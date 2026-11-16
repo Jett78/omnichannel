@@ -65,8 +65,9 @@ export const PROVIDER_META: Record<Provider, ProviderMeta> = {
     provider: "X",
     label: "X (Twitter)",
     shortLabel: "X",
-    description: "Direct messages on X — paid/restricted API, spike pending.",
-    phase: "Phase 7 spike",
+    description:
+      "Direct messages on X — official API v2, self-serve on X's pay-per-use pricing (you pay X per DM read/sent).",
+    phase: "Phase 8 — live",
     color: "#0f1419",
     icon: AtSign,
   },

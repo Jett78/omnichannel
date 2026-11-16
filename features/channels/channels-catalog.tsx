@@ -25,6 +25,7 @@ import type { Provider } from "@/generated/prisma/client";
 
 /** Client-safe subset of Channel.config (never contains tokens). */
 export interface RealChannelConfig {
+  username?: string;
   displayPhoneNumber?: string;
   verifiedName?: string;
   connectionMethod?: string;
@@ -62,6 +63,19 @@ export interface TikTokConfigView {
   webhookUrl: string;
 }
 
+/**
+ * Public X setup facts (no secrets). X DMs are self-serve on X's
+ * pay-per-use pricing (Phase 8): `configured` says whether the OAuth
+ * 2.0 app credentials exist in env; `webhookIdSet` says whether
+ * real-time subscriptions can be created when an account connects.
+ */
+export interface XConfigView {
+  configured: boolean;
+  redirectUri: string;
+  webhookUrl: string;
+  webhookIdSet: boolean;
+}
+
 export function ChannelsCatalog({
   realChannels,
   workspaceId,
@@ -71,6 +85,10 @@ export function ChannelsCatalog({
   metaError,
   whatsappConfig,
   tiktokConfig,
+  xConfig,
+  xConnected,
+  xWarning,
+  xError,
 }: {
   realChannels: RealChannel[];
   workspaceId?: string;
@@ -80,6 +98,10 @@ export function ChannelsCatalog({
   metaError?: string | null;
   whatsappConfig?: WhatsAppConfigView;
   tiktokConfig?: TikTokConfigView;
+  xConfig?: XConfigView;
+  xConnected?: string | null;
+  xWarning?: string | null;
+  xError?: string | null;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Provider | null>(null);
@@ -147,13 +169,34 @@ export function ChannelsCatalog({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Channels"
-        description="Connect a messaging account per provider. Each adapter implements the same IMessagingProvider contract. Facebook Messenger and Instagram connect through Meta's official OAuth flows; the mock channel below is available for development."
+        description="Connect a messaging account per provider. Each adapter implements the same IMessagingProvider contract. Facebook Messenger and Instagram connect through Meta's official OAuth flows, X through its OAuth 2.0 flow; the mock channel below is available for development."
       />
 
       {metaError ? (
         <p className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
           Meta connection failed: {metaError}
+        </p>
+      ) : null}
+
+      {xError ? (
+        <p className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          X connection failed: {xError}
+        </p>
+      ) : null}
+
+      {xConnected ? (
+        <p className="rounded-md bg-green-50 p-3 text-sm text-green-700">
+          X account connected: <strong>{xConnected}</strong>. Its direct messages will appear in
+          the unified inbox.
+        </p>
+      ) : null}
+
+      {xWarning ? (
+        <p className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-700">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          X connected, but the real-time webhook subscription reported a problem: {xWarning}
         </p>
       ) : null}
 
@@ -214,13 +257,19 @@ export function ChannelsCatalog({
               {realChannels.map((channel) => (
                 <li key={channel.id} className="flex items-center gap-3 py-2.5">
                   <ChannelIcon provider={channel.provider} size="sm" />
-                  <span className="flex-1 text-sm font-medium">{channel.displayName}</span>
+                  <span className="flex-1 text-sm font-medium">
+                    {channel.displayName}
+                    {channel.provider === "X" && channel.config?.username ? (
+                      <span className="text-muted-foreground"> @{channel.config.username}</span>
+                    ) : null}
+                  </span>
                   <Badge variant={channel.status === "CONNECTED" ? "success" : "warning"}>
                     {channel.status}
                   </Badge>
                   {(channel.provider === "FACEBOOK" ||
                     channel.provider === "INSTAGRAM" ||
-                    channel.provider === "WHATSAPP") &&
+                    channel.provider === "WHATSAPP" ||
+                    channel.provider === "X") &&
                   channel.status === "CONNECTED" ? (
                     <Button
                       variant="outline"
@@ -263,6 +312,10 @@ export function ChannelsCatalog({
                 {provider === "TIKTOK" ? (
                   <Button variant="outline" onClick={() => setSelected(provider)}>
                     Access requirements
+                  </Button>
+                ) : provider === "X" && xConfig?.configured && workspaceId && !isConnected ? (
+                  <Button variant="outline" asChild>
+                    <a href={`/api/workspaces/${workspaceId}/channels/x/connect`}>Connect now</a>
                   </Button>
                 ) : provider === "WHATSAPP" && workspaceId ? (
                   <Button variant="outline" asChild>
@@ -429,6 +482,56 @@ export function ChannelsCatalog({
                 <p className="text-muted-foreground">
                   Full step-by-step approval guide: docs/TIKTOK-ACCESS.md. Research and sources:
                   docs/TIKTOK-RESEARCH.md.
+                </p>
+              </div>
+            </>
+          ) : selected === "X" && xConfig ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <ChannelIcon provider="X" size="md" />
+                  Connect X (Twitter)
+                </DialogTitle>
+                <DialogDescription>
+                  This deployment is not configured for X yet — no account can be connected until
+                  the server environment is set up. Nothing has been connected.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 text-sm">
+                <p>
+                  X&apos;s Direct Messages API is self-serve on <strong>pay-per-use pricing</strong>:
+                  create a developer app in the X Developer Console (console.x.com), buy API
+                  credits there, and X bills the app per DM read ($0.010) and per DM sent ($0.015).
+                  No Enterprise contract or manual approval is needed.
+                </p>
+                <p>
+                  Set these environment variables on the server and restart the app:{" "}
+                  <code>X_CLIENT_ID</code>, <code>X_CLIENT_SECRET</code> — the OAuth 2.0
+                  credentials of a confidential-client app (type &quot;Web App&quot; or
+                  &quot;Automated App or bot&quot;, OAuth 2.0 enabled). Optionally{" "}
+                  <code>X_CONSUMER_KEY</code> / <code>X_CONSUMER_SECRET</code> as the fallback
+                  webhook-signing key.
+                </p>
+                <p>
+                  In the app&apos;s User authentication settings, register this Callback URI
+                  (exact match required):
+                  <br />
+                  <code className="break-all">{xConfig.redirectUri}</code>
+                </p>
+                <p>
+                  Webhook callback URL: <code className="break-all">{xConfig.webhookUrl}</code> —
+                  register it once via X&apos;s Webhooks API, then set <code>X_WEBHOOK_ID</code>{" "}
+                  so connecting an account also creates its real-time DM subscriptions.
+                  {xConfig.webhookIdSet
+                    ? " This deployment already has a webhook id configured."
+                    : " This deployment does not have a webhook id yet, so new connections will work over REST but won't receive real-time events until it is set."}
+                </p>
+                <p className="text-muted-foreground">
+                  Each business connects its own X account with OAuth (scopes dm.read, dm.write,
+                  tweet.read, users.read, offline.access). X only exposes the connected
+                  account&apos;s own DMs, message history is limited to the last 30 days, and
+                  whether a customer can be messaged depends on their DM settings. Full setup:
+                  docs/X-ACCESS.md.
                 </p>
               </div>
             </>

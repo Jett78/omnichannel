@@ -57,6 +57,21 @@ const envSchema = z.object({
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: z.string().optional(),
   WHATSAPP_GRAPH_API_VERSION: z.string().optional(),
+  // X (Twitter) Direct Messages (Phase 8). Self-serve on X's
+  // pay-per-use pricing (docs/X-RESEARCH.md). X_CLIENT_ID /
+  // X_CLIENT_SECRET are the app's OAuth 2.0 confidential-client
+  // credentials; the consumer key/secret are the OAuth 1.0a fallback
+  // webhook-signing keys; X_BEARER_TOKEN is only for the operator's
+  // one-time webhook registration; X_WEBHOOK_ID enables X Activity
+  // subscriptions at connect time. Read lazily by
+  // integrations/x/x-config.ts.
+  X_CLIENT_ID: z.string().optional(),
+  X_CLIENT_SECRET: z.string().optional(),
+  X_CONSUMER_KEY: z.string().optional(),
+  X_CONSUMER_SECRET: z.string().optional(),
+  X_BEARER_TOKEN: z.string().optional(),
+  X_WEBHOOK_ID: z.string().optional(),
+  X_REDIRECT_URI: z.string().optional(),
   // TikTok Business Messaging (Phase 7). ACCESS-GATED: these hold the
   // TikTok API for Business developer app's credentials, but TikTok's
   // Data Security & Privacy Review approval is additionally required

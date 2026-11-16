@@ -4,7 +4,7 @@ A multi-tenant SaaS that connects a business's messaging accounts — Facebook M
 Instagram, WhatsApp, Telegram (X and TikTok as later spikes) — into one agent inbox.
 Architecture: [`docs/PHASE-0-ARCHITECTURE.md`](docs/PHASE-0-ARCHITECTURE.md).
 
-**Current status: Phase 7 — TikTok research + access-gated scaffolding.**
+**Current status: Phase 8 — X (Twitter) Direct Messages implemented per research verdict (A) SELF-SERVE.**
 Better Auth (email/password, database sessions), workspace management with
 role-based permissions, teams, conversation assignments and notifications are
 implemented and tested, and the full SaaS shell (sidebar, top bar, overview,
@@ -16,9 +16,42 @@ the first real platform adapters — Facebook Messenger and Instagram — agains
 the official Meta APIs (see below). Phase 6 adds WhatsApp on the official
 Cloud API (see below). Phase 7 researched TikTok and shipped access-gated
 scaffolding only — TikTok's Business Messaging API requires TikTok's own
-approval before it can be called (see below). Remaining adapters
-(Telegram, …) plug into the same `IMessagingProvider` contract in later
-phases.
+approval before it can be called (see below). Phase 8 adds X Direct
+Messages on the official X API v2 — research found it self-serve on
+pay-per-use pricing, so it shipped as a full implementation (see
+below). Remaining adapters (Telegram, …) plug into the same
+`IMessagingProvider` contract in later phases.
+
+## X integration (Phase 8)
+
+- **Research verdict: (A) SELF-SERVE (paid, pay-per-use).** Since
+  6 Feb 2026 the X API is pay-per-usage with prepaid credits — no
+  subscriptions, no manual product approval for DMs. The DM endpoints
+  (X API v2), OAuth 2.0 scopes (`dm.read`/`dm.write`) and the X
+  Activity API webhooks are documented and available to any app with
+  an approved developer account and credits: DM reads **$0.010/resource**,
+  DM sends **$0.015/request**, `dm.received` webhook events
+  **$0.010/event**. Evidence and citations:
+  [`docs/X-RESEARCH.md`](docs/X-RESEARCH.md); activation playbook:
+  [`docs/X-ACCESS.md`](docs/X-ACCESS.md).
+- **What shipped**: `integrations/x/` (config, typed API client, pure
+  webhook helpers, provider), an OAuth 2.0 + PKCE connect flow on the
+  Phase 5 session pattern (tokens encrypted, never in the browser),
+  CRC + signature-verified webhooks (XAA `dm.received`; legacy AAA
+  payloads also parsed), per-account XAA subscriptions recorded
+  honestly on the channel, and a working **token-refresh chain** —
+  X access tokens live 2 hours and refresh tokens rotate, so the
+  previously-stub processor now refreshes, persists rotated tokens,
+  re-arms itself, and marks channels EXPIRED when a refresh token is
+  rejected. Platform rules are surfaced, never faked: recipient DM
+  settings 403s land on the message as FAILED with X's own error text;
+  history is 30 days; outbound media is not wired (needs a
+  pre-uploaded `media_id`) and fails with a clear error.
+- **Tests**: `npm run test:phase8` (config states, CRC/signature,
+  OAuth round-trip, provider + pipeline against a labelled fake-fetch
+  double using official-doc payload shapes, token-refresh chain,
+  cross-workspace isolation) + Phase 2/4/5/6/7 regressions. **No real
+  X account, app, credits or network calls were used.**
 
 ## TikTok integration (Phase 7) — access-gated scaffolding
 
@@ -328,6 +361,7 @@ Optional: run web + worker in Docker too — `docker compose --profile app up --
 | `npm run test:phase5` | Phase 5 Meta tests (real DB + Redis; providers use an injected fake-fetch test double — no real Meta account) |
 | `npm run test:phase6` | Phase 6 WhatsApp tests (real DB + Redis; provider uses an injected fake-fetch test double — no real WhatsApp account) |
 | `npm run test:phase7` | Phase 7 TikTok tests (real DB + Redis; gated scaffold — no TikTok account or network call exists) |
+| `npm run test:phase8` | Phase 8 X tests (real DB + Redis; provider uses an injected fake-fetch test double with official-doc payload shapes — no real X account or network call exists) |
 | `npm run db:generate` | `prisma generate` |
 | `npm run db:migrate` | `prisma migrate dev` |
 | `npm run db:seed` | Seed demo user/workspace (`tsx prisma/seed.ts`) |

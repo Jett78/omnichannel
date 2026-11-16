@@ -22,6 +22,7 @@ import {
   whatsappProvider,
   type WhatsAppPhoneNumber,
 } from "@/integrations/whatsapp/whatsapp-provider";
+import { XProvider, xProvider } from "@/integrations/x/x-provider";
 import type { ChannelContext } from "@/integrations/types";
 import { channelCredentialService } from "@/services/channel-credential.service";
 import type { Channel, OAuthConnectionSession, Prisma } from "@/generated/prisma/client";
@@ -54,6 +55,7 @@ export interface MetaConnectionDeps {
   facebook?: FacebookProvider;
   instagram?: InstagramProvider;
   whatsapp?: WhatsAppProvider;
+  x?: XProvider;
 }
 
 interface FacebookSessionData {
@@ -532,7 +534,8 @@ export const metaConnectionService = {
     if (
       channel.provider === "FACEBOOK" ||
       channel.provider === "INSTAGRAM" ||
-      channel.provider === "WHATSAPP"
+      channel.provider === "WHATSAPP" ||
+      channel.provider === "X"
     ) {
       const credential = await channelCredentialService.getDecryptedChannelCredentialForServer(
         channel.id,
@@ -545,10 +548,13 @@ export const metaConnectionService = {
             ? "facebook"
             : channel.provider === "INSTAGRAM"
               ? "instagram"
-              : "whatsapp",
+              : channel.provider === "WHATSAPP"
+                ? "whatsapp"
+                : "x",
         externalAccountId: channel.externalAccountId,
         credentials: {
           accessToken: credential?.accessToken ?? "",
+          ...(credential?.refreshToken ? { refreshToken: credential.refreshToken } : {}),
           scopes: credential?.scopes ?? [],
         },
         ...(channel.config &&
@@ -562,7 +568,9 @@ export const metaConnectionService = {
           ? (deps.facebook ?? facebookProvider)
           : channel.provider === "INSTAGRAM"
             ? (deps.instagram ?? instagramProvider)
-            : (deps.whatsapp ?? whatsappProvider);
+            : channel.provider === "WHATSAPP"
+              ? (deps.whatsapp ?? whatsappProvider)
+              : (deps.x ?? xProvider);
       // disconnectAccount is best-effort internally (logs, never throws).
       await provider.disconnectAccount(context);
     }

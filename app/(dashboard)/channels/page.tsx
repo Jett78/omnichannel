@@ -10,6 +10,7 @@ import {
   isInstagramConfigured,
 } from "@/integrations/meta/meta-config";
 import { isTikTokConfigured, tiktokRedirectUri } from "@/integrations/tiktok/tiktok-config";
+import { getXAccessState } from "@/integrations/x/x-config";
 import type { RealChannelConfig } from "@/features/channels/channels-catalog";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
@@ -21,6 +22,9 @@ interface ChannelsPageProps {
     meta_session?: string;
     meta_provider?: string;
     meta_error?: string;
+    x_connected?: string;
+    x_warning?: string;
+    x_error?: string;
   }>;
 }
 
@@ -47,6 +51,7 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
 
   const params = await searchParams;
   const appUrl = getEnv().APP_URL.replace(/\/+$/, "");
+  const xState = getXAccessState();
   const metaSession: { id: string; provider: "facebook" | "instagram" } | null =
     params.meta_session &&
     (params.meta_provider === "facebook" || params.meta_provider === "instagram")
@@ -77,6 +82,15 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
         redirectUri: tiktokRedirectUri(),
         webhookUrl: `${appUrl}/api/webhooks/tiktok`,
       }}
+      xConfig={{
+        configured: xState.configured,
+        redirectUri: xState.redirectUri,
+        webhookUrl: xState.webhookUrl,
+        webhookIdSet: xState.webhookIdSet,
+      }}
+      xConnected={params.x_connected ?? null}
+      xWarning={params.x_warning ?? null}
+      xError={params.x_error ?? null}
     />
   );
 }
@@ -92,6 +106,7 @@ function toRealChannelConfig(config: unknown): RealChannelConfig | undefined {
       ? (record.webhookSubscription as Record<string, unknown>)
       : null;
   return {
+    ...(pick("username") ? { username: pick("username") } : {}),
     ...(pick("displayPhoneNumber") ? { displayPhoneNumber: pick("displayPhoneNumber") } : {}),
     ...(pick("verifiedName") ? { verifiedName: pick("verifiedName") } : {}),
     ...(pick("connectionMethod") ? { connectionMethod: pick("connectionMethod") } : {}),
