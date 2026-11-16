@@ -60,6 +60,7 @@
     "typecheck": "tsc --noEmit",
     "test:phase2": "tsx scripts/test-phase2.ts",
     "test:phase4": "tsx scripts/test-phase4.ts",
+    "test:phase5": "tsx scripts/test-phase5.ts",
     "simulate:inbound": "tsx scripts/simulate-inbound.ts",
     "worker": "tsx workers/index.ts",
     "realtime": "tsx realtime/server.ts"

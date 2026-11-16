@@ -13,6 +13,7 @@ import type {
   WebhookVerificationRequest,
 } from "@/integrations/types";
 import type {
+  DeliveryStatusUpdate,
   MessageType,
   NormalizedConversation,
   NormalizedInboundMessage,
@@ -123,6 +124,11 @@ export const mockProvider: IMessagingProvider = {
       sentAt: event.sentAt ? new Date(event.sentAt) : new Date(),
       raw: event,
     }));
+  },
+
+  parseStatusUpdates(): DeliveryStatusUpdate[] {
+    // The mock platform emits no delivery/read receipts.
+    return [];
   },
 
   async sendMessage(input: {

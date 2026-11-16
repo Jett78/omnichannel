@@ -1,4 +1,5 @@
 import type {
+  DeliveryStatusUpdate,
   NormalizedConversation,
   NormalizedInboundMessage,
   OutboundMessage,
@@ -89,6 +90,13 @@ export interface IMessagingProvider {
   verifyWebhook(req: WebhookVerificationRequest): boolean;
   /** Pure translation of a raw webhook payload — fixture-tested per provider. */
   parseWebhook(payload: unknown): NormalizedInboundMessage[];
+  /**
+   * Optional: translate delivery/read receipts in a webhook payload
+   * into status updates for previously sent outbound messages.
+   * Providers without receipts omit this; the engine treats that as
+   * "no status updates in this event".
+   */
+  parseStatusUpdates?(payload: unknown): DeliveryStatusUpdate[];
 
   sendMessage(input: {
     channel: ChannelContext;

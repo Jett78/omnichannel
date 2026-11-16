@@ -96,9 +96,19 @@ export interface OutboundMessage {
 }
 
 export interface DeliveryStatusUpdate {
-  externalMessageId: string;
+  /**
+   * The provider message id this update refers to, or null for a
+   * watermark-only update (advance everything sent up to `watermark`).
+   */
+  externalMessageId: string | null;
   status: MessageStatus;
   at: Date;
+  /** Watermark updates: messages sent at or before this time advance. */
+  watermark?: Date;
+  /** Channel-scoped external id of the contact (PSID / IGSID) — used to resolve watermark updates. */
+  contactExternalId?: string;
+  /** External account id of the receiving channel (Page id / IG account id). */
+  channelExternalAccountId?: string;
   error?: string;
   raw: unknown;
 }

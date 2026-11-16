@@ -28,6 +28,10 @@ export async function processWebhookJob(job: Job<WebhookJobData>): Promise<void>
   try {
     const provider = getProvider(providerEnumToId(event.provider));
     const messages = provider.parseWebhook(event.payload);
+    // Delivery/read receipts are not messages — providers that emit
+    // them expose parseStatusUpdates (Phase 5, Meta). An event may
+    // carry ONLY status updates and still be fully processed.
+    const statusUpdates = provider.parseStatusUpdates?.(event.payload) ?? [];
 
     const payload = (event.payload ?? {}) as Record<string, unknown>;
     let channel = event.channelId
@@ -40,6 +44,30 @@ export async function processWebhookJob(job: Job<WebhookJobData>): Promise<void>
       channel = await prisma.channel.findFirst({
         where: { provider: event.provider, externalAccountId: payload.channelExternalAccountId },
       });
+    }
+    if (!channel) {
+      // Meta payloads address the receiving account via entry[].id
+      // (Facebook Page id / Instagram account id).
+      const entryIds = new Set<string>();
+      if (Array.isArray(payload.entry)) {
+        for (const entry of payload.entry) {
+          if (
+            entry &&
+            typeof entry === "object" &&
+            typeof (entry as { id?: unknown }).id === "string"
+          ) {
+            entryIds.add((entry as { id: string }).id);
+          }
+        }
+      }
+      for (const update of statusUpdates) {
+        if (update.channelExternalAccountId) entryIds.add(update.channelExternalAccountId);
+      }
+      if (entryIds.size > 0) {
+        channel = await prisma.channel.findFirst({
+          where: { provider: event.provider, externalAccountId: { in: [...entryIds] } },
+        });
+      }
     }
     if (!channel) {
       await prisma.webhookEvent.update({
@@ -64,6 +92,13 @@ export async function processWebhookJob(job: Job<WebhookJobData>): Promise<void>
         console.log(
           `[worker:webhook] duplicate inbound ${message.externalMessageId} ignored (idempotent)`,
         );
+      }
+    }
+
+    if (statusUpdates.length > 0) {
+      const advanced = await messagingService.applyDeliveryStatusUpdates(channel.id, statusUpdates);
+      if (advanced > 0) {
+        console.log(`[worker:webhook] event ${event.id}: ${advanced} message status update(s)`);
       }
     }
 

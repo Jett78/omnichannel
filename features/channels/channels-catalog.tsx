@@ -1,6 +1,6 @@
 "use client";
 
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { MetaConnectionPanel } from "@/features/channels/meta-connection-panel";
 import type { Provider } from "@/generated/prisma/client";
 
 export interface RealChannel {
@@ -25,21 +26,70 @@ export interface RealChannel {
   status: string;
 }
 
+/** Public Meta setup facts (no secrets) passed from the server page. */
+export interface MetaConfigView {
+  facebookConfigured: boolean;
+  instagramConfigured: boolean;
+  facebookRedirectUri: string;
+  instagramRedirectUri: string;
+  facebookWebhookUrl: string;
+  instagramWebhookUrl: string;
+}
+
 export function ChannelsCatalog({
   realChannels,
   workspaceId,
   mockEnabled = false,
+  metaConfig,
+  metaSession,
+  metaError,
 }: {
   realChannels: RealChannel[];
   workspaceId?: string;
   mockEnabled?: boolean;
+  metaConfig?: MetaConfigView;
+  metaSession?: { id: string; provider: "facebook" | "instagram" } | null;
+  metaError?: string | null;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Provider | null>(null);
   const [mockBusy, setMockBusy] = useState(false);
   const [mockError, setMockError] = useState<string | null>(null);
-  const connectedProviders = new Set(realChannels.map((c) => c.provider));
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const connectedProviders = new Set(
+    realChannels.filter((c) => c.status === "CONNECTED").map((c) => c.provider),
+  );
   const mockConnected = connectedProviders.has("MOCK");
+
+  async function disconnectChannel(channel: RealChannel) {
+    if (!workspaceId) return;
+    if (
+      !window.confirm(
+        `Disconnect ${channel.displayName}? The stored access token will be deleted and messages will stop arriving. Conversation history is kept.`,
+      )
+    ) {
+      return;
+    }
+    setDisconnectingId(channel.id);
+    setDisconnectError(null);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/channels/${channel.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(body?.error?.message ?? `Disconnect failed (${res.status})`);
+      }
+      router.refresh();
+    } catch (error) {
+      setDisconnectError(error instanceof Error ? error.message : "Could not disconnect");
+    } finally {
+      setDisconnectingId(null);
+    }
+  }
 
   async function connectMock() {
     if (!workspaceId) return;
@@ -67,8 +117,23 @@ export function ChannelsCatalog({
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Channels"
-        description="Connect a messaging account per provider. Each adapter implements the same IMessagingProvider contract. Real adapters arrive phase by phase; the mock channel below is available for development."
+        description="Connect a messaging account per provider. Each adapter implements the same IMessagingProvider contract. Facebook Messenger and Instagram connect through Meta's official OAuth flows; the mock channel below is available for development."
       />
+
+      {metaError ? (
+        <p className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          Meta connection failed: {metaError}
+        </p>
+      ) : null}
+
+      {metaSession && workspaceId ? (
+        <MetaConnectionPanel
+          workspaceId={workspaceId}
+          sessionId={metaSession.id}
+          provider={metaSession.provider}
+        />
+      ) : null}
 
       {mockEnabled && workspaceId ? (
         <Card className="border-dashed shadow-none">
@@ -115,9 +180,23 @@ export function ChannelsCatalog({
                   <Badge variant={channel.status === "CONNECTED" ? "success" : "warning"}>
                     {channel.status}
                   </Badge>
+                  {(channel.provider === "FACEBOOK" || channel.provider === "INSTAGRAM") &&
+                  channel.status === "CONNECTED" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void disconnectChannel(channel)}
+                      disabled={disconnectingId !== null}
+                    >
+                      {disconnectingId === channel.id ? "Disconnecting…" : "Disconnect"}
+                    </Button>
+                  ) : null}
                 </li>
               ))}
             </ul>
+            {disconnectError ? (
+              <p className="pt-2 text-sm text-red-600">{disconnectError}</p>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -137,9 +216,23 @@ export function ChannelsCatalog({
                 <Badge variant={isConnected ? "success" : "muted"}>
                   {isConnected ? "Connected" : "Not connected"}
                 </Badge>
-                <Button variant="outline" onClick={() => setSelected(provider)}>
-                  Connect now
-                </Button>
+                {provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId ? (
+                  <Button variant="outline" asChild>
+                    <a href={`/api/workspaces/${workspaceId}/channels/facebook/connect`}>
+                      Connect now
+                    </a>
+                  </Button>
+                ) : provider === "INSTAGRAM" && metaConfig?.instagramConfigured && workspaceId ? (
+                  <Button variant="outline" asChild>
+                    <a href={`/api/workspaces/${workspaceId}/channels/instagram/connect`}>
+                      Connect now
+                    </a>
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={() => setSelected(provider)}>
+                    Connect now
+                  </Button>
+                )}
               </CardContent>
             </Card>
           );
@@ -148,7 +241,83 @@ export function ChannelsCatalog({
 
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent>
-          {selected ? (
+          {selected === "FACEBOOK" && metaConfig ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <ChannelIcon provider="FACEBOOK" size="md" />
+                  Connect Facebook Messenger
+                </DialogTitle>
+                <DialogDescription>
+                  This deployment is not configured for Meta yet — no account can be connected until
+                  the server environment is set up. Nothing has been connected.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 text-sm">
+                <p>
+                  Set these environment variables on the server and restart the app:{" "}
+                  <code>META_APP_ID</code>, <code>META_APP_SECRET</code>,{" "}
+                  <code>META_WEBHOOK_VERIFY_TOKEN</code>.
+                </p>
+                <p>
+                  In the Meta app, register this OAuth redirect URI (Facebook Login → Valid OAuth
+                  Redirect URIs):
+                  <br />
+                  <code className="break-all">{metaConfig.facebookRedirectUri}</code>
+                </p>
+                <p>
+                  Webhook callback URL:{" "}
+                  <code className="break-all">{metaConfig.facebookWebhookUrl}</code> (verify token =
+                  your <code>META_WEBHOOK_VERIFY_TOKEN</code>).
+                </p>
+                <p className="text-muted-foreground">
+                  Note: connecting Pages you don&apos;t administer requires Meta App Review
+                  (Advanced Access for pages_messaging, pages_manage_metadata,
+                  pages_read_engagement, pages_show_list) and Business Verification. In Development
+                  mode only Pages of users with a role on the app can connect. See
+                  docs/META-APP-REVIEW.md.
+                </p>
+              </div>
+            </>
+          ) : selected === "INSTAGRAM" && metaConfig ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <ChannelIcon provider="INSTAGRAM" size="md" />
+                  Connect Instagram
+                </DialogTitle>
+                <DialogDescription>
+                  This deployment is not configured for Instagram yet — no account can be connected
+                  until the server environment is set up. Nothing has been connected.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 text-sm">
+                <p>
+                  Set these environment variables on the server and restart the app:{" "}
+                  <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> (the Instagram
+                  product&apos;s own app id/secret from the Meta dashboard — not the Facebook app
+                  secret). <code>INSTAGRAM_WEBHOOK_VERIFY_TOKEN</code> is optional and falls back to{" "}
+                  <code>META_WEBHOOK_VERIFY_TOKEN</code>.
+                </p>
+                <p>
+                  In the Meta app&apos;s Instagram product settings, register this OAuth redirect
+                  URI:
+                  <br />
+                  <code className="break-all">{metaConfig.instagramRedirectUri}</code>
+                </p>
+                <p>
+                  Webhook callback URL:{" "}
+                  <code className="break-all">{metaConfig.instagramWebhookUrl}</code>.
+                </p>
+                <p className="text-muted-foreground">
+                  This uses the Instagram API with Instagram Login: only professional
+                  (Business/Creator) accounts are eligible, and no Facebook Page is required.
+                  Messaging accounts beyond your app&apos;s test users requires Advanced Access for
+                  instagram_business_manage_messages via App Review. See docs/META-APP-REVIEW.md.
+                </p>
+              </div>
+            </>
+          ) : selected ? (
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">

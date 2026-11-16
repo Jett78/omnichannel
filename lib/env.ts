@@ -35,6 +35,20 @@ const envSchema = z.object({
   // Mock provider (Phase 4, dev/test only)
   MOCK_WEBHOOK_SECRET: z.string().min(1).default("dev-mock-secret"),
   ENABLE_MOCK_PROVIDER: z.string().optional(),
+  // Meta — Facebook Messenger (Phase 5). Read lazily by
+  // integrations/meta/meta-config.ts; all optional here so the app
+  // boots unconfigured and the connect flow fails with a clear 503.
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+  META_GRAPH_API_VERSION: z.string().optional(),
+  META_FACEBOOK_REDIRECT_URI: z.string().optional(),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  META_APPSECRET_PROOF: z.string().optional(),
+  // Meta — Instagram API with Instagram Login (Phase 5)
+  INSTAGRAM_APP_ID: z.string().optional(),
+  INSTAGRAM_APP_SECRET: z.string().optional(),
+  INSTAGRAM_REDIRECT_URI: z.string().optional(),
+  INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

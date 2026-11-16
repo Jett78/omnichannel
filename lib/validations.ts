@@ -82,6 +82,11 @@ export const conversationTagSchema = z.object({
 });
 export type ConversationTagInput = z.infer<typeof conversationTagSchema>;
 
+export const selectConnectionAccountSchema = z.object({
+  externalAccountId: z.string().min(1, "An account must be selected"),
+});
+export type SelectConnectionAccountInput = z.infer<typeof selectConnectionAccountSchema>;
+
 export const forgotPasswordSchema = z.object({
   email: z.email("Enter a valid email address"),
 });

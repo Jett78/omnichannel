@@ -118,6 +118,7 @@ model User {
   assignments   ConversationAssignment[] @relation("AssignmentAssignee")
   assignedBy    ConversationAssignment[] @relation("AssignmentAssigner")
   notifications Notification[]
+  oauthSessions OAuthConnectionSession[]
 }
 
 // Better Auth — session (database sessions, Prisma adapter)
@@ -191,6 +192,7 @@ model Workspace {
   auditLogs     AuditLog[]
   assignments   ConversationAssignment[]
   notifications Notification[]
+  oauthSessions OAuthConnectionSession[]
 }
 
 model Team {
@@ -265,6 +267,37 @@ model Channel {
 
   @@unique([workspaceId, provider, externalAccountId])
   @@index([workspaceId, provider])
+}
+
+/**
+ * Short-lived OAuth hand-off state for channel connections (Phase 5,
+ * Meta). Created when a user starts a provider OAuth flow; the
+ * callback looks the row up by `stateHash` (SHA-256 of the OAuth
+ * `state` value — the raw state only ever lives in the browser cookie
+ * + provider redirect). After the code exchange, the provider payload
+ * (long-lived user token + selectable accounts incl. their tokens) is
+ * stored AES-256-GCM encrypted in `encryptedData` until the user picks
+ * an account, at which point the session is consumed and the payload
+ * wiped. Tokens are never returned to the browser — the session API
+ * only exposes sanitized account metadata.
+ */
+model OAuthConnectionSession {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  userId        String
+  provider      Provider
+  stateHash     String    @unique
+  encryptedData String
+  scopes        String[]
+  expiresAt     DateTime
+  consumedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, userId])
 }
 
 model ChannelCredential {

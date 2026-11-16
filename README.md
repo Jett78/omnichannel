@@ -4,15 +4,51 @@ A multi-tenant SaaS that connects a business's messaging accounts — Facebook M
 Instagram, WhatsApp, Telegram (X and TikTok as later spikes) — into one agent inbox.
 Architecture: [`docs/PHASE-0-ARCHITECTURE.md`](docs/PHASE-0-ARCHITECTURE.md).
 
-**Current status: Phase 4 — unified inbox + messaging engine.** Better Auth (email/password,
-database sessions), workspace management with role-based permissions, teams,
-conversation assignments and notifications are implemented and tested, and the full
-SaaS shell (sidebar, top bar, overview, 3-column inbox, contacts, channels, team,
-automation, analytics, settings) is built. Phase 4 adds the real messaging engine
-(webhook ingest → normalized messages → Socket.IO realtime → agent replies through
-BullMQ), a real-data inbox, and a **dev-only mock provider** for exercising the loop.
-**No real social integrations are implemented yet** — real adapters (Meta, WhatsApp,
-Telegram, …) plug into the same `IMessagingProvider` contract in later phases.
+**Current status: Phase 5 — Meta integration (Facebook Messenger + Instagram).**
+Better Auth (email/password, database sessions), workspace management with
+role-based permissions, teams, conversation assignments and notifications are
+implemented and tested, and the full SaaS shell (sidebar, top bar, overview,
+3-column inbox, contacts, channels, team, automation, analytics, settings) is
+built. Phase 4 added the real messaging engine (webhook ingest → normalized
+messages → Socket.IO realtime → agent replies through BullMQ), a real-data
+inbox, and a **dev-only mock provider** for exercising the loop. Phase 5 adds
+the first real platform adapters — Facebook Messenger and Instagram — against
+the official Meta APIs (see below). Remaining adapters (WhatsApp, Telegram, …)
+plug into the same `IMessagingProvider` contract in later phases.
+
+## Meta integration (Phase 5)
+
+- **Facebook Messenger** (`integrations/meta/facebook-provider.ts`): Facebook
+  Login OAuth (code → user token → long-lived token), Page picker from
+  `/me/accounts` (MANAGE/MODERATE task required), Page token stored encrypted,
+  webhook subscription via `/{page-id}/subscribed_apps`, Send API replies,
+  delivery/read receipts.
+- **Instagram** (`integrations/meta/instagram-provider.ts`): the **Instagram
+  API with Instagram Login** model (no Facebook Page required) — OAuth at
+  `instagram.com/oauth/authorize`, tokens via `api.instagram.com` /
+  `graph.instagram.com`, long-lived tokens refreshed with
+  `ig_refresh_token`. Only professional accounts (Business/Creator) are
+  eligible; personal accounts are rejected with a clear reason.
+- **Connection flow** (`services/meta-connection.service.ts`): an
+  `OAuthConnectionSession` (state hash + AES-256-GCM-encrypted payload,
+  15-minute TTL, single-use) bridges the OAuth redirect; the dashboard only
+  ever sees sanitized account metadata — **tokens never reach the browser**.
+  A failed webhook subscription keeps the channel but surfaces a
+  `subscriptionWarning` instead of pretending everything worked.
+- **Platform rules enforced in the engine**: Meta's **24h messaging window**
+  (out-of-window sends settle FAILED before any API call), delivery/read
+  receipts advance outbound statuses monotonically (SENT → DELIVERED → READ,
+  watermark updates supported), webhook signatures verified with
+  HMAC-SHA256 per product secret, tokens sent only as Bearer headers.
+- **Honest status**: no real Meta app/account exists in the development
+  environment, so the integration is verified against payload fixtures and
+  an injected HTTP test double (`npm run test:phase5`, 56 assertions +
+  Phase 2/4 regressions) — **not** against a live Meta account. The manual
+  steps still required (app creation, Advanced Access/App Review, Business
+  Verification, data-deletion callback TODO) are documented in
+  [`docs/META-APP-REVIEW.md`](docs/META-APP-REVIEW.md). Without the `META_*` /
+  `INSTAGRAM_*` env vars, the connect flow returns a clear 503 naming the
+  missing variables and the Channels page explains exactly what to set.
 
 ## Messaging engine (Phase 4)
 
@@ -234,6 +270,7 @@ Optional: run web + worker in Docker too — `docker compose --profile app up --
 | `npm run realtime` | Socket.IO realtime gateway (tsx, port `SOCKET_PORT`) |
 | `npm run simulate:inbound` | Inject a simulated inbound message (mock provider, dev only) |
 | `npm run test:phase4` | Phase 4 messaging-engine tests (real DB + Redis + child processes) |
+| `npm run test:phase5` | Phase 5 Meta tests (real DB + Redis; providers use an injected fake-fetch test double — no real Meta account) |
 | `npm run db:generate` | `prisma generate` |
 | `npm run db:migrate` | `prisma migrate dev` |
 | `npm run db:seed` | Seed demo user/workspace (`tsx prisma/seed.ts`) |

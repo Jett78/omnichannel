@@ -9,6 +9,7 @@ import { channelCredentialService } from "@/services/channel-credential.service"
 import type { Message, MessageAttachment, Prisma } from "@/generated/prisma/client";
 import {
   providerEnumToId,
+  type DeliveryStatusUpdate,
   type MessageType,
   type NormalizedInboundMessage,
   type UnifiedMessage,
@@ -364,13 +365,16 @@ export const messagingService = {
     const channel = conversation.channel;
     const workspaceId = conversation.workspaceId;
 
-    const markFailed = async (errorMessage: string): Promise<{ status: string }> => {
+    const markFailed = async (
+      errorMessage: string,
+      extraMetadata: Record<string, unknown> = {},
+    ): Promise<{ status: string }> => {
       const previous = toMetadata(message.metadata) ?? {};
       await prisma.message.update({
         where: { id: messageId },
         data: {
           status: "FAILED",
-          metadata: { ...previous, error: errorMessage } as Prisma.InputJsonValue,
+          metadata: { ...previous, ...extraMetadata, error: errorMessage } as Prisma.InputJsonValue,
         },
       });
       await emitToWorkspaceAndConversation(workspaceId, conversation.id, "message.status_updated", {
@@ -416,6 +420,27 @@ export const messagingService = {
       },
     };
 
+    // Meta 24h standard messaging window (Facebook Messenger +
+    // Instagram): a standard reply is only permitted within 24 hours
+    // of the customer's most recent inbound message. Outside the
+    // window the send is settled FAILED immediately — retrying cannot
+    // succeed until the customer writes again, and no provider API
+    // call is made.
+    if (channel.provider === "FACEBOOK" || channel.provider === "INSTAGRAM") {
+      const latestInbound = await prisma.message.findFirst({
+        where: { conversationId: conversation.id, direction: "INBOUND" },
+        orderBy: { sentAt: "desc" },
+        select: { sentAt: true },
+      });
+      const windowMs = 24 * 60 * 60 * 1000;
+      if (!latestInbound || Date.now() - latestInbound.sentAt.getTime() > windowMs) {
+        return markFailed(
+          "Outside Meta's 24-hour messaging window: the customer must message again before a standard reply can be sent.",
+          { windowViolation: true },
+        );
+      }
+    }
+
     try {
       const result = await provider.sendMessage({
         channel: channelContext,
@@ -451,5 +476,119 @@ export const messagingService = {
       }
       throw error;
     }
+  },
+
+  /**
+   * Apply provider delivery/read receipts (Phase 5) to outbound
+   * messages on one channel. System-level (called by the webhook
+   * worker). Statuses only ever advance monotonically
+   * SENT → DELIVERED → READ: a late DELIVERED receipt never downgrades
+   * a READ message, and FAILED messages are never touched. Delivery /
+   * read timestamps are merged into message metadata and a realtime
+   * `message.status_updated` event is emitted per changed message.
+   *
+   * Two update shapes:
+   *  - per-message: `externalMessageId` set → that message advances.
+   *  - watermark: `externalMessageId` null + `watermark` +
+   *    `contactExternalId` → every already-sent outbound message to
+   *    that contact on this channel with sentAt <= watermark advances.
+   * Returns the number of messages actually advanced.
+   */
+  async applyDeliveryStatusUpdates(
+    channelId: string,
+    updates: DeliveryStatusUpdate[],
+  ): Promise<number> {
+    if (updates.length === 0) return 0;
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      select: { id: true, workspaceId: true },
+    });
+    if (!channel) return 0;
+    const workspaceId = channel.workspaceId;
+
+    const STATUS_RANK: Record<string, number> = { SENT: 1, DELIVERED: 2, READ: 3 };
+
+    interface Candidate {
+      id: string;
+      status: Message["status"];
+      metadata: Prisma.JsonValue | null;
+      conversationId: string;
+    }
+
+    const advance = async (
+      candidate: Candidate,
+      update: DeliveryStatusUpdate,
+    ): Promise<boolean> => {
+      if (candidate.status === "FAILED") return false;
+      const currentRank = STATUS_RANK[candidate.status] ?? 0;
+      const nextRank = STATUS_RANK[update.status] ?? 0;
+      if (nextRank <= currentRank) return false;
+      const metadata: Record<string, unknown> = { ...(toMetadata(candidate.metadata) ?? {}) };
+      if (update.status === "DELIVERED") metadata.deliveredAt = update.at.toISOString();
+      if (update.status === "READ") metadata.readAt = update.at.toISOString();
+      await prisma.message.update({
+        where: { id: candidate.id },
+        data: {
+          status: update.status as Message["status"],
+          metadata: metadata as Prisma.InputJsonValue,
+        },
+      });
+      await emitToWorkspaceAndConversation(
+        workspaceId,
+        candidate.conversationId,
+        "message.status_updated",
+        {
+          workspaceId,
+          conversationId: candidate.conversationId,
+          messageId: candidate.id,
+          status: update.status,
+        },
+      );
+      return true;
+    };
+
+    let updatedCount = 0;
+    for (const update of updates) {
+      if (update.externalMessageId) {
+        const candidates = await prisma.message.findMany({
+          where: {
+            externalMessageId: update.externalMessageId,
+            direction: "OUTBOUND",
+            conversation: { channelId },
+          },
+          select: { id: true, status: true, metadata: true, conversationId: true },
+        });
+        for (const candidate of candidates) {
+          if (await advance(candidate, update)) updatedCount += 1;
+        }
+        continue;
+      }
+
+      if (update.watermark && update.contactExternalId) {
+        const identity = await prisma.contactIdentity.findUnique({
+          where: {
+            channelId_externalUserId: {
+              channelId,
+              externalUserId: update.contactExternalId,
+            },
+          },
+          select: { contactId: true },
+        });
+        if (!identity) continue;
+        const candidates = await prisma.message.findMany({
+          where: {
+            direction: "OUTBOUND",
+            status: { in: ["SENT", "DELIVERED"] },
+            sentAt: { lte: update.watermark },
+            conversation: { channelId, contactId: identity.contactId },
+          },
+          select: { id: true, status: true, metadata: true, conversationId: true },
+        });
+        for (const candidate of candidates) {
+          if (await advance(candidate, update)) updatedCount += 1;
+        }
+      }
+    }
+    return updatedCount;
   },
 };

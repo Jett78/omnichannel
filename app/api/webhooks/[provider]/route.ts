@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { AppError } from "@/lib/errors";
 import { getProvider } from "@/integrations/registry";
+import { webhookVerifyToken } from "@/integrations/meta/meta-config";
 import { webhookService } from "@/services/webhook.service";
 import { isProviderId, providerIdToEnum, type ProviderId } from "@/types/messaging";
 
@@ -91,17 +92,23 @@ export async function POST(request: Request, context: RouteContext) {
 }
 
 /**
- * GET /api/webhooks/[provider] — verification handshake stub.
- * Meta-style: echoes hub.challenge when hub.mode=subscribe and the
- * verify token matches META_WEBHOOK_VERIFY_TOKEN (when configured).
- * Other providers get a plain liveness response.
+ * GET /api/webhooks/[provider] — Meta verification handshake.
+ * Echoes hub.challenge when hub.mode=subscribe and the verify token
+ * matches the provider's configured token (Instagram:
+ * INSTAGRAM_WEBHOOK_VERIFY_TOKEN, falling back to
+ * META_WEBHOOK_VERIFY_TOKEN; everything else:
+ * META_WEBHOOK_VERIFY_TOKEN). Other providers get a liveness response.
  */
 export async function GET(request: Request, context: RouteContext) {
   const { provider: providerParam } = await context.params;
   const url = new URL(request.url);
 
   if (url.searchParams.get("hub.mode") === "subscribe" && url.searchParams.get("hub.challenge")) {
-    const expected = process.env.META_WEBHOOK_VERIFY_TOKEN;
+    const providerKey = providerParam.toLowerCase();
+    const expected =
+      providerKey === "instagram" || providerKey === "facebook"
+        ? webhookVerifyToken(providerKey)
+        : process.env.META_WEBHOOK_VERIFY_TOKEN;
     if (expected && url.searchParams.get("hub.verify_token") !== expected) {
       return new Response("Verification token mismatch", { status: 403 });
     }
