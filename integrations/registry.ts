@@ -4,6 +4,7 @@ import type { ProviderId } from "@/types/messaging";
 import { mockProvider } from "@/integrations/mock/mock.provider";
 import { facebookProvider } from "@/integrations/meta/facebook-provider";
 import { instagramProvider } from "@/integrations/meta/instagram-provider";
+import { tiktokProvider } from "@/integrations/tiktok/tiktok-provider";
 import { whatsappProvider } from "@/integrations/whatsapp/whatsapp-provider";
 import type { IMessagingProvider } from "@/integrations/types";
 
@@ -14,8 +15,13 @@ import type { IMessagingProvider } from "@/integrations/types";
  * and Instagram (Phase 5) are real adapters against the official Meta
  * Graph API — they register unconditionally, but every operation
  * fails with a clear configuration error until the deployment sets
- * the Meta env vars (see integrations/meta/meta-config.ts). The MOCK
- * provider is registered ONLY outside production, or when
+ * the Meta env vars (see integrations/meta/meta-config.ts). TikTok
+ * (Phase 7) registers unconditionally too, but it is an ACCESS-GATED
+ * scaffold: TikTok's Business Messaging API requires TikTok's Data
+ * Security & Privacy Review approval, which this deployment does not
+ * have, so every TikTok operation throws TikTokAccessError (see
+ * integrations/tiktok/tiktok-config.ts and docs/TIKTOK-RESEARCH.md).
+ * The MOCK provider is registered ONLY outside production, or when
  * ENABLE_MOCK_PROVIDER=true — it is a dev/test fake, never a real
  * platform integration.
  */
@@ -32,6 +38,7 @@ export function registerProvider(provider: IMessagingProvider): void {
 registerProvider(facebookProvider);
 registerProvider(instagramProvider);
 registerProvider(whatsappProvider);
+registerProvider(tiktokProvider);
 
 if (isMockProviderEnabled()) {
   registerProvider(mockProvider);

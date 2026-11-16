@@ -57,6 +57,15 @@ const envSchema = z.object({
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: z.string().optional(),
   WHATSAPP_GRAPH_API_VERSION: z.string().optional(),
+  // TikTok Business Messaging (Phase 7). ACCESS-GATED: these hold the
+  // TikTok API for Business developer app's credentials, but TikTok's
+  // Data Security & Privacy Review approval is additionally required
+  // before any messaging call can succeed (docs/TIKTOK-RESEARCH.md).
+  // Read lazily by integrations/tiktok/tiktok-config.ts.
+  TIKTOK_CLIENT_KEY: z.string().optional(),
+  TIKTOK_CLIENT_SECRET: z.string().optional(),
+  TIKTOK_REDIRECT_URI: z.string().optional(),
+  TIKTOK_WEBHOOK_SECRET: z.string().optional(),
   // S3-compatible media storage (used by the WhatsApp media processor)
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().optional(),

@@ -50,6 +50,18 @@ export interface MetaConfigView {
   instagramWebhookUrl: string;
 }
 
+/**
+ * Public TikTok setup facts (no secrets). TikTok Business Messaging is
+ * access-gated by TikTok (Phase 7): `configured` only says whether the
+ * developer app credentials exist in env — it never means messaging
+ * access has been granted.
+ */
+export interface TikTokConfigView {
+  configured: boolean;
+  redirectUri: string;
+  webhookUrl: string;
+}
+
 export function ChannelsCatalog({
   realChannels,
   workspaceId,
@@ -58,6 +70,7 @@ export function ChannelsCatalog({
   metaSession,
   metaError,
   whatsappConfig,
+  tiktokConfig,
 }: {
   realChannels: RealChannel[];
   workspaceId?: string;
@@ -66,6 +79,7 @@ export function ChannelsCatalog({
   metaSession?: { id: string; provider: "facebook" | "instagram" } | null;
   metaError?: string | null;
   whatsappConfig?: WhatsAppConfigView;
+  tiktokConfig?: TikTokConfigView;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Provider | null>(null);
@@ -239,10 +253,18 @@ export function ChannelsCatalog({
                 <CardDescription>{meta.description}</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col items-center gap-3">
-                <Badge variant={isConnected ? "success" : "muted"}>
-                  {isConnected ? "Connected" : "Not connected"}
-                </Badge>
-                {provider === "WHATSAPP" && workspaceId ? (
+                {provider === "TIKTOK" && !isConnected ? (
+                  <Badge variant="warning">Access restricted by TikTok</Badge>
+                ) : (
+                  <Badge variant={isConnected ? "success" : "muted"}>
+                    {isConnected ? "Connected" : "Not connected"}
+                  </Badge>
+                )}
+                {provider === "TIKTOK" ? (
+                  <Button variant="outline" onClick={() => setSelected(provider)}>
+                    Access requirements
+                  </Button>
+                ) : provider === "WHATSAPP" && workspaceId ? (
                   <Button variant="outline" asChild>
                     <a href="#whatsapp-connect">Connect now</a>
                   </Button>
@@ -344,6 +366,69 @@ export function ChannelsCatalog({
                   (Business/Creator) accounts are eligible, and no Facebook Page is required.
                   Messaging accounts beyond your app&apos;s test users requires Advanced Access for
                   instagram_business_manage_messages via App Review. See docs/META-APP-REVIEW.md.
+                </p>
+              </div>
+            </>
+          ) : selected === "TIKTOK" && tiktokConfig ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <ChannelIcon provider="TIKTOK" size="md" />
+                  TikTok — access restricted by TikTok
+                </DialogTitle>
+                <DialogDescription>
+                  TikTok&apos;s Business Messaging API is not self-serve. No TikTok account can be
+                  connected here yet, and no messages will be sent or received — this is a
+                  restriction on TikTok&apos;s side, not a missing setting.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 text-sm">
+                <p>
+                  Before any TikTok account can connect, TikTok must approve <em>this app</em>{" "}
+                  through its <strong>Data Security &amp; Privacy Review</strong> — a manual,
+                  company-level review started from TikTok&apos;s intake form (TikTok begins
+                  processing within ~10 working days). Serving accounts signed up in the US also
+                  requires the <strong>US Data Security Review</strong> and a signed USDS
+                  Addendum. Until TikTok approves us, its API rejects messaging calls even for
+                  accounts that authorize the app.
+                </p>
+                <p>
+                  Even after approval, only TikTok accounts with <strong>Advanced Access</strong>{" "}
+                  or <strong>Verified Business Account</strong> status can use Business
+                  Messaging, and accounts signed up in the EEA, Switzerland or the UK are not
+                  supported at all.
+                </p>
+                <p>
+                  {tiktokConfig.configured ? (
+                    <>
+                      This deployment <strong>does</strong> have TikTok developer credentials
+                      configured (<code>TIKTOK_CLIENT_KEY</code> /{" "}
+                      <code>TIKTOK_CLIENT_SECRET</code>) — credentials alone do not grant access;
+                      TikTok&apos;s review approval is still required before connecting is
+                      possible.
+                    </>
+                  ) : (
+                    <>
+                      This deployment does not yet have TikTok developer credentials configured (
+                      <code>TIKTOK_CLIENT_KEY</code>, <code>TIKTOK_CLIENT_SECRET</code>) — and
+                      credentials alone would not grant access either; TikTok&apos;s review
+                      approval is the real gate.
+                    </>
+                  )}
+                </p>
+                <p>
+                  For the future application, register this OAuth redirect URI in the TikTok
+                  developer app:
+                  <br />
+                  <code className="break-all">{tiktokConfig.redirectUri}</code>
+                </p>
+                <p>
+                  Webhook callback URL:{" "}
+                  <code className="break-all">{tiktokConfig.webhookUrl}</code>
+                </p>
+                <p className="text-muted-foreground">
+                  Full step-by-step approval guide: docs/TIKTOK-ACCESS.md. Research and sources:
+                  docs/TIKTOK-RESEARCH.md.
                 </p>
               </div>
             </>

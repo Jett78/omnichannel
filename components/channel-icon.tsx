@@ -74,8 +74,9 @@ export const PROVIDER_META: Record<Provider, ProviderMeta> = {
     provider: "TIKTOK",
     label: "TikTok",
     shortLabel: "TikTok",
-    description: "TikTok business messages — partner/invite-only API, spike pending.",
-    phase: "Phase 7 spike",
+    description:
+      "TikTok business messages — access is restricted by TikTok pending its Data Security & Privacy Review approval.",
+    phase: "Phase 7 — access gated",
     color: "#161823",
     icon: Music2,
   },

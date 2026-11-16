@@ -9,6 +9,7 @@ import {
   isFacebookConfigured,
   isInstagramConfigured,
 } from "@/integrations/meta/meta-config";
+import { isTikTokConfigured, tiktokRedirectUri } from "@/integrations/tiktok/tiktok-config";
 import type { RealChannelConfig } from "@/features/channels/channels-catalog";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
@@ -70,6 +71,11 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
       whatsappConfig={{
         embeddedSignupReady: whatsapp.embeddedSignupReady,
         manualReady: whatsapp.manualConnectReady,
+      }}
+      tiktokConfig={{
+        configured: isTikTokConfigured(),
+        redirectUri: tiktokRedirectUri(),
+        webhookUrl: `${appUrl}/api/webhooks/tiktok`,
       }}
     />
   );

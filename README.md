@@ -4,7 +4,7 @@ A multi-tenant SaaS that connects a business's messaging accounts — Facebook M
 Instagram, WhatsApp, Telegram (X and TikTok as later spikes) — into one agent inbox.
 Architecture: [`docs/PHASE-0-ARCHITECTURE.md`](docs/PHASE-0-ARCHITECTURE.md).
 
-**Current status: Phase 6 — WhatsApp Business Cloud API.**
+**Current status: Phase 7 — TikTok research + access-gated scaffolding.**
 Better Auth (email/password, database sessions), workspace management with
 role-based permissions, teams, conversation assignments and notifications are
 implemented and tested, and the full SaaS shell (sidebar, top bar, overview,
@@ -14,8 +14,34 @@ messages → Socket.IO realtime → agent replies through BullMQ), a real-data
 inbox, and a **dev-only mock provider** for exercising the loop. Phase 5 adds
 the first real platform adapters — Facebook Messenger and Instagram — against
 the official Meta APIs (see below). Phase 6 adds WhatsApp on the official
-Cloud API (see below). Remaining adapters (Telegram, …) plug into the same
-`IMessagingProvider` contract in later phases.
+Cloud API (see below). Phase 7 researched TikTok and shipped access-gated
+scaffolding only — TikTok's Business Messaging API requires TikTok's own
+approval before it can be called (see below). Remaining adapters
+(Telegram, …) plug into the same `IMessagingProvider` contract in later
+phases.
+
+## TikTok integration (Phase 7) — access-gated scaffolding
+
+- **Research verdict: GATED.** TikTok's Business Messaging API (TikTok API
+  for Business v1.3) is real and documented, but not self-serve: the
+  developer must pass TikTok's manual **Data Security & Privacy Review**
+  (plus the **US Data Security Review** + USDS Addendum for US-registered
+  accounts) before any messaging call can succeed, and only **Advanced
+  Access / Verified Business Accounts** are eligible — accounts signed up
+  in the EEA, Switzerland or the UK are excluded entirely. Evidence and
+  citations: [`docs/TIKTOK-RESEARCH.md`](docs/TIKTOK-RESEARCH.md);
+  approval playbook: [`docs/TIKTOK-ACCESS.md`](docs/TIKTOK-ACCESS.md).
+- **What shipped**: env config (`integrations/tiktok/tiktok-config.ts`), a
+  registered provider adapter whose operational methods all throw
+  `TikTokAccessError` and whose `verifyWebhook` returns false, and a
+  Channels card that honestly shows "Access restricted by TikTok" with
+  the approval steps — **no connect flow, no endpoint calls, no parsed
+  payloads, nothing faked**. Setting `TIKTOK_CLIENT_KEY` /
+  `TIKTOK_CLIENT_SECRET` prepares the deployment; it does not grant
+  access.
+- **Tests**: `npm run test:phase7` (config states, gated provider
+  behaviour, webhook pipeline records the access failure terminally,
+  workspace scoping) + Phase 2/4/5/6 regressions.
 
 ## WhatsApp integration (Phase 6)
 
@@ -301,6 +327,7 @@ Optional: run web + worker in Docker too — `docker compose --profile app up --
 | `npm run test:phase4` | Phase 4 messaging-engine tests (real DB + Redis + child processes) |
 | `npm run test:phase5` | Phase 5 Meta tests (real DB + Redis; providers use an injected fake-fetch test double — no real Meta account) |
 | `npm run test:phase6` | Phase 6 WhatsApp tests (real DB + Redis; provider uses an injected fake-fetch test double — no real WhatsApp account) |
+| `npm run test:phase7` | Phase 7 TikTok tests (real DB + Redis; gated scaffold — no TikTok account or network call exists) |
 | `npm run db:generate` | `prisma generate` |
 | `npm run db:migrate` | `prisma migrate dev` |
 | `npm run db:seed` | Seed demo user/workspace (`tsx prisma/seed.ts`) |

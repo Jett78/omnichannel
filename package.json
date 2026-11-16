@@ -66,7 +66,8 @@
     "simulate:inbound": "tsx scripts/simulate-inbound.ts",
     "worker": "tsx workers/index.ts",
     "realtime": "tsx realtime/server.ts",
-    "worker:web": "tsx workers/web.ts"
+    "worker:web": "tsx workers/web.ts",
+    "test:phase7": "tsx scripts/test-phase7.ts"
   },
   "version": "0.1.0"
 }
