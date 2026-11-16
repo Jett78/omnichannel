@@ -21,7 +21,7 @@ import { workspaceService } from "@/services/workspace.service";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/api/session-expired");
 
   const workspaces = await workspaceService.listWorkspacesForUser(user.id);
   if (workspaces.length === 0) redirect("/onboarding");

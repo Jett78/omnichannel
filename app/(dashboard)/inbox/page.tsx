@@ -15,7 +15,7 @@ import { workspaceService } from "@/services/workspace.service";
  */
 export default async function InboxPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/api/session-expired");
 
   let realData: RealInboxData | undefined;
   const active = await getActiveWorkspace(user.id);

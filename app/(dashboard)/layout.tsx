@@ -9,11 +9,11 @@ import { workspaceService } from "@/services/workspace.service";
 
 /**
  * The REAL auth gate for the dashboard group (the proxy is only an
- * optimistic cookie check): no session → /login.
+ * optimistic cookie check): no session → /api/session-expired (clears the stale cookie, then /login).
  */
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/api/session-expired");
 
   const [workspaces, activeWorkspace, notifications] = await Promise.all([
     workspaceService.listWorkspacesForUser(user.id),

@@ -8,7 +8,7 @@ import { workspaceService } from "@/services/workspace.service";
 
 export default async function TeamPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/api/session-expired");
 
   const active = await getActiveWorkspace(user.id);
   if (!active) redirect("/onboarding");
