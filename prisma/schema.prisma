@@ -1,4 +1,4 @@
-// Unified Omnichannel Inbox — Prisma schema (Phase 1)
+// Unified Omnichannel Inbox — Prisma schema (Phases 1–4)
 // Multi-tenant: every tenant-owned row carries workspaceId and all
 // service-layer queries are scoped by it (see services/).
 
@@ -27,6 +27,8 @@ enum Provider {
   TELEGRAM
   X
   TIKTOK
+  /** Dev/test-only provider (Phase 4). Never a real platform. */
+  MOCK
 }
 
 enum ChannelStatus {
@@ -353,6 +355,9 @@ model Message {
   senderUserId      String?
   externalMessageId String?
   status            MessageStatus    @default(RECEIVED)
+  /** Platform-specific metadata (raw ids, delivery errors, provider extras).
+   *  Kept separate from the unified message fields — see types/messaging.ts. */
+  metadata          Json?
   sentAt            DateTime         @default(now())
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt

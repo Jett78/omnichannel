@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ChannelsCatalog } from "@/features/channels/channels-catalog";
+import { isMockProviderEnabled } from "@/integrations/registry";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -18,5 +19,11 @@ export default async function ChannelsPage() {
     select: { id: true, provider: true, displayName: true, status: true },
   });
 
-  return <ChannelsCatalog realChannels={channels} />;
+  return (
+    <ChannelsCatalog
+      realChannels={channels}
+      workspaceId={active.id}
+      mockEnabled={isMockProviderEnabled()}
+    />
+  );
 }

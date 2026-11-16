@@ -12,6 +12,7 @@
     "@radix-ui/react-switch": "^1.4.1",
     "@radix-ui/react-tabs": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.4.1",
+    "@socket.io/redis-adapter": "^8.3.0",
     "better-auth": "^1.7.25",
     "bullmq": "^6.7.6",
     "class-variance-authority": "^0.7.1",
@@ -23,6 +24,8 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^3.10.1",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"
   },
@@ -56,7 +59,10 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:phase2": "tsx scripts/test-phase2.ts",
-    "worker": "tsx workers/index.ts"
+    "test:phase4": "tsx scripts/test-phase4.ts",
+    "simulate:inbound": "tsx scripts/simulate-inbound.ts",
+    "worker": "tsx workers/index.ts",
+    "realtime": "tsx realtime/server.ts"
   },
   "version": "0.1.0"
 }

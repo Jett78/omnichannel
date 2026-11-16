@@ -59,6 +59,29 @@ export const createTeamSchema = z.object({
 });
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
 
+// ─── Phase 4: conversations & messaging ───────────────────────────────────────
+
+export const sendMessageSchema = z.object({
+  content: z.string().min(1, "Message cannot be empty").max(10000),
+  type: z.enum(["TEXT", "IMAGE", "VIDEO", "AUDIO", "FILE", "LOCATION", "STICKER"]).default("TEXT"),
+});
+export type SendMessageInput = z.infer<typeof sendMessageSchema>;
+
+export const assignConversationSchema = z.object({
+  assigneeId: z.string().min(1).nullable(),
+});
+export type AssignConversationInput = z.infer<typeof assignConversationSchema>;
+
+export const internalNoteSchema = z.object({
+  content: z.string().min(1, "Note cannot be empty").max(10000),
+});
+export type InternalNoteInput = z.infer<typeof internalNoteSchema>;
+
+export const conversationTagSchema = z.object({
+  name: z.string().min(1, "Tag name is required").max(50),
+});
+export type ConversationTagInput = z.infer<typeof conversationTagSchema>;
+
 export const forgotPasswordSchema = z.object({
   email: z.email("Enter a valid email address"),
 });

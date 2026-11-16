@@ -1,11 +1,73 @@
 import { redirect } from "next/navigation";
 
 import { InboxShell } from "@/features/inbox/inbox-shell";
+import type { RealInboxData } from "@/features/inbox/real-data";
+import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
+import { conversationService } from "@/services/conversation.service";
+import { workspaceService } from "@/services/workspace.service";
 
+/**
+ * Inbox page (Phase 4 dual mode): if the active workspace has REAL
+ * conversations, they are loaded server-side and the real inbox is
+ * rendered. Workspaces without conversations keep the Phase 3 sample
+ * preview (clearly badged, never written to the DB).
+ */
 export default async function InboxPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  return <InboxShell currentUserName={user.name} />;
+  let realData: RealInboxData | undefined;
+  const active = await getActiveWorkspace(user.id);
+  if (active) {
+    try {
+      const { items } = await conversationService.listConversations(user.id, active.id, {
+        limit: 30,
+      });
+      const first = items[0];
+      if (first) {
+        const [messages, members] = await Promise.all([
+          conversationService.listMessages(user.id, active.id, first.id, { limit: 100 }),
+          workspaceService.listMembers(user.id, active.id),
+        ]);
+        realData = {
+          workspaceId: active.id,
+          currentUserId: user.id,
+          conversations: items.map((item) => ({
+            id: item.id,
+            status: item.status,
+            unreadCount: item.unreadCount,
+            lastMessageAt: item.lastMessageAt?.toISOString() ?? null,
+            preview: item.preview,
+            contact: item.contact,
+            channel: item.channel,
+            assignee: item.assignee,
+            tags: item.tags.map((t) => ({ id: t.id, name: t.name })),
+          })),
+          initialMessages: {
+            conversationId: first.id,
+            messages: messages.items.map((m) => ({
+              id: m.id,
+              conversationId: m.conversationId,
+              direction: m.direction,
+              messageType: m.messageType,
+              content: m.content,
+              status: m.status,
+              senderType: m.senderType,
+              senderId: m.senderId,
+              isPrivateNote: m.isPrivateNote,
+              externalMessageId: m.externalMessageId,
+              createdAt: m.createdAt.toISOString(),
+            })),
+          },
+          members: members.map((m) => ({ id: m.user.id, name: m.user.name })),
+        };
+      }
+    } catch (error) {
+      // Fall back to the sample preview rather than breaking the page.
+      console.error("[inbox] failed to load real conversations:", error);
+    }
+  }
+
+  return <InboxShell currentUserName={user.name} realData={realData} />;
 }

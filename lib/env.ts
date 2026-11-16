@@ -29,6 +29,12 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  // Realtime (Phase 4) — standalone Socket.IO gateway
+  SOCKET_PORT: z.coerce.number().default(4001),
+  NEXT_PUBLIC_SOCKET_URL: z.string().min(1).default("http://localhost:4001"),
+  // Mock provider (Phase 4, dev/test only)
+  MOCK_WEBHOOK_SECRET: z.string().min(1).default("dev-mock-secret"),
+  ENABLE_MOCK_PROVIDER: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

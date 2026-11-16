@@ -4,13 +4,64 @@ A multi-tenant SaaS that connects a business's messaging accounts — Facebook M
 Instagram, WhatsApp, Telegram (X and TikTok as later spikes) — into one agent inbox.
 Architecture: [`docs/PHASE-0-ARCHITECTURE.md`](docs/PHASE-0-ARCHITECTURE.md).
 
-**Current status: Phase 3 — dashboard UI + design system.** Better Auth (email/password,
+**Current status: Phase 4 — unified inbox + messaging engine.** Better Auth (email/password,
 database sessions), workspace management with role-based permissions, teams,
 conversation assignments and notifications are implemented and tested, and the full
 SaaS shell (sidebar, top bar, overview, 3-column inbox, contacts, channels, team,
-automation, analytics, settings) is built.
-**No social integrations are implemented yet** — `integrations/` contains only the
-`IMessagingProvider` contract and an empty registry.
+automation, analytics, settings) is built. Phase 4 adds the real messaging engine
+(webhook ingest → normalized messages → Socket.IO realtime → agent replies through
+BullMQ), a real-data inbox, and a **dev-only mock provider** for exercising the loop.
+**No real social integrations are implemented yet** — real adapters (Meta, WhatsApp,
+Telegram, …) plug into the same `IMessagingProvider` contract in later phases.
+
+## Messaging engine (Phase 4)
+
+- **Provider interface v2** (`integrations/types.ts`): `connectAccount`,
+  `disconnectAccount`, `sendMessage`, `getConversations`, `getMessages`,
+  `verifyWebhook`, `parseWebhook` (+ optional OAuth helpers). Everything above the
+  adapters speaks one canonical shape, `UnifiedMessage` (`types/messaging.ts`);
+  platform specifics live in `Message.metadata` (new `Json?` column).
+- **Ingest:** `POST /api/webhooks/[provider]` verifies the provider signature,
+  stores the raw `WebhookEvent`, ACKs fast and enqueues a BullMQ **webhook** job.
+  The worker parses the payload and calls `messagingService.ingestInboundMessage`,
+  which resolves/creates the contact + channel identity, find-or-creates the
+  conversation (a new inbound **reopens** a RESOLVED one) and stores the message
+  **idempotently** on `[conversationId, externalMessageId]` — redeliveries never
+  duplicate messages or inflate `unreadCount`.
+- **Outbound:** replies are stored as `QUEUED` and sent by the **outbound** worker
+  through the provider adapter (3 attempts, exponential backoff) → `SENT` with the
+  provider's external id, or `FAILED` with the error in `metadata.error`.
+- **Conversation ops** (`services/conversation.service.ts`, all workspace- and
+  permission-checked): list/search with cursor pagination, mark-as-read, assign
+  (assignment history + notification + audit log), resolve/reopen with status
+  guards, internal notes (`PRIVATE_NOTE`, never sent to the customer), tags.
+  Thin API routes live under `/api/workspaces/[workspaceId]/conversations/**`.
+- **Realtime:** standalone Socket.IO gateway (`realtime/server.ts`, port
+  `SOCKET_PORT`, default 4001) with the Redis adapter. Web/worker publish events
+  (`message.created`, `message.status_updated`, `conversation.created`,
+  `conversation.updated`) to a Redis channel via `lib/realtime.ts`; the gateway
+  fans them out to `workspace:{id}` / `conversation:{id}` rooms. Sockets
+  authenticate with the Better Auth session token (validated against the
+  `Session` table) and room joins re-check workspace membership server-side.
+  The browser gets its token from `GET /api/realtime/token`.
+- **Inbox dual mode:** `/inbox` renders the **real** inbox (API + realtime) when
+  the active workspace has conversations, and keeps the Phase 3 sample preview
+  (badged) for empty workspaces. The real inbox has Reply / Private-note composer
+  tabs, assignment, tags, resolve/reopen and a live connection dot.
+- **Mock provider (dev only):** `integrations/mock/` implements the full
+  interface against nothing — it simulates sends (content containing `[fail]`
+  throws, to exercise retries) and parses signed test webhooks
+  (`x-mock-signature: $MOCK_WEBHOOK_SECRET`). It registers only when
+  `NODE_ENV !== "production"` or `ENABLE_MOCK_PROVIDER=true`. Connect it from
+  the Channels page (“Connect mock channel (dev only)”) or
+  `POST /api/workspaces/[workspaceId]/channels/mock-connect`, then inject a
+  customer message with `npm run simulate:inbound`. **It is not a social
+  integration: no external account is connected and no real message is ever
+  sent or received through it.**
+- **Tests:** `npm run test:phase4` — 34 assertions against real PostgreSQL +
+  Redis with the real worker + realtime gateway spawned as child processes
+  (ingest, idempotency, unread, assignment, notes, tags, resolve/reopen,
+  outbound success/failure, socket delivery, cross-workspace isolation).
 
 ## Dashboard UI (Phase 3)
 
@@ -137,6 +188,13 @@ npm run dev                 # http://localhost:3000  → redirects to /dashboard
 
 # 5. Background worker (separate terminal)
 npm run worker
+
+# 6. Realtime gateway (separate terminal, Phase 4)
+npm run realtime            # Socket.IO on :4001 (SOCKET_PORT)
+
+# 7. (Optional, dev only) exercise the messaging loop with the mock provider:
+#    connect the mock channel on /channels, then:
+npm run simulate:inbound    # injects a simulated customer message via the webhook pipeline
 ```
 
 Health check (reports each dependency independently):
@@ -156,6 +214,10 @@ generate the Prisma client (`generated/` is git-ignored). No build step needs
 `DATABASE_URL`/Redis — clients stay lazy and dashboard pages are dynamic.
 
 Auth env vars: `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (see `.env.example`).
+Phase 4 env vars: `SOCKET_PORT` (default 4001), `NEXT_PUBLIC_SOCKET_URL`
+(default `http://localhost:4001`), `MOCK_WEBHOOK_SECRET` (default
+`dev-mock-secret`), `ENABLE_MOCK_PROVIDER` (set `true` to allow the dev-only
+mock provider in production builds — local dev enables it automatically).
 
 Optional: run web + worker in Docker too — `docker compose --profile app up --build`.
 
@@ -169,6 +231,9 @@ Optional: run web + worker in Docker too — `docker compose --profile app up --
 | `npm run typecheck` | `tsc --noEmit` (strict) |
 | `npm run format` / `format:check` | Prettier |
 | `npm run worker` | BullMQ worker process (tsx) |
+| `npm run realtime` | Socket.IO realtime gateway (tsx, port `SOCKET_PORT`) |
+| `npm run simulate:inbound` | Inject a simulated inbound message (mock provider, dev only) |
+| `npm run test:phase4` | Phase 4 messaging-engine tests (real DB + Redis + child processes) |
 | `npm run db:generate` | `prisma generate` |
 | `npm run db:migrate` | `prisma migrate dev` |
 | `npm run db:seed` | Seed demo user/workspace (`tsx prisma/seed.ts`) |

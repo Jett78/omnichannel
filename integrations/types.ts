@@ -1,14 +1,22 @@
-import type { NormalizedInboundMessage, OutboundMessage, ProviderId } from "@/types/messaging";
+import type {
+  NormalizedConversation,
+  NormalizedInboundMessage,
+  OutboundMessage,
+  ProviderId,
+} from "@/types/messaging";
 
 /**
- * Provider adapter contract (Phase 0, Section 5).
+ * Provider adapter contract (Phase 0 §5, evolved in Phase 4).
  *
  * Every social platform implements this interface in its own folder
  * under `integrations/`. The messaging engine only ever talks to this
  * interface — platform quirks never leak into inbox/conversation code.
  *
- * Phase 1 ships the contract ONLY. No adapter is implemented yet and
- * nothing here makes network calls.
+ * Required surface (Phase 4): connectAccount, disconnectAccount,
+ * sendMessage, getConversations, getMessages, verifyWebhook,
+ * parseWebhook. OAuth helpers (getAuthUrl / exchangeCode /
+ * refreshToken) stay optional — only providers with an OAuth flow
+ * implement them.
  */
 
 export interface ProviderCapabilities {
@@ -42,6 +50,21 @@ export interface ContactProfile {
   username?: string;
 }
 
+/** Input for a provider connect flow (OAuth code exchange, bot token, …). */
+export interface ConnectInput {
+  workspaceId: string;
+  displayName?: string;
+  /** Provider-specific secrets supplied by the user (e.g. Telegram bot token). Never persisted raw. */
+  credentials?: Record<string, string>;
+}
+
+export interface ConnectResult {
+  externalAccountId: string;
+  displayName: string;
+  credentials: ChannelCredentials;
+  config?: Record<string, unknown>;
+}
+
 export interface WebhookVerificationRequest {
   headers: Headers;
   rawBody: string;
@@ -52,10 +75,14 @@ export interface IMessagingProvider {
   readonly id: ProviderId;
   readonly capabilities: ProviderCapabilities;
 
-  /** Start of the connect flow (OAuth URL, or bot-token form for Telegram). */
-  getAuthUrl(workspaceId: string): string;
-  /** Exchange an OAuth code for credentials to encrypt and store. */
-  exchangeCode(code: string): Promise<ChannelCredentials>;
+  /** Connect an account and return its identity + credentials (stored encrypted by the caller). */
+  connectAccount(input: ConnectInput): Promise<ConnectResult>;
+  /** Disconnect / deauthorize an account at the provider, if it supports it. */
+  disconnectAccount(channel: ChannelContext): Promise<void>;
+
+  /** OAuth flow helpers — implemented only by providers that use OAuth. */
+  getAuthUrl?(workspaceId: string): string;
+  exchangeCode?(code: string): Promise<ChannelCredentials>;
   refreshToken?(credentials: ChannelCredentials): Promise<ChannelCredentials>;
 
   /** Verify the provider's webhook signature over the RAW body. */
@@ -68,6 +95,19 @@ export interface IMessagingProvider {
     toExternalId: string;
     message: OutboundMessage;
   }): Promise<{ externalMessageId: string }>;
+
+  /** Provider-side conversation list (backfill/sync). Our DB stays the source of truth. */
+  getConversations(
+    channel: ChannelContext,
+    options?: { limit?: number },
+  ): Promise<NormalizedConversation[]>;
+  /** Provider-side message history for one thread (backfill/sync). */
+  getMessages(
+    channel: ChannelContext,
+    externalThreadId: string,
+    options?: { limit?: number },
+  ): Promise<NormalizedInboundMessage[]>;
+
   sendTyping?(channel: ChannelContext, toExternalId: string): Promise<void>;
   markAsRead?(channel: ChannelContext, externalMessageId: string): Promise<void>;
   getContactProfile(channel: ChannelContext, externalUserId: string): Promise<ContactProfile>;

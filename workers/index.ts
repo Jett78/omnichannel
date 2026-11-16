@@ -43,7 +43,7 @@ const workers = [
 ];
 
 console.log(
-  `[worker] listening on queues: ${Object.values(QUEUE_NAMES).join(", ")} (processors are Phase 1 stubs)`,
+  `[worker] listening on queues: ${Object.values(QUEUE_NAMES).join(", ")} (Phase 4: webhook + outbound live, media + token-refresh stubs)`,
 );
 
 async function shutdown(): Promise<void> {

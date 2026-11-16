@@ -1,5 +1,7 @@
 "use client";
 
+import { FlaskConical } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ChannelIcon, PROVIDER_META, PROVIDER_ORDER } from "@/components/channel-icon";
@@ -23,16 +25,80 @@ export interface RealChannel {
   status: string;
 }
 
-export function ChannelsCatalog({ realChannels }: { realChannels: RealChannel[] }) {
+export function ChannelsCatalog({
+  realChannels,
+  workspaceId,
+  mockEnabled = false,
+}: {
+  realChannels: RealChannel[];
+  workspaceId?: string;
+  mockEnabled?: boolean;
+}) {
+  const router = useRouter();
   const [selected, setSelected] = useState<Provider | null>(null);
+  const [mockBusy, setMockBusy] = useState(false);
+  const [mockError, setMockError] = useState<string | null>(null);
   const connectedProviders = new Set(realChannels.map((c) => c.provider));
+  const mockConnected = connectedProviders.has("MOCK");
+
+  async function connectMock() {
+    if (!workspaceId) return;
+    setMockBusy(true);
+    setMockError(null);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/channels/mock-connect`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(body?.error?.message ?? `Request failed (${res.status})`);
+      }
+      router.refresh();
+    } catch (error) {
+      setMockError(error instanceof Error ? error.message : "Could not connect the mock channel");
+    } finally {
+      setMockBusy(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Channels"
-        description="Connect a messaging account per provider. Each adapter implements the same IMessagingProvider contract — none are connected yet."
+        description="Connect a messaging account per provider. Each adapter implements the same IMessagingProvider contract. Real adapters arrive phase by phase; the mock channel below is available for development."
       />
+
+      {mockEnabled && workspaceId ? (
+        <Card className="border-dashed shadow-none">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FlaskConical className="size-5 text-zinc-500" />
+              Mock channel — dev only
+              <Badge variant={mockConnected ? "success" : "muted"}>
+                {mockConnected ? "Connected" : "Not connected"}
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              Simulated channel for development and testing. It is <strong>not</strong> a real
+              platform — no external account is connected and no real social messages are sent or
+              received. Use it to exercise the inbox, queues and realtime end-to-end, e.g. with{" "}
+              <code>npm run simulate:inbound</code>.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-start gap-2">
+            <Button variant="outline" onClick={() => void connectMock()} disabled={mockBusy}>
+              {mockBusy
+                ? "Connecting…"
+                : mockConnected
+                  ? "Reconnect mock channel (dev only)"
+                  : "Connect mock channel (dev only)"}
+            </Button>
+            {mockError ? <p className="text-sm text-red-600">{mockError}</p> : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {realChannels.length > 0 ? (
         <Card className="shadow-none">

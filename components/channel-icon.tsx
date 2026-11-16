@@ -1,4 +1,13 @@
-import { AtSign, Camera, MessageCircle, Music2, Phone, Send, type LucideIcon } from "lucide-react";
+import {
+  AtSign,
+  Camera,
+  FlaskConical,
+  MessageCircle,
+  Music2,
+  Phone,
+  Send,
+  type LucideIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/generated/prisma/client";
@@ -69,6 +78,15 @@ export const PROVIDER_META: Record<Provider, ProviderMeta> = {
     phase: "Phase 7 spike",
     color: "#161823",
     icon: Music2,
+  },
+  MOCK: {
+    provider: "MOCK",
+    label: "Mock (dev only)",
+    shortLabel: "Mock",
+    description: "Simulated channel for development and testing — not a real platform.",
+    phase: "Phase 4 (dev only)",
+    color: "#6b7280",
+    icon: FlaskConical,
   },
 };
 

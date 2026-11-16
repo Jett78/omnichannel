@@ -36,6 +36,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { RealInboxData } from "@/features/inbox/real-data";
+import { RealInboxShell } from "@/features/inbox/real-inbox-shell";
 import {
   SAMPLE_CONVERSATIONS,
   SAMPLE_TEAM_MEMBERS,
@@ -54,7 +56,26 @@ const TABS: Array<{ id: FilterTab; label: string }> = [
   { id: "mine", label: "Assigned to me" },
 ];
 
-export function InboxShell({ currentUserName }: { currentUserName: string }) {
+/**
+ * Inbox entry point (Phase 4 dual mode):
+ * - The active workspace HAS real conversations → the real inbox
+ *   (API-backed, Socket.IO live updates).
+ * - Otherwise → the Phase 3 sample preview, unchanged, badged as sample.
+ */
+export function InboxShell({
+  currentUserName,
+  realData,
+}: {
+  currentUserName: string;
+  realData?: RealInboxData;
+}) {
+  if (realData && realData.conversations.length > 0) {
+    return <RealInboxShell currentUserName={currentUserName} data={realData} />;
+  }
+  return <SampleInboxShell currentUserName={currentUserName} />;
+}
+
+function SampleInboxShell({ currentUserName }: { currentUserName: string }) {
   const [conversations, setConversations] = useState<SampleConversation[]>(SAMPLE_CONVERSATIONS);
   const [selectedId, setSelectedId] = useState<string>(SAMPLE_CONVERSATIONS[0]?.id ?? "");
   const [tab, setTab] = useState<FilterTab>("all");
