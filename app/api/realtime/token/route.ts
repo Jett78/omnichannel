@@ -1,8 +1,6 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 
 import { apiError, requireApiUser } from "@/lib/api";
-
-export const dynamic = "force-dynamic";
 import { auth } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 
@@ -14,6 +12,8 @@ import { getEnv } from "@/lib/env";
  * equivalent to their session cookie.
  */
 export async function GET(request: Request) {
+  // Opt out of static prerendering (Cache Components): the token is per-request.
+  await connection();
   try {
     await requireApiUser(request);
     const session = await auth.api.getSession({ headers: request.headers });
