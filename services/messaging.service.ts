@@ -123,10 +123,20 @@ export const messagingService = {
           workspaceId,
           displayName: normalized.senderName ?? normalized.senderExternalId,
           avatarUrl: normalized.senderAvatarUrl ?? null,
+          // WhatsApp senders are identified by their phone number
+          // (wa_id) — store it as the contact's phone at ingest.
+          ...(channel.provider === "WHATSAPP" ? { phone: normalized.senderExternalId } : {}),
         },
       });
       identity = await prisma.contactIdentity.create({
         data: { contactId: contact.id, channelId, externalUserId: normalized.senderExternalId },
+      });
+    } else if (channel.provider === "WHATSAPP") {
+      // Backfill the phone on contacts created before Phase 6 (or by
+      // other flows) when it is still unknown.
+      await prisma.contact.updateMany({
+        where: { id: identity.contactId, workspaceId, phone: null },
+        data: { phone: normalized.senderExternalId },
       });
     }
     const contactId = identity.contactId;
@@ -292,7 +302,16 @@ export const messagingService = {
     actorUserId: string,
     workspaceId: string,
     conversationId: string,
-    input: { content: string; type?: MessageType },
+    input: {
+      content?: string;
+      type?: MessageType;
+      /** WhatsApp template send (Phase 6) — see validations below. */
+      templateName?: string;
+      templateLanguage?: string;
+      templateParams?: string[];
+      previewText?: string;
+      optInConfirmed?: boolean;
+    },
   ): Promise<UnifiedMessage> {
     await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
     const conversation = await prisma.conversation.findFirst({
@@ -300,15 +319,57 @@ export const messagingService = {
     });
     if (!conversation) throw AppError.notFound("Conversation not found");
 
+    const isTemplateSend = Boolean(input.templateName) || input.type === "TEMPLATE";
+    let messageType: MessageType = input.type ?? "TEXT";
+    let body: string;
+    let metadata: Prisma.InputJsonValue | undefined;
+    if (isTemplateSend) {
+      const channel = await prisma.channel.findUnique({
+        where: { id: conversation.channelId },
+        select: { provider: true },
+      });
+      if (channel?.provider !== "WHATSAPP") {
+        throw AppError.badRequest("Template messages are only supported on WhatsApp channels.");
+      }
+      if (!input.templateName) {
+        throw AppError.badRequest("A template name is required for a template send.");
+      }
+      // Opt-in gate (Phase 6 v1): WhatsApp requires the customer to
+      // have opted in before a business sends a template message. The
+      // dashboard asks the agent to confirm this on every template
+      // send; the confirmation + who confirmed are recorded on the
+      // message. There is deliberately no CRM consent database yet.
+      if (input.optInConfirmed !== true) {
+        throw AppError.badRequest(
+          "Template sends require confirmed customer opt-in (optInConfirmed). Confirm the customer has opted in to receive WhatsApp messages from this business.",
+        );
+      }
+      messageType = "TEMPLATE";
+      body = input.previewText ?? input.content ?? input.templateName;
+      metadata = {
+        whatsappTemplate: {
+          name: input.templateName,
+          language: input.templateLanguage ?? "en_US",
+          params: input.templateParams ?? [],
+        },
+        optInConfirmed: true,
+        optInConfirmedBy: actorUserId,
+      } as Prisma.InputJsonValue;
+    } else {
+      if (!input.content) throw AppError.badRequest("Message content is required.");
+      body = input.content;
+    }
+
     const created = await prisma.message.create({
       data: {
         conversationId,
         direction: "OUTBOUND",
-        type: input.type ?? "TEXT",
-        body: input.content,
+        type: messageType,
+        body,
         senderType: "AGENT",
         senderUserId: actorUserId,
         status: "QUEUED",
+        ...(metadata !== undefined ? { metadata } : {}),
       },
       include: { attachments: true },
     });
@@ -418,6 +479,11 @@ export const messagingService = {
         ...(credential?.tokenExpiresAt ? { expiresAt: credential.tokenExpiresAt } : {}),
         scopes: credential?.scopes ?? [],
       },
+      ...(channel.config &&
+      typeof channel.config === "object" &&
+      !Array.isArray(channel.config)
+        ? { config: channel.config as Record<string, unknown> }
+        : {}),
     };
 
     // Meta 24h standard messaging window (Facebook Messenger +
@@ -441,6 +507,39 @@ export const messagingService = {
       }
     }
 
+    // WhatsApp 24-hour customer service window (Phase 6): free-form
+    // messages are only permitted within 24h of the customer's most
+    // recent inbound message. Approved TEMPLATE messages skip this
+    // check — they are WhatsApp's sanctioned outside-window path.
+    const messageMetadata = toMetadata(message.metadata);
+    const waTemplate =
+      messageMetadata?.whatsappTemplate &&
+      typeof messageMetadata.whatsappTemplate === "object" &&
+      !Array.isArray(messageMetadata.whatsappTemplate)
+        ? (messageMetadata.whatsappTemplate as {
+            name?: unknown;
+            language?: unknown;
+            params?: unknown;
+          })
+        : null;
+    const isWhatsAppTemplate =
+      channel.provider === "WHATSAPP" &&
+      (message.type === "TEMPLATE" || typeof waTemplate?.name === "string");
+    if (channel.provider === "WHATSAPP" && !isWhatsAppTemplate) {
+      const latestInbound = await prisma.message.findFirst({
+        where: { conversationId: conversation.id, direction: "INBOUND" },
+        orderBy: { sentAt: "desc" },
+        select: { sentAt: true },
+      });
+      const windowMs = 24 * 60 * 60 * 1000;
+      if (!latestInbound || Date.now() - latestInbound.sentAt.getTime() > windowMs) {
+        return markFailed(
+          "Outside WhatsApp's 24-hour customer service window — free-form messages can't be sent. Send an approved template message instead.",
+          { windowViolation: true },
+        );
+      }
+    }
+
     try {
       const result = await provider.sendMessage({
         channel: channelContext,
@@ -456,6 +555,18 @@ export const messagingService = {
               ...(a.fileName ? { fileName: a.fileName } : {}),
               ...(a.size !== null ? { size: a.size } : {}),
             })),
+          ...(isWhatsAppTemplate && typeof waTemplate?.name === "string"
+            ? {
+                templateName: waTemplate.name,
+                templateLanguage:
+                  typeof waTemplate.language === "string" ? waTemplate.language : "en_US",
+                templateParams: Array.isArray(waTemplate.params)
+                  ? waTemplate.params.filter(
+                      (param): param is string => typeof param === "string",
+                    )
+                  : [],
+              }
+            : {}),
         },
       });
       await prisma.message.update({
@@ -519,6 +630,38 @@ export const messagingService = {
       candidate: Candidate,
       update: DeliveryStatusUpdate,
     ): Promise<boolean> => {
+      // FAILED receipts (WhatsApp Phase 6): a provider-reported failure
+      // settles a not-yet-delivered outbound message as FAILED with the
+      // provider's error text. It never overwrites DELIVERED/READ —
+      // a message the customer already received did not fail.
+      if (update.status === "FAILED") {
+        if (candidate.status !== "QUEUED" && candidate.status !== "SENT") return false;
+        const failedMetadata: Record<string, unknown> = {
+          ...(toMetadata(candidate.metadata) ?? {}),
+          error: update.error ?? "The provider reported a delivery failure.",
+          deliveryFailedAt: update.at.toISOString(),
+        };
+        await prisma.message.update({
+          where: { id: candidate.id },
+          data: {
+            status: "FAILED",
+            metadata: failedMetadata as Prisma.InputJsonValue,
+          },
+        });
+        await emitToWorkspaceAndConversation(
+          workspaceId,
+          candidate.conversationId,
+          "message.status_updated",
+          {
+            workspaceId,
+            conversationId: candidate.conversationId,
+            messageId: candidate.id,
+            status: "FAILED",
+            error: failedMetadata.error,
+          },
+        );
+        return true;
+      }
       if (candidate.status === "FAILED") return false;
       const currentRank = STATUS_RANK[candidate.status] ?? 0;
       const nextRank = STATUS_RANK[update.status] ?? 0;

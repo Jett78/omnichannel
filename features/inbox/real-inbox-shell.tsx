@@ -3,12 +3,14 @@
 import {
   ArrowLeft,
   CheckCheck,
+  FileText,
   Lock,
   MoreHorizontal,
   Search,
   Send,
   StickyNote,
   Tag as TagIcon,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -31,12 +33,34 @@ import type {
   RealConversationItem,
   RealInboxData,
   RealMessageItem,
+  WhatsAppTemplateView,
 } from "@/features/inbox/real-data";
 import { connectSocket, disconnectSocket } from "@/lib/socket-client";
 import { cn } from "@/lib/utils";
 
 type SocketStatus = "connecting" | "connected" | "disconnected";
-type ComposerMode = "reply" | "note";
+type ComposerMode = "reply" | "note" | "template";
+
+/** Renders a template body with {{n}} placeholders substituted. */
+function renderTemplatePreview(bodyText: string | null, params: string[]): string {
+  if (!bodyText) return "";
+  return bodyText.replace(/\{\{(\d+)\}\}/g, (_match, index: string) => {
+    const value = params[Number(index) - 1]?.trim();
+    return value ? value : `{{${index}}}`;
+  });
+}
+
+/** Delivery error recorded in message metadata (e.g. WhatsApp 131047). */
+function messageErrorText(message: RealMessageItem): string | null {
+  const error = message.metadata?.error;
+  return typeof error === "string" && error ? error : null;
+}
+
+/** True when the latest inbound message is older than 24 hours (or absent). */
+function isWindowClosed(latestInboundAt: string | null): boolean {
+  if (!latestInboundAt) return true;
+  return Date.now() - new Date(latestInboundAt).getTime() > 24 * 60 * 60 * 1000;
+}
 
 interface MessageCreatedPayload {
   conversationId?: string;
@@ -89,6 +113,15 @@ export function RealInboxShell({
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [composerMode, setComposerMode] = useState<ComposerMode>("reply");
+  // WhatsApp template composer state (Phase 6).
+  const [templatesByChannel, setTemplatesByChannel] = useState<
+    Record<string, WhatsAppTemplateView[]>
+  >({});
+  const [templateSelection, setTemplateSelection] = useState<string>("");
+  const [templateParams, setTemplateParams] = useState<string[]>([]);
+  const [templateOptInConfirmed, setTemplateOptInConfirmed] = useState(false);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [socketStatus, setSocketStatus] = useState<SocketStatus>("connecting");
   const [notice, setNotice] = useState<string | null>(null);
@@ -100,6 +133,53 @@ export function RealInboxShell({
   }, [selectedId]);
   const selected = conversations.find((c) => c.id === selectedId) ?? conversations[0];
   const messages = selected ? (messagesByConversation[selected.id] ?? []) : [];
+
+  const isWhatsApp = selected?.channel.provider === "WHATSAPP";
+  const channelTemplates = selected ? templatesByChannel[selected.channel.id] : undefined;
+  const selectedTemplate = (channelTemplates ?? []).find(
+    (template) => `${template.name}|${template.language}` === templateSelection,
+  );
+  const latestInbound = [...messages].reverse().find((m) => m.direction === "INBOUND");
+  // Advisory only — the server enforces WhatsApp's 24-hour window.
+  const whatsappWindowClosed = isWhatsApp && isWindowClosed(latestInbound?.createdAt ?? null);
+
+  // Load APPROVED templates when the template composer opens.
+  useEffect(() => {
+    if (composerMode !== "template" || !selected || !isWhatsApp) return;
+    const channelId = selected.channel.id;
+    if (templatesByChannel[channelId]) return;
+    let cancelled = false;
+    void (async () => {
+      setTemplatesLoading(true);
+      setTemplatesError(null);
+      try {
+        const res = await fetch(`${apiBase}/channels/${channelId}/templates`);
+        const body = (await res.json().catch(() => null)) as {
+          templates?: WhatsAppTemplateView[];
+          error?: { message?: string };
+        } | null;
+        if (cancelled) return;
+        if (!res.ok || !body?.templates) {
+          throw new Error(body?.error?.message ?? `Could not load templates (${res.status})`);
+        }
+        setTemplatesByChannel((prev) => ({ ...prev, [channelId]: body.templates ?? [] }));
+        const first = body.templates[0];
+        if (first) {
+          setTemplateSelection(`${first.name}|${first.language}`);
+          setTemplateParams(Array.from({ length: first.paramsCount }, () => ""));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setTemplatesError(error instanceof Error ? error.message : "Could not load templates");
+        }
+      } finally {
+        if (!cancelled) setTemplatesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [composerMode, selected, isWhatsApp, apiBase, templatesByChannel]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -216,6 +296,11 @@ export function RealInboxShell({
   async function selectConversation(id: string) {
     setSelectedId(id);
     setMobileThread(true);
+    // Reset the WhatsApp template composer for the new conversation.
+    setTemplateSelection("");
+    setTemplateParams([]);
+    setTemplateOptInConfirmed(false);
+    setTemplatesError(null);
     const conversation = conversations.find((c) => c.id === id);
     if (conversation && conversation.unreadCount > 0) {
       setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)));
@@ -223,7 +308,50 @@ export function RealInboxShell({
     }
   }
 
+  async function sendTemplate() {
+    if (!selected || !selectedTemplate) return;
+    const params = Array.from({ length: selectedTemplate.paramsCount }, (_, index) =>
+      (templateParams[index] ?? "").trim(),
+    );
+    const previewText = renderTemplatePreview(selectedTemplate.bodyText, params);
+    try {
+      const res = await fetch(`${apiBase}/conversations/${selected.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          templateName: selectedTemplate.name,
+          templateLanguage: selectedTemplate.language,
+          templateParams: params,
+          previewText,
+          optInConfirmed: templateOptInConfirmed,
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        message?: RealMessageItem;
+        error?: { message?: string };
+      } | null;
+      if (!res.ok || !body?.message) {
+        throw new Error(body?.error?.message ?? `Request failed (${res.status})`);
+      }
+      const sent = body.message;
+      setMessagesByConversation((prev) => {
+        const existing = prev[selected.id] ?? [];
+        if (existing.some((m) => m.id === sent.id)) return prev;
+        return { ...prev, [selected.id]: [...existing, sent] };
+      });
+      setTemplateParams(Array.from({ length: selectedTemplate.paramsCount }, () => ""));
+      setTemplateOptInConfirmed(false);
+      void fetchConversations();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to send template");
+    }
+  }
+
   async function send() {
+    if (composerMode === "template") {
+      await sendTemplate();
+      return;
+    }
     const content = draft.trim();
     if (!content || !selected) return;
     setDraft("");
@@ -511,7 +639,12 @@ export function RealInboxShell({
                     <div key={message.id} className="flex flex-col items-end">
                       <div className="max-w-[75%]">
                         <div className="rounded-2xl rounded-br-md bg-indigo-100 px-3.5 py-2.5 text-sm text-indigo-950 dark:bg-indigo-500/20 dark:text-indigo-50">
-                          {message.content}
+                          {message.messageType === "TEMPLATE" ? (
+                            <span className="mb-1 inline-flex items-center gap-1 rounded bg-indigo-200/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase dark:bg-indigo-400/20">
+                              <FileText className="size-3" /> Template
+                            </span>
+                          ) : null}
+                          <div>{message.content}</div>
                         </div>
                         <p className="text-muted-foreground mt-1 flex items-center justify-end gap-1 pr-1 text-[11px]">
                           {formatMessageTime(message.createdAt)} · {message.status.toLowerCase()}
@@ -519,6 +652,11 @@ export function RealInboxShell({
                             <CheckCheck className="size-3.5 text-sky-600" />
                           ) : null}
                         </p>
+                        {message.status === "FAILED" && messageErrorText(message) ? (
+                          <p className="mt-0.5 max-w-full pr-1 text-right text-[11px] text-red-600">
+                            {messageErrorText(message)}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   ),
@@ -533,6 +671,13 @@ export function RealInboxShell({
 
             <div className="shrink-0 border-t px-4 py-3">
               <div className="mx-auto max-w-3xl">
+                {isWhatsApp && composerMode === "reply" && whatsappWindowClosed ? (
+                  <p className="mb-2 flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                    The 24-hour WhatsApp window is closed — free-form replies will fail. Switch to
+                    Template mode to message this customer.
+                  </p>
+                ) : null}
                 <div
                   className={cn(
                     "rounded-xl border shadow-xs focus-within:ring-ring/40 focus-within:ring-[3px]",
@@ -564,7 +709,102 @@ export function RealInboxShell({
                     >
                       <StickyNote className="size-3.5" /> Private note
                     </button>
+                    {isWhatsApp ? (
+                      <button
+                        type="button"
+                        onClick={() => setComposerMode("template")}
+                        className={cn(
+                          "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
+                          composerMode === "template"
+                            ? "bg-accent text-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        <FileText className="size-3.5" /> Template
+                      </button>
+                    ) : null}
                   </div>
+                  {composerMode === "template" ? (
+                    <div className="flex flex-col gap-2 px-3 py-2">
+                      {templatesLoading ? (
+                        <p className="text-muted-foreground text-sm">Loading templates…</p>
+                      ) : templatesError ? (
+                        <p className="text-sm text-red-600">{templatesError}</p>
+                      ) : (channelTemplates ?? []).length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                          No APPROVED templates were returned for this WhatsApp account. Create and
+                          approve templates in WhatsApp Manager first.
+                        </p>
+                      ) : (
+                        <>
+                          <Select
+                            value={templateSelection}
+                            onValueChange={(value) => {
+                              setTemplateSelection(value);
+                              const template = (channelTemplates ?? []).find(
+                                (t) => `${t.name}|${t.language}` === value,
+                              );
+                              setTemplateParams(
+                                Array.from({ length: template?.paramsCount ?? 0 }, () => ""),
+                              );
+                            }}
+                          >
+                            <SelectTrigger aria-label="WhatsApp template">
+                              <SelectValue placeholder="Choose a template" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(channelTemplates ?? []).map((template) => (
+                                <SelectItem
+                                  key={`${template.name}|${template.language}`}
+                                  value={`${template.name}|${template.language}`}
+                                >
+                                  {template.name} ({template.language})
+                                  {template.category ? ` · ${template.category}` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {selectedTemplate ? (
+                            <>
+                              <div className="bg-muted/60 rounded-md px-3 py-2 text-sm whitespace-pre-wrap">
+                                {renderTemplatePreview(selectedTemplate.bodyText, templateParams) ||
+                                  "(this template has no body text)"}
+                              </div>
+                              {Array.from({ length: selectedTemplate.paramsCount }, (_, index) => (
+                                <Input
+                                  key={index}
+                                  value={templateParams[index] ?? ""}
+                                  onChange={(event) =>
+                                    setTemplateParams((prev) =>
+                                      prev.map((value, i) =>
+                                        i === index ? event.target.value : value,
+                                      ),
+                                    )
+                                  }
+                                  placeholder={`Value for {{${index + 1}}}`}
+                                  aria-label={`Template parameter ${index + 1}`}
+                                  className="h-8"
+                                />
+                              ))}
+                              <label className="flex cursor-pointer items-start gap-2 text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={templateOptInConfirmed}
+                                  onChange={(event) =>
+                                    setTemplateOptInConfirmed(event.target.checked)
+                                  }
+                                  className="mt-0.5"
+                                />
+                                The customer has opted in to receive WhatsApp messages from this
+                                business.
+                              </label>
+                            </>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  ) : null}
+                  {composerMode !== "template" ? (
                   <Textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
@@ -583,18 +823,33 @@ export function RealInboxShell({
                     className="min-h-11 resize-none border-0 shadow-none focus-visible:ring-0"
                     rows={2}
                   />
+                  ) : null}
                   <div className="flex items-center px-2 pb-2">
                     <span className="text-muted-foreground text-xs">
                       {composerMode === "note"
                         ? "Notes are never sent to the customer."
-                        : `Sending as ${currentUserName}`}
+                        : composerMode === "template"
+                          ? "Templates can be sent outside the 24-hour window."
+                          : `Sending as ${currentUserName}`}
                     </span>
                     <Button
                       className="ml-auto"
                       onClick={() => void send()}
-                      disabled={!draft.trim()}
+                      disabled={
+                        composerMode === "template"
+                          ? !selectedTemplate ||
+                            !templateOptInConfirmed ||
+                            Array.from({ length: selectedTemplate.paramsCount }, (_, index) =>
+                              (templateParams[index] ?? "").trim(),
+                            ).some((value) => !value)
+                          : !draft.trim()
+                      }
                     >
-                      {composerMode === "note" ? "Add note" : "Send"}
+                      {composerMode === "note"
+                        ? "Add note"
+                        : composerMode === "template"
+                          ? "Send template"
+                          : "Send"}
                       <Send className="size-4" />
                     </Button>
                   </div>

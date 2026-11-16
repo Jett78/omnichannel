@@ -59,6 +59,7 @@ enum MessageType {
   STICKER
   SYSTEM
   PRIVATE_NOTE
+  TEMPLATE
 }
 
 enum MessageStatus {

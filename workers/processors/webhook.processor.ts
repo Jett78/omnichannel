@@ -60,6 +60,24 @@ export async function processWebhookJob(job: Job<WebhookJobData>): Promise<void>
           }
         }
       }
+      // WhatsApp payloads address the channel by phone_number_id in
+      // each change's value.metadata — entry[].id is the WABA id and
+      // does NOT identify the channel (Phase 6).
+      if (payload.object === "whatsapp_business_account" && Array.isArray(payload.entry)) {
+        for (const entry of payload.entry) {
+          if (!entry || typeof entry !== "object") continue;
+          const changes = (entry as { changes?: unknown }).changes;
+          if (!Array.isArray(changes)) continue;
+          for (const change of changes) {
+            if (!change || typeof change !== "object") continue;
+            const metadata = (change as { value?: { metadata?: { phone_number_id?: unknown } } })
+              .value?.metadata;
+            if (typeof metadata?.phone_number_id === "string") {
+              entryIds.add(metadata.phone_number_id);
+            }
+          }
+        }
+      }
       for (const update of statusUpdates) {
         if (update.channelExternalAccountId) entryIds.add(update.channelExternalAccountId);
       }

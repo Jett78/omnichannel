@@ -17,13 +17,27 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MetaConnectionPanel } from "@/features/channels/meta-connection-panel";
+import {
+  WhatsAppConnectPanel,
+  type WhatsAppConfigView,
+} from "@/features/channels/whatsapp-connect-panel";
 import type { Provider } from "@/generated/prisma/client";
+
+/** Client-safe subset of Channel.config (never contains tokens). */
+export interface RealChannelConfig {
+  displayPhoneNumber?: string;
+  verifiedName?: string;
+  connectionMethod?: string;
+  qualityRating?: string;
+  webhookSubscription?: { status?: string; error?: string };
+}
 
 export interface RealChannel {
   id: string;
   provider: Provider;
   displayName: string;
   status: string;
+  config?: RealChannelConfig;
 }
 
 /** Public Meta setup facts (no secrets) passed from the server page. */
@@ -43,6 +57,7 @@ export function ChannelsCatalog({
   metaConfig,
   metaSession,
   metaError,
+  whatsappConfig,
 }: {
   realChannels: RealChannel[];
   workspaceId?: string;
@@ -50,6 +65,7 @@ export function ChannelsCatalog({
   metaConfig?: MetaConfigView;
   metaSession?: { id: string; provider: "facebook" | "instagram" } | null;
   metaError?: string | null;
+  whatsappConfig?: WhatsAppConfigView;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Provider | null>(null);
@@ -135,6 +151,14 @@ export function ChannelsCatalog({
         />
       ) : null}
 
+      {whatsappConfig && workspaceId ? (
+        <WhatsAppConnectPanel
+          workspaceId={workspaceId}
+          whatsappConfig={whatsappConfig}
+          connectedChannels={realChannels}
+        />
+      ) : null}
+
       {mockEnabled && workspaceId ? (
         <Card className="border-dashed shadow-none">
           <CardHeader>
@@ -180,7 +204,9 @@ export function ChannelsCatalog({
                   <Badge variant={channel.status === "CONNECTED" ? "success" : "warning"}>
                     {channel.status}
                   </Badge>
-                  {(channel.provider === "FACEBOOK" || channel.provider === "INSTAGRAM") &&
+                  {(channel.provider === "FACEBOOK" ||
+                    channel.provider === "INSTAGRAM" ||
+                    channel.provider === "WHATSAPP") &&
                   channel.status === "CONNECTED" ? (
                     <Button
                       variant="outline"
@@ -216,7 +242,11 @@ export function ChannelsCatalog({
                 <Badge variant={isConnected ? "success" : "muted"}>
                   {isConnected ? "Connected" : "Not connected"}
                 </Badge>
-                {provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId ? (
+                {provider === "WHATSAPP" && workspaceId ? (
+                  <Button variant="outline" asChild>
+                    <a href="#whatsapp-connect">Connect now</a>
+                  </Button>
+                ) : provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId ? (
                   <Button variant="outline" asChild>
                     <a href={`/api/workspaces/${workspaceId}/channels/facebook/connect`}>
                       Connect now

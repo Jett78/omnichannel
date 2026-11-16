@@ -30,7 +30,7 @@ export const PROVIDER_META: Record<Provider, ProviderMeta> = {
     label: "WhatsApp Business",
     shortLabel: "WhatsApp",
     description: "Reply to WhatsApp Business chats from the unified inbox.",
-    phase: "Phase 6",
+    phase: "Meta Cloud API",
     color: "#25d366",
     icon: Phone,
   },

@@ -139,7 +139,9 @@ export function instagramAppSecret(): string | undefined {
 }
 
 /** Webhook verify token for the GET handshake, per provider. */
-export function webhookVerifyToken(providerId: "facebook" | "instagram"): string | undefined {
+export function webhookVerifyToken(
+  providerId: "facebook" | "instagram" | "whatsapp",
+): string | undefined {
   if (providerId === "instagram") {
     return (
       process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN?.trim() ||
@@ -147,5 +149,96 @@ export function webhookVerifyToken(providerId: "facebook" | "instagram"): string
       undefined
     );
   }
+  if (providerId === "whatsapp") {
+    return (
+      process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim() ||
+      process.env.META_WEBHOOK_VERIFY_TOKEN?.trim() ||
+      undefined
+    );
+  }
   return process.env.META_WEBHOOK_VERIFY_TOKEN?.trim() || undefined;
+}
+
+// ─── WhatsApp Business Platform (Cloud API) ──────────────────────────────────
+
+export interface WhatsAppMetaConfig {
+  /** Meta app id — required only to exchange Embedded Signup codes. */
+  appId: string | undefined;
+  /** Meta app secret — required only to exchange Embedded Signup codes. */
+  appSecret: string | undefined;
+  /** Secret used to verify X-Hub-Signature-256 on WhatsApp webhooks. */
+  signatureSecret: string | undefined;
+  webhookVerifyToken: string | undefined;
+  /** Facebook Login for Business configuration id for Embedded Signup. */
+  embeddedSignupConfigId: string | undefined;
+  graphApiVersion: string;
+  appsecretProof: boolean;
+  embeddedSignupReady: boolean;
+  manualConnectReady: boolean;
+}
+
+export interface WhatsAppEmbeddedConfig {
+  appId: string;
+  appSecret: string;
+  embeddedSignupConfigId: string;
+  graphApiVersion: string;
+  appsecretProof: boolean;
+}
+
+function whatsappGraphApiVersion(): string {
+  return process.env.WHATSAPP_GRAPH_API_VERSION?.trim() || graphApiVersion();
+}
+
+/** Graph version for WhatsApp calls without requiring full app configuration. */
+export function metaWhatsAppGraphApiVersion(): string {
+  return whatsappGraphApiVersion();
+}
+
+export function getWhatsAppConfig(): WhatsAppMetaConfig {
+  const appId = process.env.META_APP_ID?.trim() || undefined;
+  const appSecret = process.env.META_APP_SECRET?.trim() || undefined;
+  const signatureSecret =
+    process.env.WHATSAPP_APP_SECRET?.trim() || process.env.META_APP_SECRET?.trim() || undefined;
+  const embeddedSignupConfigId =
+    process.env.WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID?.trim() || undefined;
+  return {
+    appId,
+    appSecret,
+    signatureSecret,
+    webhookVerifyToken:
+      process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim() ||
+      process.env.META_WEBHOOK_VERIFY_TOKEN?.trim() ||
+      undefined,
+    embeddedSignupConfigId,
+    graphApiVersion: whatsappGraphApiVersion(),
+    appsecretProof: appsecretProofEnabled(),
+    embeddedSignupReady: Boolean(appId && appSecret && embeddedSignupConfigId),
+    manualConnectReady: Boolean(signatureSecret),
+  };
+}
+
+/** True when the Meta app credentials needed for Embedded Signup code exchange exist. */
+export function isWhatsAppConfigured(): boolean {
+  return Boolean(process.env.META_APP_ID?.trim() && process.env.META_APP_SECRET?.trim());
+}
+
+export function requireWhatsAppEmbeddedConfig(): WhatsAppEmbeddedConfig {
+  const config = getWhatsAppConfig();
+  const missing: string[] = [];
+  if (!config.appId) missing.push("META_APP_ID");
+  if (!config.appSecret) missing.push("META_APP_SECRET");
+  if (!config.embeddedSignupConfigId) missing.push("WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID");
+  if (missing.length > 0) throw missingConfigError("WhatsApp Embedded Signup", missing);
+  return {
+    appId: config.appId as string,
+    appSecret: config.appSecret as string,
+    embeddedSignupConfigId: config.embeddedSignupConfigId as string,
+    graphApiVersion: config.graphApiVersion,
+    appsecretProof: config.appsecretProof,
+  };
+}
+
+/** App secret for WhatsApp webhook signature checks; undefined when unconfigured. */
+export function whatsappAppSecret(): string | undefined {
+  return getWhatsAppConfig().signatureSecret;
 }

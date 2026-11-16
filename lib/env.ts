@@ -49,6 +49,18 @@ const envSchema = z.object({
   INSTAGRAM_APP_SECRET: z.string().optional(),
   INSTAGRAM_REDIRECT_URI: z.string().optional(),
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  // WhatsApp Business Platform Cloud API (Phase 6). The app secret /
+  // verify token fall back to the Meta values in meta-config.ts.
+  WHATSAPP_APP_SECRET: z.string().optional(),
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: z.string().optional(),
+  WHATSAPP_GRAPH_API_VERSION: z.string().optional(),
+  // S3-compatible media storage (used by the WhatsApp media processor)
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

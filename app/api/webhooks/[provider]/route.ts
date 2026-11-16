@@ -106,7 +106,7 @@ export async function GET(request: Request, context: RouteContext) {
   if (url.searchParams.get("hub.mode") === "subscribe" && url.searchParams.get("hub.challenge")) {
     const providerKey = providerParam.toLowerCase();
     const expected =
-      providerKey === "instagram" || providerKey === "facebook"
+      providerKey === "instagram" || providerKey === "facebook" || providerKey === "whatsapp"
         ? webhookVerifyToken(providerKey)
         : process.env.META_WEBHOOK_VERIFY_TOKEN;
     if (expected && url.searchParams.get("hub.verify_token") !== expected) {

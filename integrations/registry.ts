@@ -4,6 +4,7 @@ import type { ProviderId } from "@/types/messaging";
 import { mockProvider } from "@/integrations/mock/mock.provider";
 import { facebookProvider } from "@/integrations/meta/facebook-provider";
 import { instagramProvider } from "@/integrations/meta/instagram-provider";
+import { whatsappProvider } from "@/integrations/whatsapp/whatsapp-provider";
 import type { IMessagingProvider } from "@/integrations/types";
 
 /**
@@ -30,6 +31,7 @@ export function registerProvider(provider: IMessagingProvider): void {
 
 registerProvider(facebookProvider);
 registerProvider(instagramProvider);
+registerProvider(whatsappProvider);
 
 if (isMockProviderEnabled()) {
   registerProvider(mockProvider);

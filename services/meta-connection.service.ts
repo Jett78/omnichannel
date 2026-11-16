@@ -17,6 +17,11 @@ import {
   type MetaInstagramAccount,
 } from "@/integrations/meta/instagram-provider";
 import { getFacebookConfig, getInstagramConfig } from "@/integrations/meta/meta-config";
+import {
+  WhatsAppProvider,
+  whatsappProvider,
+  type WhatsAppPhoneNumber,
+} from "@/integrations/whatsapp/whatsapp-provider";
 import type { ChannelContext } from "@/integrations/types";
 import { channelCredentialService } from "@/services/channel-credential.service";
 import type { Channel, OAuthConnectionSession, Prisma } from "@/generated/prisma/client";
@@ -48,6 +53,7 @@ import type { Channel, OAuthConnectionSession, Prisma } from "@/generated/prisma
 export interface MetaConnectionDeps {
   facebook?: FacebookProvider;
   instagram?: InstagramProvider;
+  whatsapp?: WhatsAppProvider;
 }
 
 interface FacebookSessionData {
@@ -60,6 +66,13 @@ interface InstagramSessionData {
   accessToken: string;
   expiresAt: string | null;
   account: MetaInstagramAccount;
+}
+
+/** Written by services/whatsapp-connection.service.ts (Embedded Signup). */
+interface WhatsAppSessionData {
+  accessToken: string;
+  waba: { id: string; name: string };
+  phoneNumbers: WhatsAppPhoneNumber[];
 }
 
 /** Account metadata safe to send to the browser — never contains tokens. */
@@ -285,6 +298,29 @@ export const metaConnectionService = {
       };
     }
 
+    if (session.provider === "WHATSAPP") {
+      const data = parseSessionData<WhatsAppSessionData>(session);
+      return {
+        sessionId: session.id,
+        provider: session.provider,
+        expiresAt: session.expiresAt,
+        accounts: (data?.phoneNumbers ?? []).map((number) => ({
+          externalAccountId: number.id,
+          displayName: number.verifiedName,
+          detail: [
+            number.displayPhoneNumber,
+            number.status ? `status ${number.status}` : null,
+            number.qualityRating ? `quality ${number.qualityRating}` : null,
+            data?.waba ? `WABA ${data.waba.name}` : null,
+          ]
+            .filter((part): part is string => Boolean(part))
+            .join(" · "),
+          eligible: number.eligible,
+          ...(number.ineligibleReason ? { ineligibleReason: number.ineligibleReason } : {}),
+        })),
+      };
+    }
+
     const data = parseSessionData<InstagramSessionData>(session);
     const account = data?.account;
     return {
@@ -493,24 +529,40 @@ export const metaConnectionService = {
     const channel = await prisma.channel.findFirst({ where: { id: channelId, workspaceId } });
     if (!channel) throw AppError.notFound("Channel not found");
 
-    if (channel.provider === "FACEBOOK" || channel.provider === "INSTAGRAM") {
+    if (
+      channel.provider === "FACEBOOK" ||
+      channel.provider === "INSTAGRAM" ||
+      channel.provider === "WHATSAPP"
+    ) {
       const credential = await channelCredentialService.getDecryptedChannelCredentialForServer(
         channel.id,
       );
       const context: ChannelContext = {
         channelId: channel.id,
         workspaceId,
-        provider: channel.provider === "FACEBOOK" ? "facebook" : "instagram",
+        provider:
+          channel.provider === "FACEBOOK"
+            ? "facebook"
+            : channel.provider === "INSTAGRAM"
+              ? "instagram"
+              : "whatsapp",
         externalAccountId: channel.externalAccountId,
         credentials: {
           accessToken: credential?.accessToken ?? "",
           scopes: credential?.scopes ?? [],
         },
+        ...(channel.config &&
+        typeof channel.config === "object" &&
+        !Array.isArray(channel.config)
+          ? { config: channel.config as Record<string, unknown> }
+          : {}),
       };
       const provider =
         channel.provider === "FACEBOOK"
           ? (deps.facebook ?? facebookProvider)
-          : (deps.instagram ?? instagramProvider);
+          : channel.provider === "INSTAGRAM"
+            ? (deps.instagram ?? instagramProvider)
+            : (deps.whatsapp ?? whatsappProvider);
       // disconnectAccount is best-effort internally (logs, never throws).
       await provider.disconnectAccount(context);
     }

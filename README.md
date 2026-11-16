@@ -4,7 +4,7 @@ A multi-tenant SaaS that connects a business's messaging accounts — Facebook M
 Instagram, WhatsApp, Telegram (X and TikTok as later spikes) — into one agent inbox.
 Architecture: [`docs/PHASE-0-ARCHITECTURE.md`](docs/PHASE-0-ARCHITECTURE.md).
 
-**Current status: Phase 5 — Meta integration (Facebook Messenger + Instagram).**
+**Current status: Phase 6 — WhatsApp Business Cloud API.**
 Better Auth (email/password, database sessions), workspace management with
 role-based permissions, teams, conversation assignments and notifications are
 implemented and tested, and the full SaaS shell (sidebar, top bar, overview,
@@ -13,8 +13,37 @@ built. Phase 4 added the real messaging engine (webhook ingest → normalized
 messages → Socket.IO realtime → agent replies through BullMQ), a real-data
 inbox, and a **dev-only mock provider** for exercising the loop. Phase 5 adds
 the first real platform adapters — Facebook Messenger and Instagram — against
-the official Meta APIs (see below). Remaining adapters (WhatsApp, Telegram, …)
-plug into the same `IMessagingProvider` contract in later phases.
+the official Meta APIs (see below). Phase 6 adds WhatsApp on the official
+Cloud API (see below). Remaining adapters (Telegram, …) plug into the same
+`IMessagingProvider` contract in later phases.
+
+## WhatsApp integration (Phase 6)
+
+- **Provider** (`integrations/whatsapp/whatsapp-provider.ts`): official
+  WhatsApp Business Platform **Cloud API** only — text/template/media sends,
+  read receipts, two-step media download, full webhook parsing (all message
+  types; unknown types surface as SYSTEM, never dropped) and delivery
+  statuses including **failed** receipts with Meta's error text.
+- **Connections** (`services/whatsapp-connection.service.ts`): **Embedded
+  Signup** (FB JS SDK popup → server-side code exchange → `debug_token`
+  granular-scope verification → number picker; tokens never reach the
+  browser) and **manual connect** (system-user token validated against the
+  real WABA before encrypted storage), plus phone **registration** with the
+  6-digit PIN and APPROVED-template listing for the composer.
+- **Platform rules enforced in the engine**: the **24-hour customer service
+  window** for free-form sends (templates are the sanctioned outside-window
+  path), and a **template opt-in gate** — template sends require
+  `optInConfirmed` and record who confirmed (v1 consent minimum; no CRM
+  consent database yet).
+- **Media**: inbound media IDs are downloaded by the media worker and
+  stored in S3 **when configured**; without S3 the bytes are fetched and
+  discarded with a plain log line — never fake-stored.
+- **Honest status**: no real WhatsApp account exists in the development
+  environment; verification is fixtures + an injected fake-fetch test double
+  (`npm run test:phase6`, 56 assertions + Phase 2/4/5 regressions). The
+  manual setup (Meta app, Embedded Signup configuration, App Review,
+  templates, PIN) is documented in
+  [`docs/WHATSAPP-SETUP.md`](docs/WHATSAPP-SETUP.md).
 
 ## Meta integration (Phase 5)
 
@@ -271,6 +300,7 @@ Optional: run web + worker in Docker too — `docker compose --profile app up --
 | `npm run simulate:inbound` | Inject a simulated inbound message (mock provider, dev only) |
 | `npm run test:phase4` | Phase 4 messaging-engine tests (real DB + Redis + child processes) |
 | `npm run test:phase5` | Phase 5 Meta tests (real DB + Redis; providers use an injected fake-fetch test double — no real Meta account) |
+| `npm run test:phase6` | Phase 6 WhatsApp tests (real DB + Redis; provider uses an injected fake-fetch test double — no real WhatsApp account) |
 | `npm run db:generate` | `prisma generate` |
 | `npm run db:migrate` | `prisma migrate dev` |
 | `npm run db:seed` | Seed demo user/workspace (`tsx prisma/seed.ts`) |

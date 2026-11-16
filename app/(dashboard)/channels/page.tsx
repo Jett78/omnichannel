@@ -4,10 +4,12 @@ import { ChannelsCatalog } from "@/features/channels/channels-catalog";
 import { isMockProviderEnabled } from "@/integrations/registry";
 import {
   facebookRedirectUri,
+  getWhatsAppConfig,
   instagramRedirectUri,
   isFacebookConfigured,
   isInstagramConfigured,
 } from "@/integrations/meta/meta-config";
+import type { RealChannelConfig } from "@/features/channels/channels-catalog";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
@@ -28,11 +30,19 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
   const active = await getActiveWorkspace(user.id);
   if (!active) redirect("/onboarding");
 
-  const channels = await prisma.channel.findMany({
+  const channelRows = await prisma.channel.findMany({
     where: { workspaceId: active.id },
     orderBy: { createdAt: "asc" },
-    select: { id: true, provider: true, displayName: true, status: true },
+    select: { id: true, provider: true, displayName: true, status: true, config: true },
   });
+  const channels = channelRows.map((channel) => ({
+    id: channel.id,
+    provider: channel.provider,
+    displayName: channel.displayName,
+    status: channel.status,
+    config: toRealChannelConfig(channel.config),
+  }));
+  const whatsapp = getWhatsAppConfig();
 
   const params = await searchParams;
   const appUrl = getEnv().APP_URL.replace(/\/+$/, "");
@@ -57,6 +67,36 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
       }}
       metaSession={metaSession}
       metaError={params.meta_error ?? null}
+      whatsappConfig={{
+        embeddedSignupReady: whatsapp.embeddedSignupReady,
+        manualReady: whatsapp.manualConnectReady,
+      }}
     />
   );
+}
+
+/** Picks the client-safe subset out of a channel's JSON config. */
+function toRealChannelConfig(config: unknown): RealChannelConfig | undefined {
+  if (!config || typeof config !== "object" || Array.isArray(config)) return undefined;
+  const record = config as Record<string, unknown>;
+  const pick = (key: string): string | undefined =>
+    typeof record[key] === "string" ? (record[key] as string) : undefined;
+  const subscription =
+    record.webhookSubscription && typeof record.webhookSubscription === "object"
+      ? (record.webhookSubscription as Record<string, unknown>)
+      : null;
+  return {
+    ...(pick("displayPhoneNumber") ? { displayPhoneNumber: pick("displayPhoneNumber") } : {}),
+    ...(pick("verifiedName") ? { verifiedName: pick("verifiedName") } : {}),
+    ...(pick("connectionMethod") ? { connectionMethod: pick("connectionMethod") } : {}),
+    ...(pick("qualityRating") ? { qualityRating: pick("qualityRating") } : {}),
+    ...(subscription
+      ? {
+          webhookSubscription: {
+            ...(typeof subscription.status === "string" ? { status: subscription.status } : {}),
+            ...(typeof subscription.error === "string" ? { error: subscription.error } : {}),
+          },
+        }
+      : {}),
+  };
 }

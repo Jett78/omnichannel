@@ -58,6 +58,7 @@ export default async function InboxPage() {
               isPrivateNote: m.isPrivateNote,
               externalMessageId: m.externalMessageId,
               createdAt: m.createdAt.toISOString(),
+              metadata: m.metadata,
             })),
           },
           members: members.map((m) => ({ id: m.user.id, name: m.user.name })),

@@ -48,7 +48,9 @@ export type MessageType =
   | "LOCATION"
   | "STICKER"
   | "SYSTEM"
-  | "PRIVATE_NOTE";
+  | "PRIVATE_NOTE"
+  /** WhatsApp approved template message (Phase 6) — the outside-window send path. */
+  | "TEMPLATE";
 
 export type MessageDirection = "INBOUND" | "OUTBOUND";
 

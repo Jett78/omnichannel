@@ -35,6 +35,17 @@ export interface RealMessageItem {
   isPrivateNote: boolean;
   externalMessageId: string | null;
   createdAt: string;
+  /** Provider message metadata (template info, delivery error, …). */
+  metadata?: Record<string, unknown> | null;
+}
+
+/** APPROVED WhatsApp template as returned by the templates API. */
+export interface WhatsAppTemplateView {
+  name: string;
+  language: string;
+  category: string | null;
+  bodyText: string | null;
+  paramsCount: number;
 }
 
 export interface RealInboxData {

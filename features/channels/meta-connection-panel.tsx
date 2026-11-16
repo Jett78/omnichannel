@@ -40,7 +40,7 @@ export function MetaConnectionPanel({
 }: {
   workspaceId: string;
   sessionId: string;
-  provider: "facebook" | "instagram";
+  provider: "facebook" | "instagram" | "whatsapp";
 }) {
   const router = useRouter();
   const [accounts, setAccounts] = useState<SessionAccount[] | null>(null);
@@ -114,11 +114,14 @@ export function MetaConnectionPanel({
     }
   }
 
-  const providerEnum: Provider = provider === "facebook" ? "FACEBOOK" : "INSTAGRAM";
+  const providerEnum: Provider =
+    provider === "facebook" ? "FACEBOOK" : provider === "instagram" ? "INSTAGRAM" : "WHATSAPP";
   const title =
     provider === "facebook"
       ? "Choose the Facebook Page to connect"
-      : "Connect your Instagram account";
+      : provider === "instagram"
+        ? "Connect your Instagram account"
+        : "Choose the WhatsApp number to connect";
 
   return (
     <Card className="border-indigo-200 shadow-none">
@@ -130,7 +133,9 @@ export function MetaConnectionPanel({
         <CardDescription>
           {provider === "facebook"
             ? "Meta returned these Pages for your authorization. Only Pages your user can manage for Messenger can be connected."
-            : "Meta returned this account for your authorization. Only professional (Business/Creator) accounts can use Instagram messaging."}
+            : provider === "instagram"
+              ? "Meta returned this account for your authorization. Only professional (Business/Creator) accounts can use Instagram messaging."
+              : "Embedded Signup returned these phone numbers for the WhatsApp Business Account. Only connected/verified numbers can be connected."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">

@@ -43,6 +43,8 @@ export interface ChannelContext {
   provider: ProviderId;
   externalAccountId: string;
   credentials: ChannelCredentials;
+  /** Channel.config JSON (e.g. WhatsApp's wabaId) when the caller has it. */
+  config?: Record<string, unknown>;
 }
 
 export interface ContactProfile {
