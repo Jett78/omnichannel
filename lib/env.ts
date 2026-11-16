@@ -29,7 +29,9 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  // Realtime (Phase 4) — standalone Socket.IO gateway
+  // Realtime (Phase 4) — standalone Socket.IO gateway. When SOCKET_PORT is
+  // not set explicitly, getEnv() falls back to the platform-provided PORT
+  // (e.g. Render) so hosted web services bind the port health checks expect.
   SOCKET_PORT: z.coerce.number().default(4001),
   NEXT_PUBLIC_SOCKET_URL: z.string().min(1).default("http://localhost:4001"),
   // Mock provider (Phase 4, dev/test only)
@@ -76,6 +78,14 @@ export function getEnv(): Env {
         .map((i) => `${i.path.join(".")}: ${i.message}`)
         .join("; ")}`,
     );
+  }
+  // Hosted platforms (Render etc.) inject PORT and expect the service to
+  // bind it; an explicit SOCKET_PORT always wins.
+  if (process.env.SOCKET_PORT === undefined && process.env.PORT) {
+    const platformPort = Number(process.env.PORT);
+    if (Number.isFinite(platformPort) && platformPort > 0) {
+      parsed.data.SOCKET_PORT = platformPort;
+    }
   }
   cached = parsed.data;
   return cached;
