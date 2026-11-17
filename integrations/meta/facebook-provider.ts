@@ -9,6 +9,8 @@ import type {
 } from "@/integrations/types";
 import type {
   DeliveryStatusUpdate,
+  ImportedThread,
+  MessageType,
   NormalizedConversation,
   NormalizedInboundMessage,
   OutboundMessage,
@@ -126,11 +128,19 @@ interface GraphThreadMessage {
   from?: { id: string; name?: string };
   attachments?: {
     data?: Array<{
+      id?: string;
+      mime_type?: string;
+      name?: string;
+      size?: number;
       image_data?: { url?: string };
       video_data?: { url?: string };
       file_url?: string;
     }>;
   };
+}
+
+interface GraphConversationWithMessages extends GraphConversation {
+  messages?: { data?: GraphThreadMessage[] };
 }
 
 interface GraphProfile {
@@ -515,6 +525,76 @@ export class FacebookProvider implements IMessagingProvider {
       });
     }
     return conversations;
+  }
+
+  /**
+   * History import: read the Page's recent conversation threads WITH
+   * their messages (both directions) from the conversations edge.
+   * Meta returns messages newest-first; threads are returned with
+   * messages oldest-first for ingest. Bounded by the caller's limits —
+   * this is a recent-history backfill, not a full archive export.
+   */
+  async fetchRecentConversations(input: {
+    channel: ChannelContext;
+    conversationLimit: number;
+    messageLimit: number;
+  }): Promise<ImportedThread[]> {
+    const { channel, conversationLimit, messageLimit } = input;
+    const pageId = channel.externalAccountId;
+    const response = await this.client.get<GraphListResponse<GraphConversationWithMessages>>(
+      GRAPH_HOST,
+      `/${this.version()}/${pageId}/conversations`,
+      {
+        accessToken: channel.credentials.accessToken,
+        ...this.proofOptions(),
+        params: {
+          platform: "messenger",
+          fields: `id,participants{id,name},messages.limit(${messageLimit}){id,message,from{id,name},created_time,attachments{data{id,mime_type,name,size,image_data{url},video_data{url},file_url}}}`,
+          limit: conversationLimit,
+        },
+      },
+    );
+    const threads: ImportedThread[] = [];
+    for (const thread of response.data ?? []) {
+      const participant = (thread.participants?.data ?? []).find((p) => p.id !== pageId);
+      if (!participant) continue;
+      const messages = [...(thread.messages?.data ?? [])].reverse().map((item) => {
+        const attachments = (item.attachments?.data ?? []).map((a) => ({
+          url: a.image_data?.url ?? a.video_data?.url ?? a.file_url ?? null,
+          mimeType: a.mime_type ?? null,
+          fileName: a.name ?? null,
+          size: a.size ?? null,
+        }));
+        const firstMime = attachments[0]?.mimeType ?? "";
+        const type: MessageType =
+          attachments.length === 0
+            ? "TEXT"
+            : firstMime.startsWith("image/")
+              ? "IMAGE"
+              : firstMime.startsWith("video/")
+                ? "VIDEO"
+                : firstMime.startsWith("audio/")
+                  ? "AUDIO"
+                  : "FILE";
+        return {
+          externalMessageId: item.id,
+          direction: (item.from?.id === pageId ? "OUTBOUND" : "INBOUND") as
+            | "INBOUND"
+            | "OUTBOUND",
+          type,
+          body: item.message ? item.message : null,
+          sentAt: item.created_time ? new Date(item.created_time) : new Date(),
+          attachments,
+        };
+      });
+      threads.push({
+        externalThreadId: thread.id,
+        participantExternalId: participant.id,
+        ...(participant.name ? { participantName: participant.name } : {}),
+        messages,
+      });
+    }
+    return threads;
   }
 
   async getMessages(

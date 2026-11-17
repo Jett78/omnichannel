@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Paperclip,
   Search,
+  Smile,
   Send,
   StickyNote,
   Tag as TagIcon,
@@ -84,6 +85,18 @@ function formatListTime(iso: string | null): string {
     ? date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : date.toLocaleDateString([], { day: "numeric", month: "short" });
 }
+
+/** Curated emoji set for the composer picker (most-used chat emojis). */
+const COMPOSER_EMOJIS = [
+  "😀", "😁", "😂", "🤣", "😅", "😊", "🙂", "😉",
+  "😍", "🥰", "😘", "😎", "🤩", "😇", "🤗", "🤔",
+  "🙄", "😬", "😴", "😢", "😭", "🥺", "😱", "😡",
+  "🙏", "👍", "👎", "👏", "🙌", "👋", "👌", "✌️",
+  "🤞", "🤝", "💪", "👀", "💬", "💡", "📌", "🔔",
+  "❤️", "💔", "💯", "🔥", "⭐", "🚀", "🎉", "🎂",
+  "🎁", "✅", "❌", "📦", "🚚", "💰", "💵", "📞",
+  "📱", "📍", "⏰", "📅", "🎵", "😌", "😷", "🤒",
+];
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -191,14 +204,23 @@ export function RealInboxShell({
   const [tagInput, setTagInput] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [contactEditing, setContactEditing] = useState(false);
   const [contactPhone, setContactPhone] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactSaving, setContactSaving] = useState(false);
   const [contactError, setContactError] = useState<string | null>(null);
-  useEffect(() => {
+  // Switching conversations closes the contact editor, drops any
+  // pending attachment and closes the emoji picker (render-pattern
+  // state adjustment, per this codebase's lint rules).
+  const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
+  if (prevSelectedId !== selectedId) {
+    setPrevSelectedId(selectedId);
     setContactEditing(false);
-  }, [selectedId]);
+    setPendingFile(null);
+    setEmojiOpen(false);
+  }
   const [socketStatus, setSocketStatus] = useState<SocketStatus>("connecting");
   const [notice, setNotice] = useState<string | null>(null);
   const [mobileThread, setMobileThread] = useState(false);
@@ -426,6 +448,18 @@ export function RealInboxShell({
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Failed to send template");
     }
+  }
+
+  function insertEmoji(emoji: string) {
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? draft.length;
+    const end = textarea?.selectionEnd ?? draft.length;
+    setDraft(draft.slice(0, start) + emoji + draft.slice(end));
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      const position = start + emoji.length;
+      textarea?.setSelectionRange(position, position);
+    });
   }
 
   async function sendMedia() {
@@ -846,10 +880,27 @@ export function RealInboxShell({
                 ) : null}
                 <div
                   className={cn(
-                    "rounded-xl border shadow-xs focus-within:ring-ring/40 focus-within:ring-[3px]",
+                    "relative rounded-xl border shadow-xs focus-within:ring-ring/40 focus-within:ring-[3px]",
                     composerMode === "note" && "border-amber-300 bg-amber-50/50",
                   )}
                 >
+                  {emojiOpen && composerMode !== "template" ? (
+                    <div className="bg-background absolute bottom-full left-2 z-10 mb-2 w-72 rounded-xl border p-2 shadow-lg">
+                      <div className="grid grid-cols-8 gap-0.5">
+                        {COMPOSER_EMOJIS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            className="rounded-md p-1 text-lg leading-none hover:bg-accent"
+                            onClick={() => insertEmoji(emoji)}
+                            aria-label={`Insert emoji ${emoji}`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-1 px-2 pt-2">
                     <button
                       type="button"
@@ -972,6 +1023,7 @@ export function RealInboxShell({
                   ) : null}
                   {composerMode !== "template" ? (
                   <Textarea
+                    ref={textareaRef}
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     onKeyDown={(event) => {
@@ -1031,6 +1083,18 @@ export function RealInboxShell({
                         onClick={() => fileInputRef.current?.click()}
                       >
                         <Paperclip className="size-4" />
+                      </Button>
+                    ) : null}
+                    {composerMode !== "template" ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        aria-label="Insert emoji"
+                        title="Insert emoji"
+                        onClick={() => setEmojiOpen((open) => !open)}
+                      >
+                        <Smile className="size-4" />
                       </Button>
                     ) : null}
                     <span className="text-muted-foreground text-xs">

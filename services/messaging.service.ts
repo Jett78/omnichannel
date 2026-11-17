@@ -634,6 +634,162 @@ export const messagingService = {
   },
 
   /**
+   * One-time history import: read the channel's recent conversation
+   * threads from the platform (provider.fetchRecentConversations) and
+   * store their messages. Webhooks only deliver messages from the
+   * moment a channel connects, so this backfills what came before.
+   * Rows keep their platform timestamps (createdAt = sentAt) so thread
+   * ordering stays correct, are marked metadata.imported, and do NOT
+   * increment unread counts — it is a history sync, not new arrivals.
+   * Idempotent: messages already stored (same external id in the same
+   * conversation) are skipped and counted.
+   */
+  async importRecentConversations(
+    actorUserId: string,
+    workspaceId: string,
+    channelId: string,
+    options: { conversationLimit?: number; messageLimit?: number } = {},
+  ): Promise<{ conversations: number; messagesImported: number; messagesSkipped: number }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "channels.manage");
+    const channel = await prisma.channel.findFirst({ where: { id: channelId, workspaceId } });
+    if (!channel) throw AppError.notFound("Channel not found");
+    if (channel.status !== "CONNECTED") {
+      throw AppError.badRequest("Connect the channel before importing its history.");
+    }
+    const provider = getProvider(providerEnumToId(channel.provider));
+    if (!provider.fetchRecentConversations) {
+      throw AppError.badRequest(
+        `History import is not available for ${channel.provider} channels.`,
+      );
+    }
+    const credential = await channelCredentialService.getDecryptedChannelCredentialForServer(
+      channel.id,
+    );
+    const channelContext: ChannelContext = {
+      channelId: channel.id,
+      workspaceId,
+      provider: providerEnumToId(channel.provider),
+      externalAccountId: channel.externalAccountId,
+      credentials: {
+        accessToken: credential?.accessToken ?? "",
+        ...(credential?.refreshToken ? { refreshToken: credential.refreshToken } : {}),
+        ...(credential?.tokenExpiresAt ? { expiresAt: credential.tokenExpiresAt } : {}),
+        scopes: credential?.scopes ?? [],
+      },
+      ...(channel.config &&
+      typeof channel.config === "object" &&
+      !Array.isArray(channel.config)
+        ? { config: channel.config as Record<string, unknown> }
+        : {}),
+    };
+    const threads = await provider.fetchRecentConversations({
+      channel: channelContext,
+      conversationLimit: options.conversationLimit ?? 25,
+      messageLimit: options.messageLimit ?? 50,
+    });
+
+    let conversationsTouched = 0;
+    let messagesImported = 0;
+    let messagesSkipped = 0;
+
+    for (const thread of threads) {
+      let identity = await prisma.contactIdentity.findUnique({
+        where: {
+          channelId_externalUserId: { channelId, externalUserId: thread.participantExternalId },
+        },
+      });
+      if (!identity) {
+        const contact = await prisma.contact.create({
+          data: {
+            workspaceId,
+            displayName: thread.participantName ?? thread.participantExternalId,
+          },
+        });
+        identity = await prisma.contactIdentity.create({
+          data: { contactId: contact.id, channelId, externalUserId: thread.participantExternalId },
+        });
+      }
+      const contactId = identity.contactId;
+      await enrichContactProfileIfNeeded(
+        workspaceId,
+        channel,
+        contactId,
+        thread.participantExternalId,
+      );
+
+      let conversation = await prisma.conversation.findFirst({
+        where: { channelId, contactId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!conversation) {
+        conversation = await prisma.conversation.create({
+          data: {
+            workspaceId,
+            channelId,
+            contactId,
+            status: "OPEN",
+            externalThreadId: thread.externalThreadId,
+          },
+        });
+      }
+      conversationsTouched += 1;
+
+      let newest: Date | null = null;
+      for (const message of thread.messages) {
+        const existing = await prisma.message.findUnique({
+          where: {
+            conversationId_externalMessageId: {
+              conversationId: conversation.id,
+              externalMessageId: message.externalMessageId,
+            },
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          messagesSkipped += 1;
+          continue;
+        }
+        await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            direction: message.direction,
+            type: message.type,
+            body: message.body,
+            senderType: message.direction === "INBOUND" ? "CONTACT" : "AGENT",
+            externalMessageId: message.externalMessageId,
+            status: message.direction === "INBOUND" ? "RECEIVED" : "SENT",
+            sentAt: message.sentAt,
+            createdAt: message.sentAt,
+            metadata: { imported: true, source: "history-import" } as Prisma.InputJsonValue,
+            attachments: {
+              create: message.attachments.map((a) => ({
+                originalUrl: a.url,
+                mimeType: a.mimeType,
+                fileName: a.fileName,
+                size: a.size,
+              })),
+            },
+          },
+        });
+        messagesImported += 1;
+        if (!newest || message.sentAt > newest) newest = message.sentAt;
+      }
+      if (newest && (!conversation.lastMessageAt || newest > conversation.lastMessageAt)) {
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { lastMessageAt: newest },
+        });
+      }
+    }
+
+    return {
+      conversations: conversationsTouched,
+      messagesImported,
+      messagesSkipped,
+    };
+  },
+
+  /**
    * Worker-side delivery: call the channel's provider and settle the
    * message status. Throws on provider error when this is NOT the final
    * attempt (so BullMQ retries); on the final attempt the message is

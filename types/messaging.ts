@@ -78,6 +78,30 @@ export interface NormalizedInboundMessage {
   raw: unknown;
 }
 
+/** One message in a history-import thread (oldest first within a thread). */
+export interface ImportedThreadMessage {
+  externalMessageId: string;
+  direction: "INBOUND" | "OUTBOUND";
+  type: MessageType;
+  body: string | null;
+  sentAt: Date;
+  attachments: Array<{
+    url: string | null;
+    mimeType: string | null;
+    fileName: string | null;
+    size: number | null;
+  }>;
+}
+
+/** A past conversation thread read back from a provider for history import. */
+export interface ImportedThread {
+  externalThreadId: string;
+  /** The customer's channel-scoped id (PSID / IGSID) — never the Page itself. */
+  participantExternalId: string;
+  participantName?: string;
+  messages: ImportedThreadMessage[];
+}
+
 /** A conversation as reported by a provider (used for future backfill/sync). */
 export interface NormalizedConversation {
   externalThreadId: string;

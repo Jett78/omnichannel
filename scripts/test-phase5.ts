@@ -182,6 +182,41 @@ function facebookHandler(call: RecordedCall): { status?: number; json: unknown }
   if (call.method === "POST" && path === "/v25.0/page-1001/message_attachments") {
     return { json: { attachment_id: "att-fb-1" } };
   }
+  if (call.method === "GET" && path === "/v25.0/page-1001/conversations") {
+    // History import fixture: one old thread, messages newest-first
+    // (as Meta returns them).
+    return {
+      json: {
+        data: [
+          {
+            id: "thread-old-1",
+            participants: {
+              data: [
+                { id: "page-1001", name: "Acme Store" },
+                { id: "psid-old", name: "Old Customer" },
+              ],
+            },
+            messages: {
+              data: [
+                {
+                  id: "mid-old-2",
+                  message: "Old answer from the shop",
+                  from: { id: "page-1001", name: "Acme Store" },
+                  created_time: "2026-11-10T10:05:00+0000",
+                },
+                {
+                  id: "mid-old-1",
+                  message: "Old question",
+                  from: { id: "psid-old", name: "Old Customer" },
+                  created_time: "2026-11-10T10:00:00+0000",
+                },
+              ],
+            },
+          },
+        ],
+      },
+    };
+  }
   if (call.method === "GET" && path === "/v25.0/psid-9") {
     // User Profile API for the webhook test sender.
     return {
@@ -1160,6 +1195,34 @@ async function main(): Promise<void> {
         fileName: "evil.exe",
         mimeType: "application/x-msdownload",
       }),
+    );
+  }
+
+  // ── 9c. History import ─────────────────────────────────────────────────────
+  console.log("9c. History import");
+  {
+    const import1 = await messagingService.importRecentConversations(userA.id, wsA.id, fbChannelId);
+    assert(
+      "Import: 1 conversation, 2 messages imported",
+      import1.conversations === 1 && import1.messagesImported === 2 && import1.messagesSkipped === 0,
+    );
+    const imported = await prisma.message.findMany({
+      where: { externalMessageId: { in: ["mid-old-1", "mid-old-2"] } },
+      orderBy: { createdAt: "asc" },
+    });
+    assert(
+      "Import: directions, status and platform timestamps preserved",
+      imported.length === 2 &&
+        imported[0]?.direction === "INBOUND" &&
+        imported[0]?.body === "Old question" &&
+        imported[1]?.direction === "OUTBOUND" &&
+        imported[1]?.status === "SENT" &&
+        imported[0]?.createdAt.toISOString() === "2026-11-10T10:00:00.000Z",
+    );
+    const import2 = await messagingService.importRecentConversations(userA.id, wsA.id, fbChannelId);
+    assert(
+      "Import: second run skips everything (idempotent)",
+      import2.messagesImported === 0 && import2.messagesSkipped === 2,
     );
   }
 

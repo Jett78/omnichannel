@@ -1,5 +1,6 @@
 import type {
   DeliveryStatusUpdate,
+  ImportedThread,
   NormalizedConversation,
   NormalizedInboundMessage,
   OutboundMessage,
@@ -117,6 +118,17 @@ export interface IMessagingProvider {
     channel: ChannelContext;
     media: { bytes: Buffer; mimeType: string; fileName: string };
   }): Promise<{ ref: string }>;
+
+  /**
+   * Optional: read back recent conversation threads (with messages)
+   * from the platform for a one-time history import. Providers whose
+   * APIs cannot read past threads omit this.
+   */
+  fetchRecentConversations?(input: {
+    channel: ChannelContext;
+    conversationLimit: number;
+    messageLimit: number;
+  }): Promise<ImportedThread[]>;
 
   /** Provider-side conversation list (backfill/sync). Our DB stays the source of truth. */
   getConversations(

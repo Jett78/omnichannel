@@ -116,6 +116,10 @@ export function ChannelsCatalog({
   const [waConnectSignal, setWaConnectSignal] = useState(0);
   const [waEditSignal, setWaEditSignal] = useState(0);
   const [waEditChannelId, setWaEditChannelId] = useState<string | null>(null);
+  const [importingId, setImportingId] = useState<string | null>(null);
+  const [importResults, setImportResults] = useState<
+    Record<string, { text: string; ok: boolean }>
+  >({});
 
   function openWhatsAppConnect() {
     setWaConnectSignal((signal) => signal + 1);
@@ -156,6 +160,51 @@ export function ChannelsCatalog({
       setDisconnectError(error instanceof Error ? error.message : "Could not disconnect");
     } finally {
       setDisconnectingId(null);
+    }
+  }
+
+  async function importHistory(channel: RealChannel) {
+    if (!workspaceId) return;
+    setImportingId(channel.id);
+    setImportResults((prev) => {
+      const next = { ...prev };
+      delete next[channel.id];
+      return next;
+    });
+    try {
+      const res = await fetch(
+        `/api/workspaces/${workspaceId}/channels/${channel.id}/import-history`,
+        { method: "POST" },
+      );
+      const body = (await res.json().catch(() => null)) as {
+        result?: { conversations: number; messagesImported: number; messagesSkipped: number };
+        error?: { message?: string };
+      } | null;
+      if (!res.ok || !body?.result) {
+        throw new Error(body?.error?.message ?? `Import failed (${res.status})`);
+      }
+      const { conversations, messagesImported, messagesSkipped } = body.result;
+      setImportResults((prev) => ({
+        ...prev,
+        [channel.id]: {
+          ok: true,
+          text:
+            `Imported ${messagesImported} message${messagesImported === 1 ? "" : "s"} from ${conversations} recent conversation${conversations === 1 ? "" : "s"}` +
+            (messagesSkipped > 0 ? ` (${messagesSkipped} already here, skipped)` : "") +
+            ".",
+        },
+      }));
+      router.refresh();
+    } catch (error) {
+      setImportResults((prev) => ({
+        ...prev,
+        [channel.id]: {
+          ok: false,
+          text: error instanceof Error ? error.message : "Import failed",
+        },
+      }));
+    } finally {
+      setImportingId(null);
     }
   }
 
@@ -343,6 +392,20 @@ export function ChannelsCatalog({
                         {channel.config.lastError} Reconnect to fix it.
                       </span>
                     ) : null}
+                    {(() => {
+                      const importResult = importResults[channel.id];
+                      return importResult ? (
+                        <span
+                          className={
+                            importResult.ok
+                              ? "block pt-0.5 text-xs text-emerald-700"
+                              : "block pt-0.5 text-xs text-red-600"
+                          }
+                        >
+                          {importResult.text}
+                        </span>
+                      ) : null;
+                    })()}
                   </span>
                   <Badge
                     variant={
@@ -406,6 +469,18 @@ export function ChannelsCatalog({
                           </Button>
                         ) : null;
                       })()}
+                      {channel.status === "CONNECTED" &&
+                      (channel.provider === "FACEBOOK" || channel.provider === "INSTAGRAM") ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void importHistory(channel)}
+                          disabled={importingId !== null}
+                          title="Backfill recent conversations from before this channel was connected"
+                        >
+                          {importingId === channel.id ? "Importing…" : "Import recent chats"}
+                        </Button>
+                      ) : null}
                       <Button
                         variant="ghost"
                         size="sm"
