@@ -25,6 +25,8 @@ import { cn } from "@/lib/utils";
 
 /** Client-safe subset of Channel.config (never contains tokens). */
 export interface RealChannelConfig {
+  lastError?: string;
+  lastErrorAt?: string;
   username?: string;
   displayPhoneNumber?: string;
   verifiedName?: string;
@@ -319,33 +321,78 @@ export function ChannelsCatalog({
                         ? ` · ${channel.config.displayPhoneNumber}`
                         : ""}
                     </span>
+                    {channel.status === "ERROR" && channel.config?.lastError ? (
+                      <span className="block pt-0.5 text-xs text-red-600">
+                        {channel.config.lastError} Reconnect to fix it.
+                      </span>
+                    ) : null}
                   </span>
                   <Badge
-                    variant={channel.status === "CONNECTED" ? "success" : "warning"}
+                    variant={
+                      channel.status === "CONNECTED"
+                        ? "success"
+                        : channel.status === "ERROR"
+                          ? "destructive"
+                          : channel.status === "EXPIRED"
+                            ? "warning"
+                            : "muted"
+                    }
                     className="gap-1.5"
                   >
                     <span
                       className={cn(
                         "size-1.5 rounded-full",
-                        channel.status === "CONNECTED" ? "bg-emerald-500" : "bg-amber-500",
+                        channel.status === "CONNECTED"
+                          ? "bg-emerald-500"
+                          : channel.status === "ERROR"
+                            ? "bg-white"
+                            : channel.status === "EXPIRED"
+                              ? "bg-amber-500"
+                              : "bg-zinc-400",
                       )}
                     />
                     {channel.status}
                   </Badge>
-                  {(channel.provider === "FACEBOOK" ||
-                    channel.provider === "INSTAGRAM" ||
-                    channel.provider === "WHATSAPP" ||
-                    channel.provider === "X") &&
-                  channel.status === "CONNECTED" ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-red-600"
-                      onClick={() => void disconnectChannel(channel)}
-                      disabled={disconnectingId !== null}
-                    >
-                      {disconnectingId === channel.id ? "Disconnecting…" : "Disconnect"}
-                    </Button>
+                  {channel.provider === "FACEBOOK" ||
+                  channel.provider === "INSTAGRAM" ||
+                  channel.provider === "WHATSAPP" ||
+                  channel.provider === "X" ? (
+                    <span className="flex items-center gap-1">
+                      {(() => {
+                        const reconnectHref =
+                          channel.provider === "FACEBOOK" &&
+                          metaConfig?.facebookConfigured &&
+                          workspaceId
+                            ? `/api/workspaces/${workspaceId}/channels/facebook/connect`
+                            : channel.provider === "INSTAGRAM" &&
+                                metaConfig?.instagramConfigured &&
+                                workspaceId
+                              ? `/api/workspaces/${workspaceId}/channels/instagram/connect`
+                              : channel.provider === "X" && xConfig?.configured && workspaceId
+                                ? `/api/workspaces/${workspaceId}/channels/x/connect`
+                                : channel.provider === "WHATSAPP" && workspaceId
+                                  ? "#whatsapp-connect"
+                                  : null;
+                        return reconnectHref ? (
+                          <Button
+                            variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
+                            size="sm"
+                            asChild
+                          >
+                            <a href={reconnectHref}>Reconnect</a>
+                          </Button>
+                        ) : null;
+                      })()}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-red-600"
+                        onClick={() => void disconnectChannel(channel)}
+                        disabled={disconnectingId !== null}
+                      >
+                        {disconnectingId === channel.id ? "Disconnecting…" : "Disconnect"}
+                      </Button>
+                    </span>
                   ) : null}
                 </li>
               ))}

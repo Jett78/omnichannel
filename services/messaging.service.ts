@@ -3,8 +3,10 @@ import { getQueues } from "@/lib/queue";
 import { emitToWorkspace, emitToWorkspaceAndConversation } from "@/lib/realtime";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspacePermission } from "@/lib/workspace-auth";
+import { MetaGraphError } from "@/integrations/meta/meta-graph-client";
 import { getProvider } from "@/integrations/registry";
 import type { ChannelContext } from "@/integrations/types";
+import { XApiError } from "@/integrations/x/x-api-client";
 import { channelCredentialService } from "@/services/channel-credential.service";
 import type { Message, MessageAttachment, Prisma } from "@/generated/prisma/client";
 import {
@@ -26,6 +28,26 @@ import {
  * Platform specifics live behind IMessagingProvider; everything here
  * works on the unified message shape (types/messaging.ts).
  */
+
+/**
+ * True when a provider send failure means the stored credential is
+ * dead (revoked/expired token), as opposed to a transient or
+ * content error: Meta Graph error 190 (invalid/expired access
+ * token — WhatsApp Cloud API surfaces through the same client) or
+ * an X API 401. Such failures put the channel into ERROR status so
+ * the dashboard can prompt a reconnect; retrying cannot fix them.
+ */
+function isProviderAuthError(error: unknown): boolean {
+  if (error instanceof MetaGraphError) return error.code === 190;
+  if (error instanceof XApiError) return error.status === 401;
+  return false;
+}
+
+function channelConfigObject(config: unknown): Record<string, unknown> {
+  return config && typeof config === "object" && !Array.isArray(config)
+    ? { ...(config as Record<string, unknown>) }
+    : {};
+}
 
 /**
  * Best-effort contact profile enrichment. Some providers' webhooks
@@ -643,6 +665,17 @@ export const messagingService = {
         where: { id: messageId },
         data: { status: "SENT", externalMessageId: result.externalMessageId, sentAt: new Date() },
       });
+      // A successful send proves the credential works again — clear
+      // a previous ERROR state (e.g. after the user reconnected).
+      if (channel.status === "ERROR") {
+        const config = channelConfigObject(channel.config);
+        delete config.lastError;
+        delete config.lastErrorAt;
+        await prisma.channel.update({
+          where: { id: channel.id },
+          data: { status: "CONNECTED", config: config as Prisma.InputJsonValue },
+        });
+      }
       await emitToWorkspaceAndConversation(workspaceId, conversation.id, "message.status_updated", {
         workspaceId,
         conversationId: conversation.id,
@@ -653,6 +686,26 @@ export const messagingService = {
       return { status: "SENT" };
     } catch (error) {
       if (options.isFinalAttempt) {
+        // A dead credential is a channel-level problem, not just a
+        // message failure: flag the channel ERROR with the reason so
+        // the Channels page can show it and offer reconnect.
+        if (isProviderAuthError(error) && channel.status !== "ERROR") {
+          try {
+            await prisma.channel.update({
+              where: { id: channel.id },
+              data: {
+                status: "ERROR",
+                config: {
+                  ...channelConfigObject(channel.config),
+                  lastError: error instanceof Error ? error.message : "Provider auth failed",
+                  lastErrorAt: new Date().toISOString(),
+                } as Prisma.InputJsonValue,
+              },
+            });
+          } catch {
+            // Channel flagging must never mask the message outcome.
+          }
+        }
         return markFailed(error instanceof Error ? error.message : "Provider send failed");
       }
       throw error;

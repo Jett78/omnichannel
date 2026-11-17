@@ -106,6 +106,8 @@ function toRealChannelConfig(config: unknown): RealChannelConfig | undefined {
       ? (record.webhookSubscription as Record<string, unknown>)
       : null;
   return {
+    ...(pick("lastError") ? { lastError: pick("lastError") } : {}),
+    ...(pick("lastErrorAt") ? { lastErrorAt: pick("lastErrorAt") } : {}),
     ...(pick("username") ? { username: pick("username") } : {}),
     ...(pick("displayPhoneNumber") ? { displayPhoneNumber: pick("displayPhoneNumber") } : {}),
     ...(pick("verifiedName") ? { verifiedName: pick("verifiedName") } : {}),

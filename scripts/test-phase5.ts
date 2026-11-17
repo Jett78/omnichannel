@@ -147,6 +147,10 @@ const FB_PAGES_RESPONSE = {
   paging: {},
 };
 
+/** Mutable fake state: the page-autherr send route fails with a Meta
+ * 190 (dead token) until a test flips this off to simulate recovery. */
+const fakeState = { authErrorPageFails: true };
+
 function facebookHandler(call: RecordedCall): { status?: number; json: unknown } | null {
   const url = new URL(call.url);
   const path = url.pathname;
@@ -184,6 +188,23 @@ function facebookHandler(call: RecordedCall): { status?: number; json: unknown }
         profile_pic: "https://example.com/psid-9.jpg",
       },
     };
+  }
+  if (call.method === "POST" && path === "/v25.0/page-autherr/messages") {
+    if (fakeState.authErrorPageFails) {
+      return {
+        status: 400,
+        json: {
+          error: {
+            message: "(#190) OAuthException - The access token has expired",
+            type: "OAuthException",
+            code: 190,
+            error_subcode: 463,
+            fbtrace_id: "trace-190",
+          },
+        },
+      };
+    }
+    return { json: { recipient_id: "psid-autherr", message_id: "fb-out-autherr-1" } };
   }
   if (call.method === "POST" && path === "/v25.0/page-error/messages") {
     return {
@@ -1133,6 +1154,93 @@ async function main(): Promise<void> {
       metaConnectionService.disconnectChannel(userB.id, wsA.id, fbChannelId, deps),
     );
     assert("Sanity: conversation from pipeline still exists", conversationId.length > 0);
+  }
+
+  // ── 12. Channel ERROR status on dead credential ───────────────────────────
+  console.log("12. Channel ERROR status (dead credential → ERROR → recovery)");
+  {
+    const channel = await prisma.channel.create({
+      data: {
+        workspaceId: wsA.id,
+        provider: "FACEBOOK",
+        externalAccountId: "page-autherr",
+        displayName: "Auth Error Page",
+        status: "CONNECTED",
+      },
+    });
+    await channelCredentialService.setChannelCredential(userA.id, wsA.id, channel.id, {
+      accessToken: "dead-page-token",
+      scopes: [],
+    });
+    const contact = await prisma.contact.create({
+      data: { workspaceId: wsA.id, displayName: "Auth Err Customer" },
+    });
+    await prisma.contactIdentity.create({
+      data: { contactId: contact.id, channelId: channel.id, externalUserId: "psid-autherr" },
+    });
+    const conversation = await prisma.conversation.create({
+      data: { workspaceId: wsA.id, channelId: channel.id, contactId: contact.id, status: "OPEN" },
+    });
+    await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: "INBOUND",
+        type: "TEXT",
+        body: "hi",
+        senderType: "CONTACT",
+        externalMessageId: "mid-autherr-in-1",
+        status: "RECEIVED",
+        sentAt: new Date(),
+      },
+    });
+    const outbound = await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: "OUTBOUND",
+        type: "TEXT",
+        body: "reply",
+        senderType: "AGENT",
+        senderUserId: userA.id,
+        status: "QUEUED",
+      },
+    });
+    const failedResult = await messagingService.deliverOutboundMessage(outbound.id, {
+      isFinalAttempt: true,
+    });
+    const errored = await prisma.channel.findUnique({ where: { id: channel.id } });
+    assert(
+      "Channel ERROR: Meta 190 (dead token) marks the channel ERROR with the reason recorded",
+      failedResult.status === "FAILED" &&
+        errored?.status === "ERROR" &&
+        typeof (errored?.config as { lastError?: unknown } | null)?.lastError === "string",
+      `status=${errored?.status}`,
+    );
+
+    // Recovery: the credential works again → the next successful send
+    // restores CONNECTED and clears the recorded error.
+    fakeState.authErrorPageFails = false;
+    const outbound2 = await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        direction: "OUTBOUND",
+        type: "TEXT",
+        body: "reply 2",
+        senderType: "AGENT",
+        senderUserId: userA.id,
+        status: "QUEUED",
+      },
+    });
+    const okResult = await messagingService.deliverOutboundMessage(outbound2.id, {
+      isFinalAttempt: true,
+    });
+    const recovered = await prisma.channel.findUnique({ where: { id: channel.id } });
+    assert(
+      "Channel ERROR: a later successful send restores CONNECTED and clears the error",
+      okResult.status === "SENT" &&
+        recovered?.status === "CONNECTED" &&
+        (recovered?.config as { lastError?: unknown } | null)?.lastError === undefined,
+      `status=${recovered?.status} send=${okResult.status}`,
+    );
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
