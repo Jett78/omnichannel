@@ -143,6 +143,9 @@ function expiresAtFrom(expiresInSeconds: number | undefined): Date | undefined {
   return expiresInSeconds ? new Date(Date.now() + expiresInSeconds * 1000) : undefined;
 }
 
+/** originalUrl prefix for attachments uploaded via uploadMedia. */
+export const META_ATTACHMENT_PREFIX = "meta-attachment:";
+
 function attachmentSendType(message: OutboundMessage, mimeType?: string): string {
   const major = mimeType?.split("/")[0];
   if (major === "image" || major === "video" || major === "audio") return major;
@@ -389,6 +392,50 @@ export class FacebookProvider implements IMessagingProvider {
     return parseMessengerStatusUpdates(payload, "page");
   }
 
+  /**
+   * Upload media bytes to the Page (POST /{page-id}/message_attachments)
+   * and return the "meta-attachment:{id}" reference sendMessage delivers
+   * by attachment_id.
+   */
+  async uploadMedia(input: {
+    channel: ChannelContext;
+    media: { bytes: Buffer; mimeType: string; fileName: string };
+  }): Promise<{ ref: string }> {
+    const { channel, media } = input;
+    const kind = media.mimeType.startsWith("image/")
+      ? "image"
+      : media.mimeType.startsWith("video/")
+        ? "video"
+        : media.mimeType.startsWith("audio/")
+          ? "audio"
+          : "file";
+    const formData = new FormData();
+    formData.set(
+      "message",
+      JSON.stringify({ attachment: { type: kind, payload: { is_reusable: true } } }),
+    );
+    formData.set(
+      "filedata",
+      new Blob([new Uint8Array(media.bytes)], { type: media.mimeType }),
+      media.fileName,
+    );
+    const response = await this.client.postMultipart<{ attachment_id?: string }>(
+      GRAPH_HOST,
+      `/${this.version()}/${channel.externalAccountId}/message_attachments`,
+      {
+        accessToken: channel.credentials.accessToken,
+        ...this.proofOptions(),
+        formData,
+      },
+    );
+    if (!response.attachment_id) {
+      throw new MetaGraphError("Meta attachment upload did not return an attachment id", {
+        status: 502,
+      });
+    }
+    return { ref: `${META_ATTACHMENT_PREFIX}${response.attachment_id}` };
+  }
+
   async sendMessage(input: {
     channel: ChannelContext;
     toExternalId: string;
@@ -421,7 +468,9 @@ export class FacebookProvider implements IMessagingProvider {
       lastMessageId = await sendOne({
         attachment: {
           type: attachmentSendType(message, attachment.mimeType),
-          payload: { url: attachment.url, is_reusable: false },
+          payload: attachment.url.startsWith(META_ATTACHMENT_PREFIX)
+            ? { attachment_id: attachment.url.slice(META_ATTACHMENT_PREFIX.length) }
+            : { url: attachment.url, is_reusable: false },
         },
       });
     }

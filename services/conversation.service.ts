@@ -395,6 +395,37 @@ export const conversationService = {
     return unified;
   },
 
+  /**
+   * Manually set/clear the contact's phone and email from the inbox
+   * (Customer details → Edit). Channels auto-fill only some of this —
+   * WhatsApp sets the phone from the wa_id; Messenger shares neither
+   * phone nor email — so agents fill the rest when a customer shares it
+   * in chat. An empty string clears the field; an omitted field is left
+   * unchanged.
+   */
+  async updateContactDetails(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+    input: { phone?: string; email?: string },
+  ): Promise<ConversationListItem["contact"]> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.assign");
+    const row = await loadConversationOrThrow(workspaceId, conversationId);
+    const data: { phone?: string | null; email?: string | null } = {};
+    if (input.phone !== undefined) {
+      data.phone = input.phone.trim() === "" ? null : input.phone.trim();
+    }
+    if (input.email !== undefined) {
+      data.email = input.email.trim() === "" ? null : input.email.trim();
+    }
+    if (Object.keys(data).length > 0) {
+      await prisma.contact.update({ where: { id: row.contactId }, data });
+    }
+    const updated = await loadConversationOrThrow(workspaceId, conversationId);
+    await emitConversationUpdated(workspaceId, updated);
+    return updated.contact;
+  },
+
   async addTag(
     actorUserId: string,
     workspaceId: string,

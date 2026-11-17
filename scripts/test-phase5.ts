@@ -179,6 +179,9 @@ function facebookHandler(call: RecordedCall): { status?: number; json: unknown }
   if (call.method === "POST" && path === "/v25.0/page-1001/messages") {
     return { json: { recipient_id: "psid-9", message_id: "fb-out-mid-1" } };
   }
+  if (call.method === "POST" && path === "/v25.0/page-1001/message_attachments") {
+    return { json: { attachment_id: "att-fb-1" } };
+  }
   if (call.method === "GET" && path === "/v25.0/psid-9") {
     // User Profile API for the webhook test sender.
     return {
@@ -1088,6 +1091,75 @@ async function main(): Promise<void> {
       freshResult.status === "SENT" &&
         freshRow?.status === "SENT" &&
         freshRow?.externalMessageId === "fb-out-mid-1",
+    );
+  }
+
+  // ── 9b. Outbound media (composer attachments) ──────────────────────────────
+  console.log("9b. Outbound media");
+  {
+    const mediaContact = await prisma.contact.create({
+      data: { workspaceId: wsA.id, displayName: "Media Customer" },
+    });
+    await prisma.contactIdentity.create({
+      data: { contactId: mediaContact.id, channelId: fbChannelId, externalUserId: "psid-media" },
+    });
+    const mediaConversation = await prisma.conversation.create({
+      data: {
+        workspaceId: wsA.id,
+        channelId: fbChannelId,
+        contactId: mediaContact.id,
+        status: "OPEN",
+      },
+    });
+    await prisma.message.create({
+      data: {
+        conversationId: mediaConversation.id,
+        direction: "INBOUND",
+        type: "TEXT",
+        body: "Please send the photo",
+        senderType: "CONTACT",
+        externalMessageId: "mid-media-1",
+        status: "RECEIVED",
+        sentAt: new Date(Date.now() - 5 * 60 * 1000),
+      },
+    });
+    const mediaMessage = await messagingService.sendOutboundMedia(
+      userA.id,
+      wsA.id,
+      mediaConversation.id,
+      {
+        bytes: Buffer.from("fake-png-bytes"),
+        fileName: "photo.png",
+        mimeType: "image/png",
+        caption: "Here is the photo",
+      },
+    );
+    assert(
+      "sendOutboundMedia: IMAGE message queued with the meta-attachment ref",
+      mediaMessage.messageType === "IMAGE" &&
+        mediaMessage.status === "QUEUED" &&
+        mediaMessage.attachments[0]?.url === "meta-attachment:att-fb-1" &&
+        mediaMessage.attachments[0]?.fileName === "photo.png",
+    );
+    const mediaResult = await messagingService.deliverOutboundMessage(mediaMessage.id, {
+      isFinalAttempt: true,
+    });
+    const mediaRow = await prisma.message.findUnique({ where: { id: mediaMessage.id } });
+    const attachmentSend = fbFake.calls
+      .filter((c) => c.url.includes("/page-1001/messages"))
+      .at(-1);
+    assert(
+      "sendOutboundMedia: delivery SENT with payload.attachment_id = att-fb-1",
+      mediaResult.status === "SENT" &&
+        mediaRow?.externalMessageId === "fb-out-mid-1" &&
+        (attachmentSend?.bodyText ?? "").includes('"attachment_id":"att-fb-1"'),
+    );
+    await expectThrows("sendOutboundMedia: unsupported file type rejected", () =>
+      messagingService.sendOutboundMedia(userA.id, wsA.id, mediaConversation.id, {
+        bytes: Buffer.from("x"),
+        fileName: "evil.exe",
+        mimeType: "application/x-msdownload",
+      }),
     );
   }
 

@@ -146,6 +146,12 @@ export const mockProvider: IMessagingProvider = {
     return { externalMessageId };
   },
 
+  async uploadMedia(input: {
+    media: { bytes: Buffer; mimeType: string; fileName: string };
+  }): Promise<{ ref: string }> {
+    return { ref: `mock-media:${input.media.fileName}` };
+  },
+
   async getConversations(): Promise<NormalizedConversation[]> {
     // Conversation state lives in our database; the mock has no remote side.
     return [];

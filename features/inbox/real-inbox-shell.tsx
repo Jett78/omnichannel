@@ -6,6 +6,7 @@ import {
   FileText,
   Lock,
   MoreHorizontal,
+  Paperclip,
   Search,
   Send,
   StickyNote,
@@ -84,6 +85,71 @@ function formatListTime(iso: string | null): string {
     : date.toLocaleDateString([], { day: "numeric", month: "short" });
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Where an attachment can be previewed from, if anywhere: public URLs
+ * directly, WhatsApp media references through our media route (they
+ * need the channel credential to download). Meta attachment ids cannot
+ * be fetched back, so those render as a file chip.
+ */
+function attachmentPreviewSrc(
+  workspaceId: string,
+  message: RealMessageItem,
+  attachment: NonNullable<RealMessageItem["attachments"]>[number],
+  index: number,
+): string | null {
+  const url = attachment.url;
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("whatsapp-media:")) {
+    return `/api/workspaces/${workspaceId}/conversations/${message.conversationId}/messages/${message.id}/media/${index}`;
+  }
+  return null;
+}
+
+function MessageAttachments({
+  workspaceId,
+  message,
+}: {
+  workspaceId: string;
+  message: RealMessageItem;
+}) {
+  if (!message.attachments?.length) return null;
+  return (
+    <div className="flex flex-col gap-1.5 pb-1.5">
+      {message.attachments.map((attachment, index) => {
+        const src = attachmentPreviewSrc(workspaceId, message, attachment, index);
+        if (src && attachment.mimeType?.startsWith("image/")) {
+          return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={attachment.id}
+              src={src}
+              alt={attachment.fileName ?? "Image attachment"}
+              className="max-h-64 w-auto rounded-lg object-contain"
+            />
+          );
+        }
+        return (
+          <span
+            key={attachment.id}
+            className="inline-flex items-center gap-1.5 self-start rounded-md bg-black/5 px-2 py-1 text-xs dark:bg-white/10"
+          >
+            <Paperclip className="size-3 shrink-0" />
+            <span className="max-w-48 truncate">{attachment.fileName ?? "Attachment"}</span>
+            {attachment.size ? <span>· {formatFileSize(attachment.size)}</span> : null}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function formatMessageTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -123,6 +189,16 @@ export function RealInboxShell({
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesError, setTemplatesError] = useState<string | null>(null);
   const [tagInput, setTagInput] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [contactEditing, setContactEditing] = useState(false);
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
+  useEffect(() => {
+    setContactEditing(false);
+  }, [selectedId]);
   const [socketStatus, setSocketStatus] = useState<SocketStatus>("connecting");
   const [notice, setNotice] = useState<string | null>(null);
   const [mobileThread, setMobileThread] = useState(false);
@@ -352,9 +428,48 @@ export function RealInboxShell({
     }
   }
 
+  async function sendMedia() {
+    if (!selected || !pendingFile) return;
+    const file = pendingFile;
+    const caption = draft.trim();
+    setPendingFile(null);
+    setDraft("");
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      if (caption) form.set("caption", caption);
+      const res = await fetch(`${apiBase}/conversations/${selected.id}/messages/media`, {
+        method: "POST",
+        body: form,
+      });
+      const body = (await res.json().catch(() => null)) as {
+        message?: RealMessageItem;
+        error?: { message?: string };
+      } | null;
+      if (!res.ok || !body?.message) {
+        throw new Error(body?.error?.message ?? `Request failed (${res.status})`);
+      }
+      const sent = body.message;
+      setMessagesByConversation((prev) => {
+        const existing = prev[selected.id] ?? [];
+        if (existing.some((m) => m.id === sent.id)) return prev;
+        return { ...prev, [selected.id]: [...existing, sent] };
+      });
+      void fetchConversations();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to send the file");
+      setPendingFile(file);
+      setDraft(caption);
+    }
+  }
+
   async function send() {
     if (composerMode === "template") {
       await sendTemplate();
+      return;
+    }
+    if (composerMode === "reply" && pendingFile) {
+      await sendMedia();
       return;
     }
     const content = draft.trim();
@@ -431,6 +546,44 @@ export function RealInboxShell({
         prev.map((c) => (c.id === selected.id ? { ...c, tags: body.tags } : c)),
       );
     }
+  }
+
+  function startContactEdit() {
+    if (!selected) return;
+    setContactPhone(selected.contact.phone ?? "");
+    setContactEmail(selected.contact.email ?? "");
+    setContactError(null);
+    setContactEditing(true);
+  }
+
+  async function saveContactDetails() {
+    if (!selected) return;
+    setContactSaving(true);
+    setContactError(null);
+    const res = await fetch(`${apiBase}/conversations/${selected.id}/contact`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: contactPhone, email: contactEmail }),
+    }).catch(() => null);
+    if (res?.ok) {
+      const body = (await res.json()) as {
+        contact: { phone: string | null; email: string | null };
+      };
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selected.id
+            ? { ...c, contact: { ...c.contact, phone: body.contact.phone, email: body.contact.email } }
+            : c,
+        ),
+      );
+      setContactEditing(false);
+    } else {
+      const body = (await res?.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      setContactError(body?.error?.message ?? "Could not save the customer details.");
+    }
+    setContactSaving(false);
   }
 
   async function removeTag(name: string) {
@@ -639,6 +792,7 @@ export function RealInboxShell({
                       />
                       <div className="max-w-[75%]">
                         <div className="bg-background rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-sm shadow-xs">
+                          <MessageAttachments workspaceId={workspaceId} message={message} />
                           {message.content}
                         </div>
                         <p className="text-muted-foreground mt-1 pl-1 text-[11px]">
@@ -655,6 +809,7 @@ export function RealInboxShell({
                               <FileText className="size-3" /> Template
                             </span>
                           ) : null}
+                          <MessageAttachments workspaceId={workspaceId} message={message} />
                           <div>{message.content}</div>
                         </div>
                         <p className="text-muted-foreground mt-1 flex items-center justify-end gap-1 pr-1 text-[11px]">
@@ -835,7 +990,49 @@ export function RealInboxShell({
                     rows={2}
                   />
                   ) : null}
+                  {composerMode === "reply" ? (
+                    <>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        accept="image/*,video/mp4,audio/*,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip"
+                        onChange={(event) => {
+                          setPendingFile(event.target.files?.[0] ?? null);
+                          event.target.value = "";
+                        }}
+                      />
+                      {pendingFile ? (
+                        <div className="px-3 pb-1">
+                          <span className="inline-flex items-center gap-1.5 rounded-md bg-indigo-50 px-2 py-1 text-xs text-indigo-900 dark:bg-indigo-500/15 dark:text-indigo-100">
+                            <Paperclip className="size-3 shrink-0" />
+                            <span className="max-w-56 truncate">{pendingFile.name}</span>
+                            <span>· {formatFileSize(pendingFile.size)}</span>
+                            <button
+                              type="button"
+                              aria-label="Remove attachment"
+                              onClick={() => setPendingFile(null)}
+                            >
+                              <X className="size-3.5" />
+                            </button>
+                          </span>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
                   <div className="flex items-center px-2 pb-2">
+                    {composerMode === "reply" ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        aria-label="Attach a file"
+                        title="Attach an image or file (max 16 MB)"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Paperclip className="size-4" />
+                      </Button>
+                    ) : null}
                     <span className="text-muted-foreground text-xs">
                       {composerMode === "note"
                         ? "Notes are never sent to the customer."
@@ -853,7 +1050,7 @@ export function RealInboxShell({
                             Array.from({ length: selectedTemplate.paramsCount }, (_, index) =>
                               (templateParams[index] ?? "").trim(),
                             ).some((value) => !value)
-                          : !draft.trim()
+                          : !draft.trim() && !pendingFile
                       }
                     >
                       {composerMode === "note"
@@ -970,29 +1167,94 @@ export function RealInboxShell({
             </section>
 
             <section>
-              <h3 className="pb-2 text-xs font-semibold tracking-wide uppercase">
-                Customer details
-              </h3>
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Phone</dt>
-                  <dd className="font-medium">{selected.contact.phone ?? "—"}</dd>
+              <div className="flex items-center justify-between pb-2">
+                <h3 className="text-xs font-semibold tracking-wide uppercase">Customer details</h3>
+                {!contactEditing ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={startContactEdit}
+                  >
+                    Edit
+                  </Button>
+                ) : null}
+              </div>
+              {contactEditing ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="contact-phone" className="text-muted-foreground text-xs">
+                      Phone
+                    </label>
+                    <Input
+                      id="contact-phone"
+                      value={contactPhone}
+                      onChange={(event) => setContactPhone(event.target.value)}
+                      placeholder="e.g. +977 970-0000000"
+                      className="h-8"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="contact-email" className="text-muted-foreground text-xs">
+                      Email
+                    </label>
+                    <Input
+                      id="contact-email"
+                      type="email"
+                      value={contactEmail}
+                      onChange={(event) => setContactEmail(event.target.value)}
+                      placeholder="customer@example.com"
+                      className="h-8"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    Saved to this contact for all their conversations. Leave a field empty to
+                    clear it. WhatsApp fills the phone automatically; Messenger shares neither
+                    phone nor email.
+                  </p>
+                  {contactError ? <p className="text-xs text-red-600">{contactError}</p> : null}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => void saveContactDetails()}
+                      disabled={contactSaving}
+                    >
+                      {contactSaving ? "Saving…" : "Save"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setContactEditing(false)}
+                      disabled={contactSaving}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Email</dt>
-                  <dd className="truncate font-medium">{selected.contact.email ?? "—"}</dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Channel</dt>
-                  <dd className="font-medium">
-                    {PROVIDER_META[selected.channel.provider].shortLabel}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <dt className="text-muted-foreground">Status</dt>
-                  <dd className="font-medium">{selected.status}</dd>
-                </div>
-              </dl>
+              ) : (
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Phone</dt>
+                    <dd className="font-medium">{selected.contact.phone ?? "—"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Email</dt>
+                    <dd className="truncate font-medium">{selected.contact.email ?? "—"}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Channel</dt>
+                    <dd className="font-medium">
+                      {PROVIDER_META[selected.channel.provider].shortLabel}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Status</dt>
+                    <dd className="font-medium">{selected.status}</dd>
+                  </div>
+                </dl>
+              )}
             </section>
           </div>
         </aside>

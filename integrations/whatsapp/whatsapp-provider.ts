@@ -523,6 +523,41 @@ export class WhatsAppProvider implements IMessagingProvider {
 
   // ─── Sending ──────────────────────────────────────────────────────────────
 
+  /**
+   * Upload media bytes to WhatsApp (POST /{phone-number-id}/media) and
+   * return the "whatsapp-media:{id}" reference sendMessage delivers by
+   * id. WhatsApp keeps uploaded media for 30 days.
+   */
+  async uploadMedia(input: {
+    channel: ChannelContext;
+    media: { bytes: Buffer; mimeType: string; fileName: string };
+  }): Promise<{ ref: string }> {
+    const { channel, media } = input;
+    const formData = new FormData();
+    formData.set("messaging_product", "whatsapp");
+    formData.set("type", media.mimeType);
+    formData.set(
+      "file",
+      new Blob([new Uint8Array(media.bytes)], { type: media.mimeType }),
+      media.fileName,
+    );
+    const response = await this.client.postMultipart<{ id?: string }>(
+      GRAPH_HOST,
+      `/${this.version()}/${channel.externalAccountId}/media`,
+      {
+        accessToken: channel.credentials.accessToken,
+        ...this.proofOptions(channel.credentials.accessToken),
+        formData,
+      },
+    );
+    if (!response.id) {
+      throw new MetaGraphError("WhatsApp media upload did not return a media id", {
+        status: 502,
+      });
+    }
+    return { ref: `${WHATSAPP_MEDIA_PREFIX}${response.id}` };
+  }
+
   async sendMessage(input: {
     channel: ChannelContext;
     toExternalId: string;

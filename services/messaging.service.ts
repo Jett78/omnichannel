@@ -43,6 +43,34 @@ function isProviderAuthError(error: unknown): boolean {
   return false;
 }
 
+/** Largest attachment the inbox sends — WhatsApp's media cap (16 MB). */
+export const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
+
+const MEDIA_MIME_PATTERNS: readonly RegExp[] = [
+  /^image\//,
+  /^video\/(mp4|3gpp)$/,
+  /^audio\//,
+  /^application\/pdf$/,
+  /^text\/plain$/,
+  /^application\/msword$/,
+  /^application\/vnd\.ms-/,
+  /^application\/vnd\.openxmlformats-officedocument\./,
+  /^application\/zip$/,
+];
+
+/** Map an upload's MIME type to a message kind, rejecting unsupported types. */
+function mediaKindForMime(mimeType: string): "image" | "video" | "audio" | "file" {
+  if (!MEDIA_MIME_PATTERNS.some((pattern) => pattern.test(mimeType))) {
+    throw AppError.badRequest(
+      `File type ${mimeType || "(unknown)"} is not supported. Send an image, video (MP4), audio file, PDF, text file, Office document or ZIP.`,
+    );
+  }
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("video/")) return "video";
+  if (mimeType.startsWith("audio/")) return "audio";
+  return "file";
+}
+
 function channelConfigObject(config: unknown): Record<string, unknown> {
   return config && typeof config === "object" && !Array.isArray(config)
     ? { ...(config as Record<string, unknown>) }
@@ -476,6 +504,119 @@ export const messagingService = {
       { attempts: 3, backoff: { type: "exponential", delay: 1000 } },
     );
 
+    const unified = toUnifiedMessage({
+      ...created,
+      conversation: {
+        workspaceId,
+        channelId: conversation.channelId,
+        contactId: conversation.contactId,
+      },
+    });
+    await emitToWorkspaceAndConversation(workspaceId, conversationId, "message.created", {
+      workspaceId,
+      conversationId,
+      message: { ...unified, createdAt: unified.createdAt.toISOString() },
+    });
+    return unified;
+  },
+
+  /**
+   * Agent sends a file from the composer (image/video/audio/document).
+   * The bytes are uploaded to the platform FIRST (provider.uploadMedia)
+   * and the returned platform reference is stored as the attachment's
+   * originalUrl; delivery then flows through the normal queued path —
+   * deliverOutboundMessage calls provider.sendMessage with that
+   * reference, so window checks, retries and channel ERROR marking all
+   * apply exactly as for text. An upload failure throws before any
+   * message row exists, so the composer can show the platform's error.
+   */
+  async sendOutboundMedia(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+    input: { bytes: Buffer; fileName: string; mimeType: string; caption?: string },
+  ): Promise<UnifiedMessage> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, workspaceId },
+    });
+    if (!conversation) throw AppError.notFound("Conversation not found");
+    const channel = await prisma.channel.findUnique({
+      where: { id: conversation.channelId },
+    });
+    if (!channel) throw AppError.notFound("Channel not found");
+    if (channel.status !== "CONNECTED") {
+      throw AppError.badRequest("This channel is not connected, so files cannot be sent.");
+    }
+    if (input.bytes.length === 0) throw AppError.badRequest("The file is empty.");
+    if (input.bytes.length > MAX_MEDIA_BYTES) {
+      throw AppError.badRequest("File is too large — the limit is 16 MB.");
+    }
+    const kind = mediaKindForMime(input.mimeType);
+
+    const provider = getProvider(providerEnumToId(channel.provider));
+    if (!provider.uploadMedia) {
+      throw AppError.badRequest(
+        `Sending files is not supported on ${channel.provider} channels yet.`,
+      );
+    }
+    const credential = await channelCredentialService.getDecryptedChannelCredentialForServer(
+      channel.id,
+    );
+    const channelContext: ChannelContext = {
+      channelId: channel.id,
+      workspaceId,
+      provider: providerEnumToId(channel.provider),
+      externalAccountId: channel.externalAccountId,
+      credentials: {
+        accessToken: credential?.accessToken ?? "",
+        ...(credential?.refreshToken ? { refreshToken: credential.refreshToken } : {}),
+        ...(credential?.tokenExpiresAt ? { expiresAt: credential.tokenExpiresAt } : {}),
+        scopes: credential?.scopes ?? [],
+      },
+      ...(channel.config &&
+      typeof channel.config === "object" &&
+      !Array.isArray(channel.config)
+        ? { config: channel.config as Record<string, unknown> }
+        : {}),
+    };
+    const { ref } = await provider.uploadMedia({
+      channel: channelContext,
+      media: { bytes: input.bytes, mimeType: input.mimeType, fileName: input.fileName },
+    });
+
+    const messageType: MessageType =
+      kind === "image" ? "IMAGE" : kind === "video" ? "VIDEO" : kind === "audio" ? "AUDIO" : "FILE";
+    const caption = input.caption?.trim();
+    const created = await prisma.message.create({
+      data: {
+        conversationId,
+        direction: "OUTBOUND",
+        type: messageType,
+        body: caption ? caption : null,
+        senderType: "AGENT",
+        senderUserId: actorUserId,
+        status: "QUEUED",
+        attachments: {
+          create: {
+            originalUrl: ref,
+            mimeType: input.mimeType,
+            fileName: input.fileName,
+            size: input.bytes.length,
+          },
+        },
+      },
+      include: { attachments: true },
+    });
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { lastMessageAt: new Date() },
+    });
+    await getQueues().outbound.add(
+      "outbound",
+      { messageId: created.id, workspaceId, channelId: conversation.channelId },
+      { attempts: 3, backoff: { type: "exponential", delay: 1000 } },
+    );
     const unified = toUnifiedMessage({
       ...created,
       conversation: {

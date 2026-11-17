@@ -59,6 +59,13 @@ export default async function InboxPage() {
               externalMessageId: m.externalMessageId,
               createdAt: m.createdAt.toISOString(),
               metadata: m.metadata,
+              attachments: m.attachments.map((a) => ({
+                id: a.id,
+                url: a.url,
+                mimeType: a.mimeType,
+                fileName: a.fileName,
+                size: a.size,
+              })),
             })),
           },
           members: members.map((m) => ({ id: m.user.id, name: m.user.name })),

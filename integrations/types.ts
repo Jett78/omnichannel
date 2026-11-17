@@ -106,6 +106,18 @@ export interface IMessagingProvider {
     message: OutboundMessage;
   }): Promise<{ externalMessageId: string }>;
 
+  /**
+   * Optional: upload media bytes to the platform and return a reference
+   * (stored as the attachment's originalUrl) that sendMessage can then
+   * deliver — WhatsApp returns "whatsapp-media:{id}", Meta returns
+   * "meta-attachment:{id}". Providers without an upload API omit this;
+   * the inbox then cannot send attachments on that channel.
+   */
+  uploadMedia?(input: {
+    channel: ChannelContext;
+    media: { bytes: Buffer; mimeType: string; fileName: string };
+  }): Promise<{ ref: string }>;
+
   /** Provider-side conversation list (backfill/sync). Our DB stays the source of truth. */
   getConversations(
     channel: ChannelContext,

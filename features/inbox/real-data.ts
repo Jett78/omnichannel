@@ -37,6 +37,13 @@ export interface RealMessageItem {
   createdAt: string;
   /** Provider message metadata (template info, delivery error, …). */
   metadata?: Record<string, unknown> | null;
+  attachments?: Array<{
+    id: string;
+    url: string | null;
+    mimeType: string | null;
+    fileName: string | null;
+    size: number | null;
+  }>;
 }
 
 /** APPROVED WhatsApp template as returned by the templates API. */

@@ -90,6 +90,15 @@ export class MetaGraphClient {
     return this.request<T>("DELETE", host, path, options);
   }
 
+  /** Multipart POST (media uploads) — fetch sets the multipart boundary. */
+  async postMultipart<T>(
+    host: MetaGraphHost,
+    path: string,
+    options: GraphRequestOptions & { formData: FormData },
+  ): Promise<T> {
+    return this.request<T>("POST", host, path, options, options.formData);
+  }
+
   /** Raw download (media) — returns the bytes, still Bearer-authenticated. */
   async getBuffer(
     url: string,
@@ -114,6 +123,7 @@ export class MetaGraphClient {
     host: MetaGraphHost,
     path: string,
     options: GraphRequestOptions,
+    formData?: FormData,
   ): Promise<T> {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(options.params ?? {})) {
@@ -131,8 +141,10 @@ export class MetaGraphClient {
     const headers: Record<string, string> = { Accept: "application/json" };
     if (options.accessToken) headers.Authorization = `Bearer ${options.accessToken}`;
 
-    let body: string | undefined;
-    if (options.form) {
+    let body: string | FormData | undefined;
+    if (formData) {
+      body = formData;
+    } else if (options.form) {
       headers["Content-Type"] = "application/x-www-form-urlencoded";
       body = new URLSearchParams(options.form).toString();
     } else if (options.body !== undefined) {

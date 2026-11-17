@@ -295,6 +295,31 @@ async function main(): Promise<void> {
   );
   assert("removeTag detaches the tag", !tagsAfterRemove.some((t) => t.name === "vip"));
 
+  // ── 8b. Contact details edit (Customer details panel) ──────────────
+  const contactAfterEdit = await conversationService.updateContactDetails(
+    userA.id,
+    wa.id,
+    conversationId,
+    { phone: "+977 9800000000", email: "ram@example.com" },
+  );
+  assert(
+    "updateContactDetails sets phone + email",
+    contactAfterEdit.phone === "+977 9800000000" && contactAfterEdit.email === "ram@example.com",
+  );
+  const contactAfterClear = await conversationService.updateContactDetails(
+    userA.id,
+    wa.id,
+    conversationId,
+    { email: "" },
+  );
+  assert(
+    "updateContactDetails clears email with empty string, keeps phone",
+    contactAfterClear.email === null && contactAfterClear.phone === "+977 9800000000",
+  );
+  await expectThrows("updateContactDetails: outsider cannot edit", () =>
+    conversationService.updateContactDetails(userB.id, wa.id, conversationId, { phone: "1" }),
+  );
+
   // ── 9. Resolve, then a new inbound reopens ─────────────────────────
   const resolved = await conversationService.resolveConversation(userA.id, wa.id, conversationId);
   assert("resolveConversation → RESOLVED", resolved.status === "RESOLVED");

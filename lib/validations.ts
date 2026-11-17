@@ -118,6 +118,14 @@ export const internalNoteSchema = z.object({
 });
 export type InternalNoteInput = z.infer<typeof internalNoteSchema>;
 
+export const updateContactDetailsSchema = z.object({
+  phone: z.string().trim().max(32, "Phone number is too long").optional(),
+  email: z
+    .union([z.literal(""), z.string().trim().email("Enter a valid email address")])
+    .optional(),
+});
+export type UpdateContactDetailsInput = z.infer<typeof updateContactDetailsSchema>;
+
 export const conversationTagSchema = z.object({
   name: z.string().min(1, "Tag name is required").max(50),
 });

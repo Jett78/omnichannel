@@ -256,6 +256,9 @@ function whatsappHandler(call: RecordedCall): FakeResult {
       json: { url: "https://lookaside.fbsbx.example/download/media-img-1", mime_type: "image/jpeg", file_size: 8 },
     };
   }
+  if (call.method === "POST" && path === "/v25.0/phone-1/media") {
+    return { json: { id: "media-out-1" } };
+  }
   if (call.method === "POST" && path === "/v25.0/phone-1/messages") {
     const body = JSON.parse(call.bodyText) as {
       text?: { body?: string };
@@ -928,6 +931,39 @@ async function main(): Promise<void> {
     });
     const freshResult = await messagingService.deliverOutboundMessage(freshOutbound.id, { isFinalAttempt: false });
     assert("Window: free-form inside 24h delivers", freshResult.status === "SENT");
+
+    // Outbound media: upload → queued message → delivery by media id.
+    const waMediaMessage = await messagingService.sendOutboundMedia(
+      userA.id,
+      wsA.id,
+      freshConversation.id,
+      {
+        bytes: Buffer.from("fake-jpeg-bytes"),
+        fileName: "bill.jpg",
+        mimeType: "image/jpeg",
+        caption: "Your bill",
+      },
+    );
+    assert(
+      "sendOutboundMedia (WA): IMAGE queued with the whatsapp-media ref",
+      waMediaMessage.messageType === "IMAGE" &&
+        waMediaMessage.attachments[0]?.url === "whatsapp-media:media-out-1",
+    );
+    const waMediaResult = await messagingService.deliverOutboundMessage(waMediaMessage.id, {
+      isFinalAttempt: true,
+    });
+    const waMediaSend = waFake.calls.filter((c) => c.url.includes("/phone-1/messages")).at(-1);
+    const waMediaBody = JSON.parse(waMediaSend?.bodyText ?? "{}") as {
+      type?: string;
+      image?: { id?: string; caption?: string };
+    };
+    assert(
+      "sendOutboundMedia (WA): delivered by media id with caption",
+      waMediaResult.status === "SENT" &&
+        waMediaBody.type === "image" &&
+        waMediaBody.image?.id === "media-out-1" &&
+        waMediaBody.image?.caption === "Your bill",
+    );
   }
 
   // ── 9. Register + templates + cross-workspace ─────────────────────────────
