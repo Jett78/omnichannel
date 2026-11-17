@@ -1118,29 +1118,18 @@ export function RealInboxShell({
             />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1 px-4 pb-2">
-          {(
-            [
-              { value: "all", label: "All" },
-              { value: "mine", label: "Mine" },
-              { value: "unassigned", label: "Unassigned" },
-              { value: "mentions", label: "Mentions" },
-            ] as Array<{ value: AssigneeTab; label: string }>
-          ).map((tab) => (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => setAssigneeTab(tab.value)}
-              className={cn(
-                "rounded-full px-2.5 py-1 text-xs font-medium",
-                assigneeTab === tab.value
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="px-4 pb-2">
+          <Select value={assigneeTab} onValueChange={(v) => setAssigneeTab(v as AssigneeTab)}>
+            <SelectTrigger className="h-8 w-full" aria-label="Filter by assignee">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All conversations</SelectItem>
+              <SelectItem value="mine">Mine</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              <SelectItem value="mentions">Mentions</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex gap-2 px-4 pb-3">
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
