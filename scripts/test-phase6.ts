@@ -771,6 +771,20 @@ async function main(): Promise<void> {
       "Manual: reconnect stored the new token",
       credAfterReconnect?.accessToken === "manual-system-token-3",
     );
+
+    // Change number: disconnecting frees the single-number slot, so a
+    // DIFFERENT number can then connect in the same workspace.
+    await metaConnectionService.disconnectChannel(userA.id, wsC.id, manual.channel.id);
+    const changed = await whatsappConnectionService.connectManually(
+      userA.id,
+      wsC.id,
+      { wabaId: "waba-1", phoneNumberId: "phone-1", accessToken: "manual-system-token" },
+      { whatsapp: waProvider },
+    );
+    assert(
+      "Change number: after disconnect, a different number connects",
+      changed.channel.externalAccountId === "phone-1" && changed.channel.id !== manual.channel.id,
+    );
   }
 
   // ── 7. Webhook pipeline ────────────────────────────────────────────────────

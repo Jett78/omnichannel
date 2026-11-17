@@ -182,6 +182,11 @@ export function WhatsAppConnectPanel({
   const [editWarning, setEditWarning] = useState<string | null>(null);
   const [editNotice, setEditNotice] = useState<string | null>(null);
 
+  const [changeConfirming, setChangeConfirming] = useState(false);
+  const [changeBusy, setChangeBusy] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [changeNotice, setChangeNotice] = useState<string | null>(null);
+
   const [registerTarget, setRegisterTarget] = useState<RealChannel | null>(null);
   const [pin, setPin] = useState("");
   const [registerBusy, setRegisterBusy] = useState(false);
@@ -199,6 +204,7 @@ export function WhatsAppConnectPanel({
     setHandledOpenSignal(openSignal);
     if (openSignal > 0) {
       setDialogMode("connect");
+      setChangeNotice(null);
       setDialogOpen(true);
       // Fill any still-empty id fields from this browser's remembered ids.
       const saved = readSavedManualIds();
@@ -223,6 +229,8 @@ export function WhatsAppConnectPanel({
         setEditWarning(null);
         setEditNotice(null);
         setRegisterNotice(null);
+        setChangeConfirming(false);
+        setChangeError(null);
         setDialogMode("edit");
         setDialogOpen(true);
       }
@@ -432,6 +440,40 @@ export function WhatsAppConnectPanel({
     }
   }
 
+  /**
+   * Change number: disconnect the current channel (same endpoint as the
+   * Disconnect button — token deleted, history kept, the single-number
+   * slot freed), then switch this dialog to the connect form so the new
+   * number can be connected right away.
+   */
+  async function changeNumber() {
+    if (!editChannel) return;
+    setChangeBusy(true);
+    setChangeError(null);
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/channels/${editChannel.id}`, {
+        method: "DELETE",
+      });
+      const body = (await res.json().catch(() => null)) as {
+        error?: { message?: string };
+      } | null;
+      if (!res.ok) {
+        throw new Error(body?.error?.message ?? `Disconnect failed (${res.status})`);
+      }
+      setChangeNotice(
+        `Disconnected ${editChannel.displayName}. Connect the new number below — the workspace's WhatsApp slot is free now.`,
+      );
+      setEditChannel(null);
+      setChangeConfirming(false);
+      setDialogMode("connect");
+      router.refresh();
+    } catch (error) {
+      setChangeError(error instanceof Error ? error.message : "Disconnect failed");
+    } finally {
+      setChangeBusy(false);
+    }
+  }
+
   async function registerNumber() {
     if (!registerTarget) return;
     setRegisterBusy(true);
@@ -563,6 +605,45 @@ export function WhatsAppConnectPanel({
                     </Button>
                   </div>
                 </section>
+
+                <section className="flex flex-col gap-2 border-t pt-5">
+                  <h3 className="text-sm font-semibold">Change number</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Only one WhatsApp number can be connected to this workspace. To use a
+                    different number, disconnect this one first — its stored token is deleted and
+                    messages stop arriving (conversation history is kept) — then connect the new
+                    number in the same popup.
+                  </p>
+                  {changeConfirming ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => void changeNumber()}
+                        disabled={changeBusy}
+                      >
+                        {changeBusy
+                          ? "Disconnecting…"
+                          : `Disconnect ${editChannel.displayName} & continue`}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setChangeConfirming(false)}
+                        disabled={changeBusy}
+                      >
+                        Keep current number
+                      </Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <Button variant="outline" size="sm" onClick={() => setChangeConfirming(true)}>
+                        Change number
+                      </Button>
+                    </div>
+                  )}
+                  {changeError ? <p className="text-sm text-red-600">{changeError}</p> : null}
+                </section>
               </div>
             </>
           ) : (
@@ -580,6 +661,11 @@ export function WhatsAppConnectPanel({
               </DialogHeader>
 
               <div className="flex flex-col gap-6">
+                {changeNotice ? (
+                  <p className="rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">
+                    {changeNotice}
+                  </p>
+                ) : null}
                 <section className="flex flex-col items-start gap-2">
                   <h3 className="text-sm font-semibold">Embedded Signup (recommended)</h3>
                   {whatsappConfig.embeddedSignupReady ? (

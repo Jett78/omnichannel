@@ -140,17 +140,19 @@ async function consumeSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Product rule (Jeet, 2026-11-17): a workspace holds ONE WhatsApp number.
- * Connecting a different number is rejected until the existing one is
- * disconnected; reconnecting the SAME number stays allowed (it refreshes
- * the stored credentials through the upsert in finalizeChannel).
+ * Product rule (Jeet, 2026-11-17): a workspace holds ONE active WhatsApp
+ * number. Connecting a different number is rejected while another number
+ * is active; disconnecting frees the slot (the disconnected row stays as
+ * history, and the Change-number flow in Channels is disconnect → connect).
+ * Reconnecting the SAME number stays allowed (it refreshes the stored
+ * credentials through the upsert in finalizeChannel).
  */
 async function assertSingleWhatsAppNumber(
   workspaceId: string,
   phoneNumberId: string,
 ): Promise<void> {
   const existing = await prisma.channel.findFirst({
-    where: { workspaceId, provider: "WHATSAPP" },
+    where: { workspaceId, provider: "WHATSAPP", status: { not: "DISCONNECTED" } },
     select: { externalAccountId: true, displayName: true },
   });
   if (existing && existing.externalAccountId !== phoneNumberId) {
