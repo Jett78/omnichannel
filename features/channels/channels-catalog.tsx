@@ -31,6 +31,7 @@ export interface RealChannelConfig {
   displayPhoneNumber?: string;
   verifiedName?: string;
   connectionMethod?: string;
+  wabaId?: string;
   qualityRating?: string;
   webhookSubscription?: { status?: string; error?: string };
 }
@@ -41,6 +42,7 @@ export interface RealChannel {
   displayName: string;
   status: string;
   config?: RealChannelConfig;
+  externalAccountId?: string;
 }
 
 /** Public Meta setup facts (no secrets) passed from the server page. */

@@ -38,7 +38,14 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
   const channelRows = await prisma.channel.findMany({
     where: { workspaceId: active.id },
     orderBy: { createdAt: "asc" },
-    select: { id: true, provider: true, displayName: true, status: true, config: true },
+    select: {
+      id: true,
+      provider: true,
+      displayName: true,
+      status: true,
+      config: true,
+      externalAccountId: true,
+    },
   });
   const channels = channelRows.map((channel) => ({
     id: channel.id,
@@ -46,6 +53,7 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
     displayName: channel.displayName,
     status: channel.status,
     config: toRealChannelConfig(channel.config),
+    externalAccountId: channel.externalAccountId,
   }));
   const whatsapp = getWhatsAppConfig();
 
@@ -112,6 +120,7 @@ function toRealChannelConfig(config: unknown): RealChannelConfig | undefined {
     ...(pick("displayPhoneNumber") ? { displayPhoneNumber: pick("displayPhoneNumber") } : {}),
     ...(pick("verifiedName") ? { verifiedName: pick("verifiedName") } : {}),
     ...(pick("connectionMethod") ? { connectionMethod: pick("connectionMethod") } : {}),
+    ...(pick("wabaId") ? { wabaId: pick("wabaId") } : {}),
     ...(pick("qualityRating") ? { qualityRating: pick("qualityRating") } : {}),
     ...(subscription
       ? {

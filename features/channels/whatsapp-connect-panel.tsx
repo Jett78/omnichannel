@@ -119,7 +119,20 @@ export function WhatsAppConnectPanel({
   const [signupWarning, setSignupWarning] = useState<string | null>(null);
   const signupDataRef = useRef<EmbeddedSignupData>({});
 
-  const [manual, setManual] = useState({ wabaId: "", phoneNumberId: "", accessToken: "" });
+  const [manual, setManual] = useState(() => {
+    // Prefill the two (non-secret) ids from the already-connected channel in
+    // this workspace, so reconnecting does not start from an empty form. The
+    // access token is never sent back to the browser, so it always starts
+    // empty by design.
+    const connected = connectedChannels.find(
+      (channel) => channel.provider === "WHATSAPP" && channel.status === "CONNECTED",
+    );
+    return {
+      wabaId: connected?.config?.wabaId ?? "",
+      phoneNumberId: connected?.externalAccountId ?? "",
+      accessToken: "",
+    };
+  });
   const [manualBusy, setManualBusy] = useState(false);
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualWarning, setManualWarning] = useState<string | null>(null);
@@ -140,6 +153,19 @@ export function WhatsAppConnectPanel({
   if (openSignal !== handledOpenSignal) {
     setHandledOpenSignal(openSignal);
     if (openSignal > 0) setConnectOpen(true);
+  }
+
+  // If a WhatsApp channel appears in the props (e.g. right after connecting
+  // and the page refreshes), fill any still-empty id fields from it.
+  const [filledForChannelId, setFilledForChannelId] = useState<string | null>(null);
+  const firstConnected = whatsappChannels[0];
+  if (firstConnected && filledForChannelId !== firstConnected.id) {
+    setFilledForChannelId(firstConnected.id);
+    setManual((prev) => ({
+      wabaId: prev.wabaId || (firstConnected.config?.wabaId ?? ""),
+      phoneNumberId: prev.phoneNumberId || (firstConnected.externalAccountId ?? ""),
+      accessToken: prev.accessToken,
+    }));
   }
 
   async function startEmbeddedSignup() {
@@ -275,7 +301,9 @@ export function WhatsAppConnectPanel({
       } else {
         setConnectOpen(false);
       }
-      setManual({ wabaId: "", phoneNumberId: "", accessToken: "" });
+      // Keep the ids for next time; only the token is cleared (it is never
+      // stored in the browser).
+      setManual((prev) => ({ ...prev, accessToken: "" }));
       router.refresh();
     } catch (error) {
       setManualError(error instanceof Error ? error.message : "Manual connect failed");
@@ -331,65 +359,10 @@ export function WhatsAppConnectPanel({
             they are never shown again.
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          <div>
-            <Button onClick={() => setConnectOpen(true)}>
-              {whatsappChannels.length > 0 ? "Connect another number" : "Connect WhatsApp"}
-            </Button>
-          </div>
-
-          {whatsappChannels.length > 0 ? (
-            <section className="flex flex-col gap-2 border-t pt-5">
-              <h3 className="text-sm font-semibold">Phone number registration</h3>
-              <p className="text-muted-foreground text-sm">
-                A number must be registered with the Cloud API (6-digit PIN, two-step verification)
-                before it can send and receive. Registering a number that is actively used in the
-                WhatsApp Business app can affect that usage — check Meta&apos;s coexistence rules
-                in docs/WHATSAPP-SETUP.md first.
-              </p>
-              {registerNotice ? <p className="text-sm text-emerald-700">{registerNotice}</p> : null}
-              <ul className="divide-y">
-                {whatsappChannels.map((channel) => (
-                  <li key={channel.id} className="flex flex-wrap items-center gap-3 py-2.5">
-                    <span className="flex-1 text-sm font-medium">
-                      {channel.displayName}
-                      {channel.config?.displayPhoneNumber ? (
-                        <span className="text-muted-foreground block text-xs font-normal">
-                          {channel.config.displayPhoneNumber}
-                          {channel.config.qualityRating
-                            ? ` · quality ${channel.config.qualityRating}`
-                            : ""}
-                          {channel.config.connectionMethod
-                            ? ` · ${channel.config.connectionMethod.replace("_", " ")}`
-                            : ""}
-                        </span>
-                      ) : null}
-                      {channel.config?.webhookSubscription?.status === "failed" ? (
-                        <span className="block text-xs text-amber-700">
-                          Webhook subscription failed
-                          {channel.config.webhookSubscription.error
-                            ? `: ${channel.config.webhookSubscription.error}`
-                            : ""}{" "}
-                          — incoming messages may not arrive.
-                        </span>
-                      ) : null}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setRegisterError(null);
-                        setPin("");
-                        setRegisterTarget(channel);
-                      }}
-                    >
-                      Register number
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+        <CardContent>
+          <Button onClick={() => setConnectOpen(true)}>
+            {whatsappChannels.length > 0 ? "Connect another number" : "Connect WhatsApp"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -509,6 +482,59 @@ export function WhatsAppConnectPanel({
               {manualError ? <p className="text-sm text-red-600">{manualError}</p> : null}
               {manualWarning ? <p className="text-sm text-amber-700">{manualWarning}</p> : null}
             </section>
+
+            {whatsappChannels.length > 0 ? (
+              <section className="flex flex-col gap-2 border-t pt-5">
+                <h3 className="text-sm font-semibold">Phone number registration</h3>
+                <p className="text-muted-foreground text-sm">
+                  A number must be registered with the Cloud API (6-digit PIN, two-step verification)
+                  before it can send and receive. Registering a number that is actively used in the
+                  WhatsApp Business app can affect that usage — check Meta&apos;s coexistence rules
+                  in docs/WHATSAPP-SETUP.md first.
+                </p>
+                {registerNotice ? <p className="text-sm text-emerald-700">{registerNotice}</p> : null}
+                <ul className="divide-y">
+                  {whatsappChannels.map((channel) => (
+                    <li key={channel.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                      <span className="flex-1 text-sm font-medium">
+                        {channel.displayName}
+                        {channel.config?.displayPhoneNumber ? (
+                          <span className="text-muted-foreground block text-xs font-normal">
+                            {channel.config.displayPhoneNumber}
+                            {channel.config.qualityRating
+                              ? ` · quality ${channel.config.qualityRating}`
+                              : ""}
+                            {channel.config.connectionMethod
+                              ? ` · ${channel.config.connectionMethod.replace("_", " ")}`
+                              : ""}
+                          </span>
+                        ) : null}
+                        {channel.config?.webhookSubscription?.status === "failed" ? (
+                          <span className="block text-xs text-amber-700">
+                            Webhook subscription failed
+                            {channel.config.webhookSubscription.error
+                              ? `: ${channel.config.webhookSubscription.error}`
+                              : ""}{" "}
+                            — incoming messages may not arrive.
+                          </span>
+                        ) : null}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setRegisterError(null);
+                          setPin("");
+                          setRegisterTarget(channel);
+                        }}
+                      >
+                        Register number
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>
