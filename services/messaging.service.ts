@@ -279,10 +279,11 @@ export const messagingService = {
         },
       });
       conversationCreated = true;
-    } else if (conversation.status === "RESOLVED") {
+    } else if (conversation.status === "RESOLVED" || conversation.status === "SNOOZED") {
+      // A customer reply also unsnoozes (Chatwoot behaviour).
       conversation = await prisma.conversation.update({
         where: { id: conversation.id },
-        data: { status: "OPEN" },
+        data: { status: "OPEN", snoozedUntil: null },
       });
     }
 
@@ -644,6 +645,65 @@ export const messagingService = {
    * Idempotent: messages already stored (same external id in the same
    * conversation) are skipped and counted.
    */
+  /**
+   * Re-queue a FAILED outbound message for delivery (the composer's
+   * Retry action). The message goes back to QUEUED and the normal
+   * outbound worker path (window checks, retries, status events)
+   * takes it from there.
+   */
+  async retryOutboundMessage(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<UnifiedMessage> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, workspaceId },
+      select: { id: true, channelId: true, contactId: true },
+    });
+    if (!conversation) throw AppError.notFound("Conversation not found");
+    const message = await prisma.message.findFirst({
+      where: { id: messageId, conversationId },
+    });
+    if (!message) throw AppError.notFound("Message not found");
+    if (
+      message.direction !== "OUTBOUND" ||
+      message.type === "PRIVATE_NOTE" ||
+      message.type === "SYSTEM"
+    ) {
+      throw AppError.badRequest("Only customer messages can be retried");
+    }
+    if (message.status !== "FAILED") {
+      throw AppError.badRequest("Only failed messages can be retried");
+    }
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { status: "QUEUED" },
+      include: { attachments: true },
+    });
+    await getQueues().outbound.add(
+      "outbound",
+      { messageId, workspaceId, channelId: conversation.channelId },
+      { attempts: 3, backoff: { type: "exponential", delay: 1000 } },
+    );
+    await emitToWorkspaceAndConversation(workspaceId, conversationId, "message.status_updated", {
+      workspaceId,
+      conversationId,
+      messageId,
+      status: "QUEUED",
+      externalMessageId: updated.externalMessageId,
+    });
+    return toUnifiedMessage({
+      ...updated,
+      conversation: {
+        workspaceId,
+        channelId: conversation.channelId,
+        contactId: conversation.contactId,
+      },
+    });
+  },
+
   async importRecentConversations(
     actorUserId: string,
     workspaceId: string,

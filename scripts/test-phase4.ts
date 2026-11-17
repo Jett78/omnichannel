@@ -6,6 +6,7 @@ import { io, type Socket } from "socket.io-client";
 import { auth } from "@/lib/auth";
 import { getQueues } from "@/lib/queue";
 import { prisma } from "@/lib/prisma";
+import { cannedResponseService } from "@/services/canned-response.service";
 import { channelService } from "@/services/channel.service";
 import { conversationService } from "@/services/conversation.service";
 import { messagingService } from "@/services/messaging.service";
@@ -337,6 +338,148 @@ async function main(): Promise<void> {
   const afterReopen = await prisma.conversation.findUnique({ where: { id: conversationId } });
   assert("new inbound reopens a RESOLVED conversation", afterReopen?.status === "OPEN");
 
+  // ── 9b. Chatwoot parity: priority, snooze, activity, mentions ──────
+  const listed9b = await conversationService.listConversations(userA.id, wa.id);
+  const listedItem9b = listed9b.items.find((i) => i.id === conversationId);
+  assert("list: awaitingReply true after inbound", listedItem9b?.awaitingReply === true);
+  assert(
+    "list: preview ignores SYSTEM activity entries",
+    listedItem9b?.preview === "Actually, one more thing…",
+  );
+
+  const prioritized = await conversationService.setPriority(
+    userA.id,
+    wa.id,
+    conversationId,
+    "URGENT",
+  );
+  assert("setPriority URGENT stored", prioritized.priority === "URGENT");
+  const threadAfterPriority = await conversationService.listMessages(userA.id, wa.id, conversationId);
+  assert(
+    "activity message recorded for the priority change",
+    threadAfterPriority.items.some(
+      (m) => m.messageType === "SYSTEM" && (m.content ?? "").includes("priority"),
+    ),
+  );
+  const priorityCleared = await conversationService.setPriority(userA.id, wa.id, conversationId, null);
+  assert("setPriority null clears", priorityCleared.priority === null);
+
+  const snoozed = await conversationService.snoozeConversation(
+    userA.id,
+    wa.id,
+    conversationId,
+    new Date(Date.now() + 60 * 60 * 1000),
+  );
+  assert(
+    "snooze → SNOOZED with deadline",
+    snoozed.status === "SNOOZED" && snoozed.snoozedUntil !== null,
+  );
+  const eventSnooze = await enqueueMockWebhook(channel.id, "e-snooze", [
+    {
+      externalMessageId: `ext-${runId}-snooze`,
+      senderExternalId: "cust-1",
+      senderName: "Test Customer",
+      text: "Waking you up!",
+      type: "TEXT",
+      sentAt: new Date().toISOString(),
+    },
+  ]);
+  await waitEventProcessed(eventSnooze);
+  const afterUnsnooze = await prisma.conversation.findUnique({ where: { id: conversationId } });
+  assert(
+    "customer reply unsnoozes",
+    afterUnsnooze?.status === "OPEN" && afterUnsnooze?.snoozedUntil === null,
+  );
+
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { status: "SNOOZED", snoozedUntil: new Date(Date.now() - 60_000) },
+  });
+  const listedAfterExpiry = await conversationService.listConversations(userA.id, wa.id);
+  assert(
+    "expired snooze reopens on list (lazy unsnooze)",
+    listedAfterExpiry.items.find((i) => i.id === conversationId)?.status === "OPEN",
+  );
+
+  const mentionNote = await conversationService.addInternalNote(
+    userA.id,
+    wa.id,
+    conversationId,
+    "@Phase4 c can you check this order?",
+  );
+  const mentionNotification = await prisma.notification.findFirst({
+    where: { userId: userC.id, type: "MENTION", entityId: conversationId },
+  });
+  assert("mention creates a MENTION notification", mentionNotification !== null);
+  const mentionRow = await prisma.message.findUnique({ where: { id: mentionNote.id } });
+  const mentionMeta = (mentionRow?.metadata ?? null) as { mentions?: string[] } | null;
+  assert(
+    "mention ids stored in note metadata",
+    Array.isArray(mentionMeta?.mentions) && mentionMeta.mentions.includes(userC.id),
+  );
+  const mentionsList = await conversationService.listConversations(userA.id, wa.id, {
+    mentionedUserId: userC.id,
+  });
+  assert(
+    "mentions filter finds the conversation",
+    mentionsList.items.some((i) => i.id === conversationId),
+  );
+  const noMentionsList = await conversationService.listConversations(userA.id, wa.id, {
+    mentionedUserId: userA.id,
+  });
+  assert(
+    "mentions filter excludes a non-mentioned user",
+    !noMentionsList.items.some((i) => i.id === conversationId),
+  );
+
+  const canned = await cannedResponseService.create(userA.id, wa.id, {
+    title: "Greeting",
+    body: "Hi {{contact.name}}!",
+    shortcut: "greet",
+  });
+  const cannedList = await cannedResponseService.list(userA.id, wa.id);
+  assert(
+    "canned response create + list",
+    cannedList.some((c) => c.id === canned.id && c.shortcut === "greet"),
+  );
+  await cannedResponseService.remove(userA.id, wa.id, canned.id);
+  const cannedAfterRemove = await cannedResponseService.list(userA.id, wa.id);
+  assert("canned response removed", !cannedAfterRemove.some((c) => c.id === canned.id));
+  await expectThrows("canned: outsider cannot create", () =>
+    cannedResponseService.create(userB.id, wa.id, { title: "X", body: "Y" }),
+  );
+
+  const secondConversation = await prisma.conversation.create({
+    data: {
+      workspaceId: wa.id,
+      channelId: channel.id,
+      contactId: conversation.contactId,
+      status: "RESOLVED",
+      lastMessageAt: new Date(Date.now() - 86_400_000),
+    },
+  });
+  const previous = await conversationService.listContactConversations(userA.id, wa.id, conversationId);
+  assert(
+    "previous conversations lists the older thread only",
+    previous.length === 1 && previous[0]?.id === secondConversation.id,
+  );
+  await conversationService.deleteConversation(userA.id, wa.id, secondConversation.id);
+  const deletedRow = await prisma.conversation.findUnique({
+    where: { id: secondConversation.id },
+  });
+  assert("deleteConversation removes the row", deletedRow === null);
+
+  await conversationService.deleteMessage(userA.id, wa.id, conversationId, note.id);
+  const threadAfterDelete = await conversationService.listMessages(userA.id, wa.id, conversationId);
+  assert(
+    "deleteMessage removes the note from the thread",
+    !threadAfterDelete.items.some((m) => m.id === note.id),
+  );
+  const inboundMessage = threadAfterDelete.items.find((m) => m.direction === "INBOUND");
+  await expectThrows("deleteMessage: a customer message cannot be deleted", () =>
+    conversationService.deleteMessage(userA.id, wa.id, conversationId, inboundMessage?.id ?? "missing"),
+  );
+
   // ── 10a. Outbound success through the worker ───────────────────────
   const outbound = await messagingService.sendOutboundMessage(userA.id, wa.id, conversationId, {
     content: "Happy to help — your order is on its way.",
@@ -374,6 +517,18 @@ async function main(): Promise<void> {
   assert(
     "failure error recorded in message metadata",
     typeof failedMeta.error === "string" && failedMeta.error.includes("[fail]"),
+  );
+
+  // ── 10c. Retry a FAILED message ────────────────────────────────────
+  const retried = await messagingService.retryOutboundMessage(
+    userA.id,
+    wa.id,
+    conversationId,
+    failing.id,
+  );
+  assert("retry re-queues a FAILED message", retried.status === "QUEUED");
+  await expectThrows("retry: a SENT message cannot be retried", () =>
+    messagingService.retryOutboundMessage(userA.id, wa.id, conversationId, outbound.id),
   );
 
   // ── 11. Realtime: socket receives message.created ──────────────────

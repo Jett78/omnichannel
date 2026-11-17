@@ -28,6 +28,14 @@ export interface TeamData {
   memberCount: number;
 }
 
+export interface InvitationData {
+  id: string;
+  email: string;
+  role: Role;
+  invitedByName: string;
+  expiresLabel: string;
+}
+
 const ROLES: readonly Role[] = ["OWNER", "ADMIN", "AGENT", "VIEWER"];
 
 const ROLE_BADGE: Record<Role, "info" | "success" | "secondary" | "muted"> = {
@@ -50,6 +58,7 @@ export function TeamManagement({
   workspaceName,
   members,
   teams,
+  invitations = [],
   currentUserId,
   currentRole,
 }: {
@@ -57,6 +66,7 @@ export function TeamManagement({
   workspaceName: string;
   members: MemberData[];
   teams: TeamData[];
+  invitations?: InvitationData[];
   currentUserId: string;
   currentRole: Role;
 }) {
@@ -129,7 +139,9 @@ export function TeamManagement({
             ? (data as { inviteUrl: string }).inviteUrl
             : null;
         setInviteUrl(url);
-        setMessage("Invitation created. Share the link below (also logged by the dev mailer).");
+        setMessage(
+          `Invitation emailed to ${String(formData.get("email") ?? "")}. You can also share the link below directly.`,
+        );
         form.reset();
         router.refresh();
       } finally {
@@ -298,6 +310,73 @@ export function TeamManagement({
           ) : null}
         </CardContent>
       </Card>
+
+      {can(currentRole, "members.invite") && invitations.length > 0 ? (
+        <Card className="shadow-none">
+          <CardHeader>
+            <CardTitle>Pending invitations</CardTitle>
+            <CardDescription>
+              People who have been invited but have not accepted yet. Resending emails a fresh
+              7-day link and invalidates the old one.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="flex flex-col divide-y">
+              {invitations.map((invitation) => (
+                <li
+                  key={invitation.id}
+                  className="flex flex-wrap items-center gap-2 py-2.5 text-sm"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{invitation.email}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      Invited by {invitation.invitedByName} · expires {invitation.expiresLabel}
+                    </span>
+                  </span>
+                  <Badge variant={ROLE_BADGE[invitation.role]}>{invitation.role}</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const res = await fetch(`/api/workspaces/${workspaceId}/members`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            email: invitation.email,
+                            role: invitation.role,
+                          }),
+                        });
+                        return res.ok
+                          ? { ok: true, message: `Invitation re-sent to ${invitation.email}.` }
+                          : { ok: false, message: "Could not resend the invitation." };
+                      })
+                    }
+                  >
+                    Resend
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(() =>
+                        callApi(
+                          `/api/workspaces/${workspaceId}/invitations/${invitation.id}`,
+                          "DELETE",
+                        ),
+                      )
+                    }
+                  >
+                    Revoke
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="shadow-none">
         <CardHeader>

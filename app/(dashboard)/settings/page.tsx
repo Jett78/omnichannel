@@ -12,6 +12,7 @@ import { WorkspaceSettings } from "@/features/settings/workspace-settings";
 import { TeamManagement } from "@/features/team/team-management";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { workspaceService } from "@/services/workspace.service";
 
 export default async function SettingsPage() {
@@ -27,6 +28,10 @@ export default async function SettingsPage() {
   ]);
   const currentMember = members.find((m) => m.user.id === user.id);
   if (!currentMember) redirect("/onboarding");
+
+  const invitations = hasPermission(currentMember.role, "members.invite")
+    ? await workspaceService.listInvitations(user.id, active.id).catch(() => [])
+    : [];
 
   return (
     <div className="flex max-w-4xl flex-col gap-6">
@@ -94,6 +99,17 @@ export default async function SettingsPage() {
           name: t.name,
           description: t.description,
           memberCount: t._count.members,
+        }))}
+        invitations={invitations.map((invitation) => ({
+          id: invitation.id,
+          email: invitation.email,
+          role: invitation.role,
+          invitedByName: invitation.invitedBy?.name ?? "A teammate",
+          expiresLabel: invitation.expiresAt.toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
         }))}
         currentUserId={user.id}
         currentRole={currentMember.role}

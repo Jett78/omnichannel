@@ -202,6 +202,50 @@ export const workspaceService = {
     return { invitation, inviteUrl };
   },
 
+  /** Pending (unexpired) invitations for the Team page. */
+  async listInvitations(userId: string, workspaceId: string) {
+    await requireWorkspacePermission(userId, workspaceId, "members.invite");
+    return prisma.invitation.findMany({
+      where: { workspaceId, status: "PENDING", expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        expiresAt: true,
+        createdAt: true,
+        invitedBy: { select: { name: true } },
+      },
+    });
+  },
+
+  /** Revoke a pending invitation (its accept link stops working). */
+  async revokeInvitation(userId: string, workspaceId: string, invitationId: string) {
+    await requireWorkspacePermission(userId, workspaceId, "members.invite");
+    const invitation = await prisma.invitation.findFirst({
+      where: { id: invitationId, workspaceId },
+    });
+    if (!invitation) throw AppError.notFound("Invitation not found");
+    if (invitation.status !== "PENDING") {
+      throw AppError.badRequest(`Invitation is already ${invitation.status.toLowerCase()}`);
+    }
+    const updated = await prisma.invitation.update({
+      where: { id: invitationId },
+      data: { status: "REVOKED" },
+    });
+    await prisma.auditLog.create({
+      data: {
+        workspaceId,
+        actorId: userId,
+        action: "member.invite_revoked",
+        entity: "Invitation",
+        entityId: invitationId,
+        meta: { email: invitation.email },
+      },
+    });
+    return updated;
+  },
+
   /** Accept an invitation. The signed-in user's email must match the invite. */
   async acceptInvitation(userId: string, token: string) {
     const invitation = await prisma.invitation.findUnique({ where: { token } });

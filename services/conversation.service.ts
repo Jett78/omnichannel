@@ -3,7 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { emitToWorkspace, emitToWorkspaceAndConversation } from "@/lib/realtime";
 import { requireWorkspacePermission } from "@/lib/workspace-auth";
 import { toUnifiedMessage } from "@/services/messaging.service";
-import type { Conversation, ConversationStatus, Provider, Tag } from "@/generated/prisma/client";
+import type {
+  Conversation,
+  ConversationPriority,
+  ConversationStatus,
+  Provider,
+  Tag,
+} from "@/generated/prisma/client";
 import type { UnifiedMessage } from "@/types/messaging";
 
 /**
@@ -18,8 +24,12 @@ export interface ConversationListItem {
   channelId: string;
   contactId: string;
   status: ConversationStatus;
+  priority: ConversationPriority | null;
+  snoozedUntil: Date | null;
   assigneeId: string | null;
   unreadCount: number;
+  /** True when the newest real message is inbound and unanswered. */
+  awaitingReply: boolean;
   lastMessageAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +53,9 @@ export interface ListConversationsOptions {
   unassigned?: boolean;
   channelId?: string;
   search?: string;
+  /** Only conversations where this user was @-mentioned in a note. */
+  mentionedUserId?: string;
+  sort?: "latest" | "waiting" | "priority";
   cursor?: string;
   limit?: number;
 }
@@ -52,7 +65,13 @@ const conversationInclude = {
   channel: { select: { id: true, provider: true, displayName: true } },
   assignee: { select: { id: true, name: true } },
   tags: { include: { tag: true } },
-  messages: { orderBy: { createdAt: "desc" as const }, take: 1 },
+  // Preview = newest REAL message; SYSTEM activity entries never
+  // become the preview or affect the awaiting-reply flag.
+  messages: {
+    where: { type: { not: "SYSTEM" as const } },
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+  },
 };
 
 type ConversationRow = Conversation & {
@@ -60,7 +79,7 @@ type ConversationRow = Conversation & {
   channel: ConversationListItem["channel"];
   assignee: ConversationListItem["assignee"];
   tags: Array<{ tag: Tag }>;
-  messages: Array<{ body: string | null; createdAt: Date }>;
+  messages: Array<{ body: string | null; createdAt: Date; direction: "INBOUND" | "OUTBOUND" }>;
 };
 
 function toListItem(row: ConversationRow): ConversationListItem {
@@ -71,8 +90,11 @@ function toListItem(row: ConversationRow): ConversationListItem {
     channelId: row.channelId,
     contactId: row.contactId,
     status: row.status,
+    priority: row.priority,
+    snoozedUntil: row.snoozedUntil,
     assigneeId: row.assigneeId,
     unreadCount: row.unreadCount,
+    awaitingReply: last?.direction === "INBOUND",
     lastMessageAt: row.lastMessageAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -103,10 +125,56 @@ async function emitConversationUpdated(workspaceId: string, row: ConversationRow
     conversation: {
       id: row.id,
       status: row.status,
+      priority: row.priority,
+      snoozedUntil: row.snoozedUntil?.toISOString() ?? null,
       unreadCount: row.unreadCount,
       assigneeId: row.assigneeId,
       lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
     },
+  });
+}
+
+async function actorName(actorUserId: string): Promise<string> {
+  const user = await prisma.user.findUnique({
+    where: { id: actorUserId },
+    select: { name: true },
+  });
+  return user?.name ?? "A teammate";
+}
+
+/**
+ * Chatwoot-style activity entry in the thread timeline ("Jeet resolved
+ * this conversation"). Stored as a SYSTEM message; excluded from list
+ * previews by the include filter above.
+ */
+async function addActivityMessage(
+  workspaceId: string,
+  conversation: { id: string; channelId: string; contactId: string },
+  body: string,
+): Promise<void> {
+  const created = await prisma.message.create({
+    data: {
+      conversationId: conversation.id,
+      direction: "OUTBOUND",
+      type: "SYSTEM",
+      body,
+      senderType: "SYSTEM",
+      status: "SENT",
+    },
+    include: { attachments: true },
+  });
+  const unified = toUnifiedMessage({
+    ...created,
+    conversation: {
+      workspaceId,
+      channelId: conversation.channelId,
+      contactId: conversation.contactId,
+    },
+  });
+  await emitToWorkspaceAndConversation(workspaceId, conversation.id, "message.created", {
+    workspaceId,
+    conversationId: conversation.id,
+    message: { ...unified, createdAt: unified.createdAt.toISOString() },
   });
 }
 
@@ -130,6 +198,16 @@ export const conversationService = {
     await requireWorkspacePermission(actorUserId, workspaceId, "conversations.view");
     const limit = Math.min(Math.max(options.limit ?? 30, 1), 100);
     const search = options.search?.trim();
+    // Lazy unsnooze: timed snoozes whose deadline passed reopen here
+    // (a customer reply also unsnoozes at ingest time).
+    await prisma.conversation.updateMany({
+      where: {
+        workspaceId,
+        status: "SNOOZED",
+        snoozedUntil: { not: null, lt: new Date() },
+      },
+      data: { status: "OPEN", snoozedUntil: null },
+    });
     const rows = await prisma.conversation.findMany({
       where: {
         workspaceId,
@@ -140,6 +218,19 @@ export const conversationService = {
           : options.assigneeId
             ? { assigneeId: options.assigneeId }
             : {}),
+        ...(options.mentionedUserId
+          ? {
+              messages: {
+                some: {
+                  type: "PRIVATE_NOTE" as const,
+                  metadata: {
+                    path: ["mentions"],
+                    array_contains: [options.mentionedUserId],
+                  },
+                },
+              },
+            }
+          : {}),
         ...(search
           ? {
               OR: [
@@ -158,7 +249,16 @@ export const conversationService = {
           : {}),
       },
       include: conversationInclude,
-      orderBy: [{ lastMessageAt: "desc" }, { id: "desc" }],
+      orderBy:
+        options.sort === "waiting"
+          ? [{ lastMessageAt: "asc" }, { id: "asc" }]
+          : options.sort === "priority"
+            ? [
+                { priority: { sort: "desc" as const, nulls: "last" as const } },
+                { lastMessageAt: "desc" },
+                { id: "desc" },
+              ]
+            : [{ lastMessageAt: "desc" }, { id: "desc" }],
       take: limit + 1,
       ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
     });
@@ -305,6 +405,25 @@ export const conversationService = {
       }
     });
 
+    if (assigneeId !== row.assigneeId) {
+      const name = await actorName(actorUserId);
+      const assigneeName = assigneeId
+        ? ((await prisma.user.findUnique({
+            where: { id: assigneeId },
+            select: { name: true },
+          }))?.name ?? "a teammate")
+        : null;
+      await addActivityMessage(
+        workspaceId,
+        row,
+        assigneeId
+          ? assigneeId === actorUserId
+            ? `${name} assigned this conversation to themselves`
+            : `${name} assigned this conversation to ${assigneeName}`
+          : `${name} unassigned this conversation`,
+      );
+    }
+
     const updated = await loadConversationOrThrow(workspaceId, conversationId);
     await emitConversationUpdated(workspaceId, updated);
     return toListItem(updated);
@@ -325,6 +444,11 @@ export const conversationService = {
       data: { status: "RESOLVED" },
     });
     await writeAudit(workspaceId, actorUserId, "conversation.resolve", conversationId);
+    await addActivityMessage(
+      workspaceId,
+      row,
+      `${await actorName(actorUserId)} resolved this conversation`,
+    );
     const updated = await loadConversationOrThrow(workspaceId, conversationId);
     await emitConversationUpdated(workspaceId, updated);
     return toListItem(updated);
@@ -342,9 +466,14 @@ export const conversationService = {
     }
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: { status: "OPEN" },
+      data: { status: "OPEN", snoozedUntil: null },
     });
     await writeAudit(workspaceId, actorUserId, "conversation.reopen", conversationId);
+    await addActivityMessage(
+      workspaceId,
+      row,
+      `${await actorName(actorUserId)} reopened this conversation`,
+    );
     const updated = await loadConversationOrThrow(workspaceId, conversationId);
     await emitConversationUpdated(workspaceId, updated);
     return toListItem(updated);
@@ -363,9 +492,26 @@ export const conversationService = {
     await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
     const conversation = await prisma.conversation.findFirst({
       where: { id: conversationId, workspaceId },
-      select: { id: true, channelId: true, contactId: true },
+      select: {
+        id: true,
+        channelId: true,
+        contactId: true,
+        contact: { select: { displayName: true } },
+      },
     });
     if (!conversation) throw AppError.notFound("Conversation not found");
+
+    // @-mentions: "@Teammate Name" in a note notifies that member and
+    // files the conversation under their Mentions view.
+    const members = await prisma.workspaceMember.findMany({
+      where: { workspaceId },
+      include: { user: { select: { id: true, name: true } } },
+    });
+    const lowered = content.toLowerCase();
+    const mentionedIds = members
+      .map((m) => m.user)
+      .filter((u) => u.id !== actorUserId && lowered.includes(`@${u.name.toLowerCase()}`))
+      .map((u) => u.id);
 
     const created = await prisma.message.create({
       data: {
@@ -376,9 +522,24 @@ export const conversationService = {
         senderType: "AGENT",
         senderUserId: actorUserId,
         status: "SENT",
+        ...(mentionedIds.length > 0 ? { metadata: { mentions: mentionedIds } } : {}),
       },
       include: { attachments: true },
     });
+    if (mentionedIds.length > 0) {
+      const name = await actorName(actorUserId);
+      await prisma.notification.createMany({
+        data: mentionedIds.map((userId) => ({
+          workspaceId,
+          userId,
+          type: "MENTION" as const,
+          title: `${name} mentioned you in a note`,
+          body: `Conversation with ${conversation.contact.displayName}`,
+          entity: "Conversation",
+          entityId: conversationId,
+        })),
+      });
+    }
     const unified = toUnifiedMessage({
       ...created,
       conversation: {
@@ -466,5 +627,131 @@ export const conversationService = {
     const updated = await loadConversationOrThrow(workspaceId, conversationId);
     await emitConversationUpdated(workspaceId, updated);
     return updated.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, color: t.tag.color }));
+  },
+
+  /** Set or clear the conversation priority (Chatwoot: Low→Urgent). */
+  async setPriority(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+    priority: ConversationPriority | null,
+  ): Promise<ConversationListItem> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.assign");
+    const row = await loadConversationOrThrow(workspaceId, conversationId);
+    if (row.priority === priority) return toListItem(row);
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { priority },
+    });
+    await writeAudit(workspaceId, actorUserId, "conversation.priority", conversationId);
+    const name = await actorName(actorUserId);
+    await addActivityMessage(
+      workspaceId,
+      row,
+      priority
+        ? `${name} set the priority to ${priority.charAt(0) + priority.slice(1).toLowerCase()}`
+        : `${name} cleared the priority`,
+    );
+    const updated = await loadConversationOrThrow(workspaceId, conversationId);
+    await emitConversationUpdated(workspaceId, updated);
+    return toListItem(updated);
+  },
+
+  /**
+   * Snooze an open conversation: `until` a moment, or null for "until
+   * the next customer reply". Expired timed snoozes reopen lazily in
+   * listConversations; a customer reply unsnoozes at ingest.
+   */
+  async snoozeConversation(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+    until: Date | null,
+  ): Promise<ConversationListItem> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.assign");
+    const row = await loadConversationOrThrow(workspaceId, conversationId);
+    if (row.status !== "OPEN" && row.status !== "PENDING") {
+      throw AppError.badRequest(`Cannot snooze a conversation in status ${row.status}`);
+    }
+    if (until && until.getTime() <= Date.now()) {
+      throw AppError.badRequest("Snooze time must be in the future");
+    }
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { status: "SNOOZED", snoozedUntil: until },
+    });
+    await writeAudit(workspaceId, actorUserId, "conversation.snooze", conversationId);
+    const name = await actorName(actorUserId);
+    await addActivityMessage(
+      workspaceId,
+      row,
+      until
+        ? `${name} snoozed this conversation until ${until.toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+        : `${name} snoozed this conversation until the next reply`,
+    );
+    const updated = await loadConversationOrThrow(workspaceId, conversationId);
+    await emitConversationUpdated(workspaceId, updated);
+    return toListItem(updated);
+  },
+
+  /** Permanently delete a conversation and its messages. */
+  async deleteConversation(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+  ): Promise<{ id: string }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.assign");
+    await loadConversationOrThrow(workspaceId, conversationId);
+    await prisma.conversation.delete({ where: { id: conversationId } });
+    await writeAudit(workspaceId, actorUserId, "conversation.delete", conversationId);
+    await emitToWorkspace(workspaceId, "conversation.deleted", { workspaceId, conversationId });
+    return { id: conversationId };
+  },
+
+  /** Other conversations with the same contact (Previous conversations panel). */
+  async listContactConversations(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+  ): Promise<ConversationListItem[]> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.view");
+    const row = await loadConversationOrThrow(workspaceId, conversationId);
+    const rows = await prisma.conversation.findMany({
+      where: { workspaceId, contactId: row.contactId, id: { not: conversationId } },
+      include: conversationInclude,
+      orderBy: [{ lastMessageAt: "desc" }, { id: "desc" }],
+      take: 10,
+    });
+    return rows.map((r) => toListItem(r as ConversationRow));
+  },
+
+  /**
+   * Delete an agent-authored message (own replies and notes) from the
+   * thread. This removes it from OUR records only — a message already
+   * delivered to the customer's app cannot be unsent by this.
+   */
+  async deleteMessage(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<{ id: string }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    await loadConversationOrThrow(workspaceId, conversationId);
+    const message = await prisma.message.findFirst({
+      where: { id: messageId, conversationId },
+      select: { id: true, senderType: true },
+    });
+    if (!message) throw AppError.notFound("Message not found");
+    if (message.senderType !== "AGENT") {
+      throw AppError.badRequest("Only your team's messages can be deleted");
+    }
+    await prisma.message.delete({ where: { id: messageId } });
+    await emitToWorkspaceAndConversation(workspaceId, conversationId, "message.deleted", {
+      workspaceId,
+      conversationId,
+      messageId,
+    });
+    return { id: messageId };
   },
 };

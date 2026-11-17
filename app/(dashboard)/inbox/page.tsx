@@ -36,6 +36,9 @@ export default async function InboxPage() {
           conversations: items.map((item) => ({
             id: item.id,
             status: item.status,
+            priority: item.priority,
+            snoozedUntil: item.snoozedUntil?.toISOString() ?? null,
+            awaitingReply: item.awaitingReply,
             unreadCount: item.unreadCount,
             lastMessageAt: item.lastMessageAt?.toISOString() ?? null,
             preview: item.preview,

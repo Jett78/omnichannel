@@ -131,6 +131,24 @@ export const conversationTagSchema = z.object({
 });
 export type ConversationTagInput = z.infer<typeof conversationTagSchema>;
 
+export const setPrioritySchema = z.object({
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).nullable(),
+});
+export type SetPriorityInput = z.infer<typeof setPrioritySchema>;
+
+export const snoozeConversationSchema = z.object({
+  /** ISO timestamp to reopen at, or null = until the next reply. */
+  until: z.string().datetime().nullable(),
+});
+export type SnoozeConversationInput = z.infer<typeof snoozeConversationSchema>;
+
+export const cannedResponseCreateSchema = z.object({
+  title: z.string().min(1, "Title is required").max(120),
+  body: z.string().min(1, "Body is required").max(4000),
+  shortcut: z.string().max(40).optional(),
+});
+export type CannedResponseCreateInput = z.infer<typeof cannedResponseCreateSchema>;
+
 export const selectConnectionAccountSchema = z.object({
   externalAccountId: z.string().min(1, "An account must be selected"),
 });

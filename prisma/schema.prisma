@@ -45,6 +45,13 @@ enum ConversationStatus {
   SNOOZED
 }
 
+enum ConversationPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
 enum MessageDirection {
   INBOUND
   OUTBOUND
@@ -360,6 +367,9 @@ model Conversation {
   channelId        String
   contactId        String
   status           ConversationStatus @default(OPEN)
+  priority         ConversationPriority?
+  /** When a SNOOZED conversation should auto-reopen; null = until next reply. */
+  snoozedUntil     DateTime?
   assigneeId       String?
   externalThreadId String?
   lastMessageAt    DateTime?

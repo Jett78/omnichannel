@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { TeamManagement } from "@/features/team/team-management";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/permissions";
 import { workspaceService } from "@/services/workspace.service";
 
 export default async function TeamPage() {
@@ -19,6 +20,11 @@ export default async function TeamPage() {
   ]);
   const currentMember = members.find((m) => m.user.id === user.id);
   if (!currentMember) redirect("/onboarding");
+
+  // Pending invitations are only visible to members who can invite.
+  const invitations = hasPermission(currentMember.role, "members.invite")
+    ? await workspaceService.listInvitations(user.id, active.id).catch(() => [])
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -45,6 +51,17 @@ export default async function TeamPage() {
           name: t.name,
           description: t.description,
           memberCount: t._count.members,
+        }))}
+        invitations={invitations.map((invitation) => ({
+          id: invitation.id,
+          email: invitation.email,
+          role: invitation.role,
+          invitedByName: invitation.invitedBy?.name ?? "A teammate",
+          expiresLabel: invitation.expiresAt.toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
         }))}
         currentUserId={user.id}
         currentRole={currentMember.role}

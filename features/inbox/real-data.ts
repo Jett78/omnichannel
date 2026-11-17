@@ -5,9 +5,14 @@ import type { Provider } from "@/generated/prisma/client";
  * shell, and returned by the conversations API (Dates as ISO strings).
  * These mirror services/conversation.service + UnifiedMessage.
  */
+export type ConversationPriority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+
 export interface RealConversationItem {
   id: string;
   status: "OPEN" | "PENDING" | "RESOLVED" | "SNOOZED";
+  priority: ConversationPriority | null;
+  snoozedUntil: string | null;
+  awaitingReply: boolean;
   unreadCount: number;
   lastMessageAt: string | null;
   preview: string | null;
@@ -44,6 +49,14 @@ export interface RealMessageItem {
     fileName: string | null;
     size: number | null;
   }>;
+}
+
+/** Saved reply as returned by the canned-responses API. */
+export interface CannedResponseView {
+  id: string;
+  title: string;
+  body: string;
+  shortcut: string | null;
 }
 
 /** APPROVED WhatsApp template as returned by the templates API. */

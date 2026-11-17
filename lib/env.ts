@@ -27,6 +27,8 @@ const envSchema = z.object({
   MAIL_FROM: z.string().default("Unified Inbox <no-reply@uoi.local>"),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
+  /** "true" for implicit TLS (port 465); STARTTLS otherwise. */
+  SMTP_SECURE: z.string().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   // Realtime (Phase 4) — standalone Socket.IO gateway. When SOCKET_PORT is

@@ -15,7 +15,12 @@ import { createRedisConnection } from "@/lib/redis";
 export const REALTIME_CHANNEL = "uoi:realtime";
 
 export type RealtimeEventName =
-  "message.created" | "message.status_updated" | "conversation.created" | "conversation.updated";
+  | "message.created"
+  | "message.status_updated"
+  | "message.deleted"
+  | "conversation.created"
+  | "conversation.updated"
+  | "conversation.deleted";
 
 export interface RealtimeEnvelope {
   room: string;
