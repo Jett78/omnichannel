@@ -14,12 +14,14 @@ export function AppShell({
   workspaces = [],
   activeWorkspaceId = null,
   notifications = [],
+  inboxOpenCount = 0,
 }: {
   children: ReactNode;
   user?: { name: string; email: string };
   workspaces?: WorkspaceOption[];
   activeWorkspaceId?: string | null;
   notifications?: HeaderNotification[];
+  inboxOpenCount?: number;
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -31,6 +33,7 @@ export function AppShell({
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         user={user}
+        inboxOpenCount={inboxOpenCount}
         className="sticky top-0 hidden h-screen lg:flex"
       />
       {mobileOpen ? (
@@ -45,6 +48,7 @@ export function AppShell({
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
             user={user}
+            inboxOpenCount={inboxOpenCount}
             className="absolute inset-y-0 left-0 shadow-xl"
             onNavigate={() => setMobileOpen(false)}
           />

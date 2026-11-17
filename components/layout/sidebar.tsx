@@ -18,12 +18,11 @@ import { AvatarWithBadge } from "@/components/avatar-with-badge";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { WorkspaceSwitcher, type WorkspaceOption } from "@/components/layout/workspace-switcher";
 import { Badge } from "@/components/ui/badge";
-import { SAMPLE_UNREAD_TOTAL } from "@/features/inbox/sample-data";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/inbox", label: "Inbox", icon: Inbox, badge: SAMPLE_UNREAD_TOTAL },
+  { href: "/inbox", label: "Inbox", icon: Inbox, badge: "inbox" as const },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/channels", label: "Channels", icon: Cable },
   { href: "/automation", label: "Automation", icon: Bot },
@@ -36,12 +35,15 @@ export function Sidebar({
   workspaces = [],
   activeWorkspaceId = null,
   user,
+  inboxOpenCount = 0,
   className,
   onNavigate,
 }: {
   workspaces?: WorkspaceOption[];
   activeWorkspaceId?: string | null;
   user?: { name: string; email: string };
+  /** Real count of OPEN conversations in the active workspace. */
+  inboxOpenCount?: number;
   className?: string;
   onNavigate?: () => void;
 }) {
@@ -98,13 +100,9 @@ export function Sidebar({
             >
               <Icon className="size-4 shrink-0" />
               <span className="flex-1">{item.label}</span>
-              {"badge" in item && item.badge ? (
-                <Badge
-                  variant="info"
-                  className="px-1.5"
-                  title="Sample preview count — real unread counts arrive with channels"
-                >
-                  {item.badge}
+              {"badge" in item && item.badge === "inbox" && inboxOpenCount > 0 ? (
+                <Badge variant="info" className="px-1.5" title="Open conversations">
+                  {inboxOpenCount}
                 </Badge>
               ) : null}
             </Link>

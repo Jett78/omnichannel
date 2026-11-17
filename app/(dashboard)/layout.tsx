@@ -15,19 +15,25 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const user = await getCurrentUser();
   if (!user) redirect("/api/session-expired");
 
-  const [workspaces, activeWorkspace, notifications] = await Promise.all([
+  const activeWorkspace = await getActiveWorkspace(user.id);
+  const [workspaces, notifications, inboxOpenCount] = await Promise.all([
     workspaceService.listWorkspacesForUser(user.id),
-    getActiveWorkspace(user.id),
     prisma.notification.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
+    activeWorkspace
+      ? prisma.conversation.count({
+          where: { workspaceId: activeWorkspace.id, status: "OPEN" },
+        })
+      : Promise.resolve(0),
   ]);
 
   return (
     <AppShell
       user={{ name: user.name, email: user.email }}
+      inboxOpenCount={inboxOpenCount}
       workspaces={workspaces.map((w) => ({ id: w.id, name: w.name, slug: w.slug }))}
       activeWorkspaceId={activeWorkspace?.id ?? null}
       notifications={notifications.map((n) => ({

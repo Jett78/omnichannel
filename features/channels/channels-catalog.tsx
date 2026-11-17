@@ -1,11 +1,10 @@
 "use client";
 
-import { FlaskConical, TriangleAlert } from "lucide-react";
+import { CheckCircle2, FlaskConical, PlugZap, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ChannelIcon, PROVIDER_META, PROVIDER_ORDER } from "@/components/channel-icon";
-import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +21,7 @@ import {
   type WhatsAppConfigView,
 } from "@/features/channels/whatsapp-connect-panel";
 import type { Provider } from "@/generated/prisma/client";
+import { cn } from "@/lib/utils";
 
 /** Client-safe subset of Channel.config (never contains tokens). */
 export interface RealChannelConfig {
@@ -165,12 +165,48 @@ export function ChannelsCatalog({
     }
   }
 
+  const connectedCount = realChannels.filter((c) => c.status === "CONNECTED").length;
+
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Channels"
-        description="Connect a messaging account per provider. Each adapter implements the same IMessagingProvider contract. Facebook Messenger and Instagram connect through Meta's official OAuth flows, X through its OAuth 2.0 flow; the mock channel below is available for development."
-      />
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-8 text-white shadow-lg sm:px-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-white/10 blur-2xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-28 left-1/3 size-56 rounded-full bg-fuchsia-300/20 blur-3xl"
+        />
+        <div className="relative flex flex-wrap items-end justify-between gap-4">
+          <div className="max-w-xl">
+            <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-indigo-100 uppercase">
+              <PlugZap className="size-4" /> Channels
+            </p>
+            <h2 className="pt-2 text-3xl font-bold tracking-tight">
+              Every conversation, one inbox
+            </h2>
+            <p className="pt-2 text-sm leading-relaxed text-indigo-100">
+              Connect your messaging accounts and reply to customers from a single place.
+              Messenger and Instagram connect through Meta&apos;s official sign-in, X through its
+              own — you always approve access on the platform itself.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium ring-1 ring-white/25 backdrop-blur">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-emerald-300" />
+              </span>
+              {connectedCount} connected
+            </span>
+            <span className="inline-flex items-center rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium ring-1 ring-white/25 backdrop-blur">
+              {PROVIDER_ORDER.length} channels available
+            </span>
+          </div>
+        </div>
+      </section>
 
       {metaError ? (
         <p className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
@@ -247,23 +283,53 @@ export function ChannelsCatalog({
       ) : null}
 
       {realChannels.length > 0 ? (
-        <Card className="shadow-none">
-          <CardHeader>
-            <CardTitle>Connected in this workspace</CardTitle>
-            <CardDescription>Channels stored in the database for this workspace.</CardDescription>
-          </CardHeader>
-          <CardContent>
+        <section className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between">
+            <h3 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+              <CheckCircle2 className="size-4 text-emerald-500" />
+              Connected in this workspace
+            </h3>
+            <p className="text-muted-foreground text-xs">
+              {connectedCount} of {realChannels.length} active
+            </p>
+          </div>
+          <Card className="overflow-hidden py-0 shadow-sm">
             <ul className="divide-y">
               {realChannels.map((channel) => (
-                <li key={channel.id} className="flex items-center gap-3 py-2.5">
-                  <ChannelIcon provider={channel.provider} size="sm" />
-                  <span className="flex-1 text-sm font-medium">
-                    {channel.displayName}
-                    {channel.provider === "X" && channel.config?.username ? (
-                      <span className="text-muted-foreground"> @{channel.config.username}</span>
-                    ) : null}
+                <li
+                  key={channel.id}
+                  className="flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-muted/40"
+                >
+                  <span className="rounded-2xl bg-muted/60 p-1.5 ring-1 ring-black/5">
+                    <ChannelIcon provider={channel.provider} size="md" />
                   </span>
-                  <Badge variant={channel.status === "CONNECTED" ? "success" : "warning"}>
+                  <span className="min-w-0 flex-1 leading-tight">
+                    <span className="block truncate text-sm font-semibold">
+                      {channel.displayName}
+                      {channel.provider === "X" && channel.config?.username ? (
+                        <span className="text-muted-foreground font-normal">
+                          {" "}
+                          @{channel.config.username}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="text-muted-foreground block pt-0.5 text-xs">
+                      {PROVIDER_META[channel.provider].label}
+                      {channel.config?.displayPhoneNumber
+                        ? ` · ${channel.config.displayPhoneNumber}`
+                        : ""}
+                    </span>
+                  </span>
+                  <Badge
+                    variant={channel.status === "CONNECTED" ? "success" : "warning"}
+                    className="gap-1.5"
+                  >
+                    <span
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        channel.status === "CONNECTED" ? "bg-emerald-500" : "bg-amber-500",
+                      )}
+                    />
                     {channel.status}
                   </Badge>
                   {(channel.provider === "FACEBOOK" ||
@@ -272,8 +338,9 @@ export function ChannelsCatalog({
                     channel.provider === "X") &&
                   channel.status === "CONNECTED" ? (
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
+                      className="text-muted-foreground hover:text-red-600"
                       onClick={() => void disconnectChannel(channel)}
                       disabled={disconnectingId !== null}
                     >
@@ -284,65 +351,108 @@ export function ChannelsCatalog({
               ))}
             </ul>
             {disconnectError ? (
-              <p className="pt-2 text-sm text-red-600">{disconnectError}</p>
+              <p className="px-5 pb-3 text-sm text-red-600">{disconnectError}</p>
             ) : null}
-          </CardContent>
-        </Card>
+          </Card>
+        </section>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {PROVIDER_ORDER.map((provider) => {
-          const meta = PROVIDER_META[provider];
-          const isConnected = connectedProviders.has(provider);
-          return (
-            <Card key={provider} className="items-center text-center shadow-none">
-              <CardHeader className="items-center">
-                <ChannelIcon provider={provider} size="lg" className="mx-auto" />
-                <CardTitle className="pt-1">{meta.label}</CardTitle>
-                <CardDescription>{meta.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col items-center gap-3">
-                {provider === "TIKTOK" && !isConnected ? (
-                  <Badge variant="warning">Access restricted by TikTok</Badge>
-                ) : (
-                  <Badge variant={isConnected ? "success" : "muted"}>
-                    {isConnected ? "Connected" : "Not connected"}
-                  </Badge>
+      <section className="flex flex-col gap-3">
+        <div>
+          <h3 className="text-base font-semibold tracking-tight">All channels</h3>
+          <p className="text-muted-foreground pt-0.5 text-xs">
+            Pick a platform to connect it to this workspace.
+          </p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {PROVIDER_ORDER.map((provider) => {
+            const meta = PROVIDER_META[provider];
+            const isConnected = connectedProviders.has(provider);
+            return (
+              <Card
+                key={provider}
+                className={cn(
+                  "group gap-0 overflow-hidden py-0 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-lg",
+                  isConnected && "ring-2 ring-emerald-400/50",
                 )}
-                {provider === "TIKTOK" ? (
-                  <Button variant="outline" onClick={() => setSelected(provider)}>
-                    Access requirements
-                  </Button>
-                ) : provider === "X" && xConfig?.configured && workspaceId && !isConnected ? (
-                  <Button variant="outline" asChild>
-                    <a href={`/api/workspaces/${workspaceId}/channels/x/connect`}>Connect now</a>
-                  </Button>
-                ) : provider === "WHATSAPP" && workspaceId ? (
-                  <Button variant="outline" asChild>
-                    <a href="#whatsapp-connect">Connect now</a>
-                  </Button>
-                ) : provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId ? (
-                  <Button variant="outline" asChild>
-                    <a href={`/api/workspaces/${workspaceId}/channels/facebook/connect`}>
+              >
+                <div
+                  className="relative flex h-24 items-center justify-center"
+                  style={{
+                    background: `linear-gradient(135deg, ${meta.color}30 0%, ${meta.color}0f 70%)`,
+                  }}
+                >
+                  <span className="rounded-full shadow-lg ring-4 ring-white/70 transition duration-300 group-hover:scale-110">
+                    <ChannelIcon provider={provider} size="lg" />
+                  </span>
+                  <span className="absolute top-3 right-3">
+                    {provider === "TIKTOK" && !isConnected ? (
+                      <Badge variant="warning" className="bg-white/85 shadow-sm backdrop-blur">
+                        Access restricted by TikTok
+                      </Badge>
+                    ) : (
+                      <Badge
+                        variant={isConnected ? "success" : "muted"}
+                        className="gap-1.5 bg-white/85 shadow-sm backdrop-blur"
+                      >
+                        <span
+                          className={cn(
+                            "size-1.5 rounded-full",
+                            isConnected ? "bg-emerald-500" : "bg-zinc-400",
+                          )}
+                        />
+                        {isConnected ? "Connected" : "Not connected"}
+                      </Badge>
+                    )}
+                  </span>
+                </div>
+                <div className="flex flex-1 flex-col items-center gap-1.5 px-5 pt-4 pb-5 text-center">
+                  <p className="text-[15px] font-semibold tracking-tight">{meta.label}</p>
+                  <p className="text-muted-foreground line-clamp-2 min-h-10 text-[13px] leading-snug">
+                    {meta.description}
+                  </p>
+                  <p className="text-muted-foreground/80 pb-2 text-[11px] font-medium tracking-wide uppercase">
+                    {meta.phase}
+                  </p>
+                  {provider === "TIKTOK" ? (
+                    <Button variant="outline" className="w-full" onClick={() => setSelected(provider)}>
+                      Access requirements
+                    </Button>
+                  ) : provider === "X" && xConfig?.configured && workspaceId && !isConnected ? (
+                    <Button className="w-full" asChild>
+                      <a href={`/api/workspaces/${workspaceId}/channels/x/connect`}>Connect now</a>
+                    </Button>
+                  ) : provider === "WHATSAPP" && workspaceId ? (
+                    <Button className="w-full" asChild>
+                      <a href="#whatsapp-connect">Connect now</a>
+                    </Button>
+                  ) : provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId ? (
+                    <Button className="w-full" asChild>
+                      <a href={`/api/workspaces/${workspaceId}/channels/facebook/connect`}>
+                        Connect now
+                      </a>
+                    </Button>
+                  ) : provider === "INSTAGRAM" && metaConfig?.instagramConfigured && workspaceId ? (
+                    <Button className="w-full" asChild>
+                      <a href={`/api/workspaces/${workspaceId}/channels/instagram/connect`}>
+                        Connect now
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={isConnected ? "outline" : "default"}
+                      className="w-full"
+                      onClick={() => setSelected(provider)}
+                    >
                       Connect now
-                    </a>
-                  </Button>
-                ) : provider === "INSTAGRAM" && metaConfig?.instagramConfigured && workspaceId ? (
-                  <Button variant="outline" asChild>
-                    <a href={`/api/workspaces/${workspaceId}/channels/instagram/connect`}>
-                      Connect now
-                    </a>
-                  </Button>
-                ) : (
-                  <Button variant="outline" onClick={() => setSelected(provider)}>
-                    Connect now
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
 
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent>
