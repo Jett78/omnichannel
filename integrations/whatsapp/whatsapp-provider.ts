@@ -756,7 +756,7 @@ export class WhatsAppProvider implements IMessagingProvider {
         ...this.proofOptions(accessToken),
         params: {
           fields:
-            "id,display_phone_number,verified_name,code_verification_status,name_status,status,quality_rating,messaging_limit",
+            "id,display_phone_number,verified_name,code_verification_status,name_status,status,quality_rating",
         },
       },
     );
