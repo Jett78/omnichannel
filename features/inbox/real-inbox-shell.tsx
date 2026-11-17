@@ -234,6 +234,11 @@ export function RealInboxShell({
           socket.emit("join:workspace", { workspaceId });
           const current = selectedIdRef.current;
           if (current) socket.emit("join:conversation", { workspaceId, conversationId: current });
+          // Catch up on anything missed while the socket was down
+          // (gateway sleep/redeploy): resync the list and the open
+          // thread instead of waiting for the next live event.
+          void fetchConversations();
+          if (current) void fetchMessages(current);
         });
         socket.on("disconnect", () => setSocketStatus("disconnected"));
         socket.on("message.created", (payload: unknown) => {
@@ -280,7 +285,7 @@ export function RealInboxShell({
       cancelled = true;
       disconnectSocket();
     };
-  }, [workspaceId, fetchConversations]);
+  }, [workspaceId, fetchConversations, fetchMessages]);
 
   // Join the selected conversation's room + load its messages.
   useEffect(() => {
@@ -512,6 +517,7 @@ export function RealInboxShell({
                   >
                     <AvatarWithBadge
                       name={conversation.contact.displayName}
+                      image={conversation.contact.avatarUrl}
                       provider={conversation.channel.provider}
                     />
                     <span className="min-w-0 flex-1">
@@ -588,6 +594,7 @@ export function RealInboxShell({
               </Button>
               <AvatarWithBadge
                 name={selected.contact.displayName}
+                image={selected.contact.avatarUrl}
                 provider={selected.channel.provider}
               />
               <div className="min-w-0 flex-1 leading-tight">
@@ -625,7 +632,11 @@ export function RealInboxShell({
                     </div>
                   ) : message.direction === "INBOUND" ? (
                     <div key={message.id} className="flex items-end gap-2">
-                      <AvatarWithBadge name={selected.contact.displayName} size="sm" />
+                      <AvatarWithBadge
+                        name={selected.contact.displayName}
+                        image={selected.contact.avatarUrl}
+                        size="sm"
+                      />
                       <div className="max-w-[75%]">
                         <div className="bg-background rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-sm shadow-xs">
                           {message.content}
@@ -872,6 +883,7 @@ export function RealInboxShell({
           <div className="flex flex-col items-center gap-1.5 px-4 pt-6 pb-4 text-center">
             <AvatarWithBadge
               name={selected.contact.displayName}
+              image={selected.contact.avatarUrl}
               provider={selected.channel.provider}
               size="lg"
             />
