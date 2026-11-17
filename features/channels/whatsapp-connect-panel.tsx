@@ -2,7 +2,7 @@
 
 import { MessageCircle, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -70,6 +70,37 @@ declare global {
 interface EmbeddedSignupData {
   wabaId?: string;
   phoneNumberId?: string;
+}
+
+/**
+ * The manual form's two ids (WABA id + phone number id) are not secrets,
+ * so they are remembered in the browser: once typed or connected anywhere,
+ * the connect form reopens filled in every workspace. The access token is
+ * NEVER stored in the browser — it always starts empty.
+ */
+const MANUAL_IDS_STORAGE_KEY = "uoi.whatsapp.manualIds";
+
+function readSavedManualIds(): { wabaId: string; phoneNumberId: string } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(MANUAL_IDS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { wabaId?: unknown; phoneNumberId?: unknown };
+    if (typeof parsed.wabaId !== "string" || typeof parsed.phoneNumberId !== "string") {
+      return null;
+    }
+    return { wabaId: parsed.wabaId, phoneNumberId: parsed.phoneNumberId };
+  } catch {
+    return null;
+  }
+}
+
+function saveManualIds(wabaId: string, phoneNumberId: string): void {
+  try {
+    window.localStorage.setItem(MANUAL_IDS_STORAGE_KEY, JSON.stringify({ wabaId, phoneNumberId }));
+  } catch {
+    // Storage unavailable (e.g. private mode) — remembering is best-effort.
+  }
 }
 
 function loadFacebookSdk(): Promise<FbSdk> {
@@ -169,6 +200,15 @@ export function WhatsAppConnectPanel({
     if (openSignal > 0) {
       setDialogMode("connect");
       setDialogOpen(true);
+      // Fill any still-empty id fields from this browser's remembered ids.
+      const saved = readSavedManualIds();
+      if (saved) {
+        setManual((prev) => ({
+          wabaId: prev.wabaId || saved.wabaId,
+          phoneNumberId: prev.phoneNumberId || saved.phoneNumberId,
+          accessToken: prev.accessToken,
+        }));
+      }
     }
   }
   const [handledEditSignal, setHandledEditSignal] = useState(editSignal);
@@ -188,6 +228,14 @@ export function WhatsAppConnectPanel({
       }
     }
   }
+
+  // Remember the ids in this browser whenever both are present (typed,
+  // prefilled from a channel, or just connected).
+  useEffect(() => {
+    if (manual.wabaId.trim() && manual.phoneNumberId.trim()) {
+      saveManualIds(manual.wabaId.trim(), manual.phoneNumberId.trim());
+    }
+  }, [manual.wabaId, manual.phoneNumberId]);
 
   // If a WhatsApp channel appears in the props (e.g. right after connecting
   // and the page refreshes), fill any still-empty manual id fields from it.

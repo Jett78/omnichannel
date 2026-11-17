@@ -389,22 +389,13 @@ export function ChannelsCatalog({
                                 ? `/api/workspaces/${workspaceId}/channels/x/connect`
                                 : null;
                         return channel.provider === "WHATSAPP" && workspaceId ? (
-                          <>
-                            <Button
-                              variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
-                              size="sm"
-                              onClick={() => openWhatsAppEdit(channel.id)}
-                            >
-                              Reconnect
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openWhatsAppEdit(channel.id)}
-                            >
-                              Edit
-                            </Button>
-                          </>
+                          <Button
+                            variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
+                            size="sm"
+                            onClick={() => openWhatsAppEdit(channel.id)}
+                          >
+                            Reconnect
+                          </Button>
                         ) : reconnectHref ? (
                           <Button
                             variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
@@ -504,6 +495,10 @@ export function ChannelsCatalog({
                   ) : provider === "WHATSAPP" && workspaceId && !isConnected ? (
                     <Button className="w-full" onClick={openWhatsAppConnect}>
                       Connect now
+                    </Button>
+                  ) : provider === "WHATSAPP" && isConnected ? (
+                    <Button variant="outline" className="w-full" disabled>
+                      Number connected
                     </Button>
                   ) : provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId ? (
                     <Button className="w-full" asChild>
