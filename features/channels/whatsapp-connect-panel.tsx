@@ -20,7 +20,9 @@ import { MetaConnectionPanel } from "@/features/channels/meta-connection-panel";
 import type { RealChannel } from "@/features/channels/channels-catalog";
 
 /**
- * WhatsApp connect panel (Phase 6) — two official paths:
+ * WhatsApp connect panel (Phase 6) — two official paths, presented in a
+ * modal that opens from the Channels page Connect buttons (the forms are
+ * not rendered open on the page):
  *
  *  1. Embedded Signup: loads Meta's Facebook JS SDK on demand (only
  *     when the button is clicked — the SDK is not in the base bundle),
@@ -101,12 +103,16 @@ export function WhatsAppConnectPanel({
   workspaceId,
   whatsappConfig,
   connectedChannels,
+  openSignal = 0,
 }: {
   workspaceId: string;
   whatsappConfig: WhatsAppConfigView;
   connectedChannels: RealChannel[];
+  /** Incremented by the Channels catalog when a Connect/Reconnect button is clicked. */
+  openSignal?: number;
 }) {
   const router = useRouter();
+  const [connectOpen, setConnectOpen] = useState(false);
   const [signupBusy, setSignupBusy] = useState(false);
   const [signupError, setSignupError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -127,6 +133,14 @@ export function WhatsAppConnectPanel({
   const whatsappChannels = connectedChannels.filter(
     (channel) => channel.provider === "WHATSAPP" && channel.status === "CONNECTED",
   );
+
+  // Open the modal whenever the catalog's Connect/Reconnect buttons bump the
+  // signal (state adjusted during render, per React's prev-prop pattern).
+  const [handledOpenSignal, setHandledOpenSignal] = useState(openSignal);
+  if (openSignal !== handledOpenSignal) {
+    setHandledOpenSignal(openSignal);
+    if (openSignal > 0) setConnectOpen(true);
+  }
 
   async function startEmbeddedSignup() {
     setSignupBusy(true);
@@ -258,6 +272,8 @@ export function WhatsAppConnectPanel({
         setManualWarning(
           `Connected, but the webhook subscription failed: ${body.subscriptionWarning}`,
         );
+      } else {
+        setConnectOpen(false);
       }
       setManual({ wabaId: "", phoneNumberId: "", accessToken: "" });
       router.refresh();
@@ -316,106 +332,11 @@ export function WhatsAppConnectPanel({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <section className="flex flex-col items-start gap-2">
-            <h3 className="text-sm font-semibold">Embedded Signup (recommended)</h3>
-            {whatsappConfig.embeddedSignupReady ? (
-              <>
-                <p className="text-muted-foreground text-sm">
-                  Opens Meta&apos;s official signup popup: log in, pick your business and number,
-                  and grant this app messaging access.
-                </p>
-                <Button onClick={() => void startEmbeddedSignup()} disabled={signupBusy}>
-                  {signupBusy ? "Opening signup…" : "Connect with Embedded Signup"}
-                </Button>
-              </>
-            ) : (
-              <p className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-                Embedded Signup is not configured on this deployment. Set META_APP_ID,
-                META_APP_SECRET and WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID (a Facebook Login for
-                Business configuration id) on the server — see docs/WHATSAPP-SETUP.md. Manual
-                connect below still works.
-              </p>
-            )}
-            {signupError ? <p className="text-sm text-red-600">{signupError}</p> : null}
-            {signupWarning ? (
-              <p className="text-sm text-amber-700">
-                Signup completed, but the webhook subscription failed: {signupWarning}
-              </p>
-            ) : null}
-          </section>
-
-          {sessionId ? (
-            <MetaConnectionPanel workspaceId={workspaceId} sessionId={sessionId} provider="whatsapp" />
-          ) : null}
-
-          <section className="flex flex-col gap-3 border-t pt-5">
-            <h3 className="text-sm font-semibold">Connect manually (system-user token)</h3>
-            <p className="text-muted-foreground text-sm">
-              For numbers managed in Meta Business Settings: create a system user, assign it the
-              WhatsApp Business Account and phone number assets with whatsapp_business_messaging +
-              whatsapp_business_management, and paste its permanent token here. The token is
-              checked against the WABA before it is stored.
-            </p>
-            {!whatsappConfig.manualReady ? (
-              <p className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-                Neither WHATSAPP_APP_SECRET nor META_APP_SECRET is set on this deployment, so
-                incoming webhook signatures cannot be verified yet. You can connect now, but set a
-                secret before relying on incoming messages.
-              </p>
-            ) : null}
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="wa-waba-id">WhatsApp Business Account ID</Label>
-                <Input
-                  id="wa-waba-id"
-                  value={manual.wabaId}
-                  onChange={(event) => setManual((prev) => ({ ...prev, wabaId: event.target.value }))}
-                  placeholder="e.g. 123456789012345"
-                  autoComplete="off"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="wa-phone-id">Phone number ID</Label>
-                <Input
-                  id="wa-phone-id"
-                  value={manual.phoneNumberId}
-                  onChange={(event) =>
-                    setManual((prev) => ({ ...prev, phoneNumberId: event.target.value }))
-                  }
-                  placeholder="e.g. 109876543210987"
-                  autoComplete="off"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5 md:col-span-2">
-                <Label htmlFor="wa-token">System-user access token</Label>
-                <Input
-                  id="wa-token"
-                  type="password"
-                  value={manual.accessToken}
-                  onChange={(event) =>
-                    setManual((prev) => ({ ...prev, accessToken: event.target.value }))
-                  }
-                  placeholder="Permanent system-user token"
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-            <div>
-              <Button
-                variant="outline"
-                onClick={() => void connectManually()}
-                disabled={
-                  manualBusy || !manual.wabaId.trim() || !manual.phoneNumberId.trim() || !manual.accessToken.trim()
-                }
-              >
-                {manualBusy ? "Validating…" : "Connect manually"}
-              </Button>
-            </div>
-            {manualError ? <p className="text-sm text-red-600">{manualError}</p> : null}
-            {manualWarning ? <p className="text-sm text-amber-700">{manualWarning}</p> : null}
-          </section>
+          <div>
+            <Button onClick={() => setConnectOpen(true)}>
+              {whatsappChannels.length > 0 ? "Connect another number" : "Connect WhatsApp"}
+            </Button>
+          </div>
 
           {whatsappChannels.length > 0 ? (
             <section className="flex flex-col gap-2 border-t pt-5">
@@ -471,6 +392,126 @@ export function WhatsAppConnectPanel({
           ) : null}
         </CardContent>
       </Card>
+
+      <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageCircle className="size-5 text-[#25d366]" />
+              Connect WhatsApp Business
+            </DialogTitle>
+            <DialogDescription>
+              Two official ways to connect. Embedded Signup is Meta&apos;s standard flow for
+              businesses; manual connect is for numbers you manage yourself with a system-user
+              token in Meta Business Settings.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-6">
+            <section className="flex flex-col items-start gap-2">
+              <h3 className="text-sm font-semibold">Embedded Signup (recommended)</h3>
+              {whatsappConfig.embeddedSignupReady ? (
+                <>
+                  <p className="text-muted-foreground text-sm">
+                    Opens Meta&apos;s official signup popup: log in, pick your business and number,
+                    and grant this app messaging access. Note: Meta currently requires the
+                    platform&apos;s business verification before a signup can finish.
+                  </p>
+                  <Button onClick={() => void startEmbeddedSignup()} disabled={signupBusy}>
+                    {signupBusy ? "Opening signup…" : "Connect with Embedded Signup"}
+                  </Button>
+                </>
+              ) : (
+                <p className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                  <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                  Embedded Signup is not configured on this deployment. Set META_APP_ID,
+                  META_APP_SECRET and WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID (a Facebook Login for
+                  Business configuration id) on the server — see docs/WHATSAPP-SETUP.md. Manual
+                  connect below still works.
+                </p>
+              )}
+              {signupError ? <p className="text-sm text-red-600">{signupError}</p> : null}
+              {signupWarning ? (
+                <p className="text-sm text-amber-700">
+                  Signup completed, but the webhook subscription failed: {signupWarning}
+                </p>
+              ) : null}
+            </section>
+
+            {sessionId ? (
+              <MetaConnectionPanel workspaceId={workspaceId} sessionId={sessionId} provider="whatsapp" />
+            ) : null}
+
+            <section className="flex flex-col gap-3 border-t pt-5">
+              <h3 className="text-sm font-semibold">Connect manually (system-user token)</h3>
+              <p className="text-muted-foreground text-sm">
+                For numbers managed in Meta Business Settings: create a system user, assign it the
+                WhatsApp Business Account and phone number assets with whatsapp_business_messaging +
+                whatsapp_business_management, and paste its permanent token here. The token is
+                checked against the WABA before it is stored.
+              </p>
+              {!whatsappConfig.manualReady ? (
+                <p className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-800">
+                  <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                  Neither WHATSAPP_APP_SECRET nor META_APP_SECRET is set on this deployment, so
+                  incoming webhook signatures cannot be verified yet. You can connect now, but set a
+                  secret before relying on incoming messages.
+                </p>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="wa-waba-id">WhatsApp Business Account ID</Label>
+                  <Input
+                    id="wa-waba-id"
+                    value={manual.wabaId}
+                    onChange={(event) => setManual((prev) => ({ ...prev, wabaId: event.target.value }))}
+                    placeholder="e.g. 123456789012345"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="wa-phone-id">Phone number ID</Label>
+                  <Input
+                    id="wa-phone-id"
+                    value={manual.phoneNumberId}
+                    onChange={(event) =>
+                      setManual((prev) => ({ ...prev, phoneNumberId: event.target.value }))
+                    }
+                    placeholder="e.g. 109876543210987"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <Label htmlFor="wa-token">System-user access token</Label>
+                  <Input
+                    id="wa-token"
+                    type="password"
+                    value={manual.accessToken}
+                    onChange={(event) =>
+                      setManual((prev) => ({ ...prev, accessToken: event.target.value }))
+                    }
+                    placeholder="Permanent system-user token"
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+              <div>
+                <Button
+                  variant="outline"
+                  onClick={() => void connectManually()}
+                  disabled={
+                    manualBusy || !manual.wabaId.trim() || !manual.phoneNumberId.trim() || !manual.accessToken.trim()
+                  }
+                >
+                  {manualBusy ? "Validating…" : "Connect manually"}
+                </Button>
+              </div>
+              {manualError ? <p className="text-sm text-red-600">{manualError}</p> : null}
+              {manualWarning ? <p className="text-sm text-amber-700">{manualWarning}</p> : null}
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={registerTarget !== null} onOpenChange={(open) => !open && setRegisterTarget(null)}>
         <DialogContent>
