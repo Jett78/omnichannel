@@ -114,10 +114,16 @@ export function ChannelsCatalog({
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const [waConnectSignal, setWaConnectSignal] = useState(0);
+  const [waEditSignal, setWaEditSignal] = useState(0);
+  const [waEditChannelId, setWaEditChannelId] = useState<string | null>(null);
 
   function openWhatsAppConnect() {
     setWaConnectSignal((signal) => signal + 1);
-    document.getElementById("whatsapp-connect")?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function openWhatsAppEdit(channelId: string) {
+    setWaEditChannelId(channelId);
+    setWaEditSignal((signal) => signal + 1);
   }
   const connectedProviders = new Set(
     realChannels.filter((c) => c.status === "CONNECTED").map((c) => c.provider),
@@ -260,6 +266,8 @@ export function ChannelsCatalog({
           whatsappConfig={whatsappConfig}
           connectedChannels={realChannels}
           openSignal={waConnectSignal}
+          editSignal={waEditSignal}
+          editChannelId={waEditChannelId}
         />
       ) : null}
 
@@ -381,13 +389,22 @@ export function ChannelsCatalog({
                                 ? `/api/workspaces/${workspaceId}/channels/x/connect`
                                 : null;
                         return channel.provider === "WHATSAPP" && workspaceId ? (
-                          <Button
-                            variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
-                            size="sm"
-                            onClick={openWhatsAppConnect}
-                          >
-                            Reconnect
-                          </Button>
+                          <>
+                            <Button
+                              variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
+                              size="sm"
+                              onClick={() => openWhatsAppEdit(channel.id)}
+                            >
+                              Reconnect
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openWhatsAppEdit(channel.id)}
+                            >
+                              Edit
+                            </Button>
+                          </>
                         ) : reconnectHref ? (
                           <Button
                             variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
@@ -484,7 +501,7 @@ export function ChannelsCatalog({
                     <Button className="w-full" asChild>
                       <a href={`/api/workspaces/${workspaceId}/channels/x/connect`}>Connect now</a>
                     </Button>
-                  ) : provider === "WHATSAPP" && workspaceId ? (
+                  ) : provider === "WHATSAPP" && workspaceId && !isConnected ? (
                     <Button className="w-full" onClick={openWhatsAppConnect}>
                       Connect now
                     </Button>

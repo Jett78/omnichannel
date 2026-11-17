@@ -98,6 +98,11 @@ export const whatsappManualConnectSchema = z.object({
 });
 export type WhatsAppManualConnectInput = z.infer<typeof whatsappManualConnectSchema>;
 
+export const whatsappCredentialsUpdateSchema = z.object({
+  accessToken: z.string().min(1, "A system-user access token is required"),
+});
+export type WhatsAppCredentialsUpdateInput = z.infer<typeof whatsappCredentialsUpdateSchema>;
+
 export const whatsappRegisterSchema = z.object({
   pin: z.string().regex(/^\d{6}$/, "The registration PIN must be exactly 6 digits"),
 });

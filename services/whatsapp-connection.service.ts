@@ -139,6 +139,27 @@ async function consumeSession(sessionId: string): Promise<void> {
   });
 }
 
+/**
+ * Product rule (Jeet, 2026-11-17): a workspace holds ONE WhatsApp number.
+ * Connecting a different number is rejected until the existing one is
+ * disconnected; reconnecting the SAME number stays allowed (it refreshes
+ * the stored credentials through the upsert in finalizeChannel).
+ */
+async function assertSingleWhatsAppNumber(
+  workspaceId: string,
+  phoneNumberId: string,
+): Promise<void> {
+  const existing = await prisma.channel.findFirst({
+    where: { workspaceId, provider: "WHATSAPP" },
+    select: { externalAccountId: true, displayName: true },
+  });
+  if (existing && existing.externalAccountId !== phoneNumberId) {
+    throw AppError.badRequest(
+      `This workspace already has a WhatsApp number connected (${existing.displayName}). Only one WhatsApp number is allowed per workspace — disconnect it first to connect a different number.`,
+    );
+  }
+}
+
 async function finalizeChannel(
   actorUserId: string,
   workspaceId: string,
@@ -151,6 +172,7 @@ async function finalizeChannel(
     webhookSubscription: Record<string, unknown>;
   },
 ): Promise<Channel> {
+  await assertSingleWhatsAppNumber(workspaceId, input.phoneNumber.id);
   const config: Record<string, unknown> = {
     wabaId: input.waba.id,
     wabaName: input.waba.name,
@@ -385,6 +407,65 @@ export const whatsappConnectionService = {
       webhookSubscription,
     });
     return { channel, ...(subscriptionWarning ? { subscriptionWarning } : {}) };
+  },
+
+  /**
+   * Replace the stored system-user token of an existing WhatsApp channel
+   * (the Edit action in Channels). The new token is verified against the
+   * channel's own WABA and phone number before it is stored — a token
+   * that cannot read them is rejected and the old one kept. Stored tokens
+   * are never readable again, so editing credentials means replacing the
+   * token, never viewing it.
+   */
+  async updateManualCredentials(
+    actorUserId: string,
+    workspaceId: string,
+    channelId: string,
+    input: { accessToken: string },
+    deps: WhatsAppConnectionDeps = {},
+  ): Promise<WhatsAppSelectResult> {
+    const channel = await loadWhatsAppChannel(actorUserId, workspaceId, channelId, "channels.manage");
+    const wabaId = channelWabaId(channel);
+    const provider = deps.whatsapp ?? whatsappProvider;
+
+    await provider.getWaba(wabaId, input.accessToken);
+    const phoneNumbers = await provider.listPhoneNumbers(wabaId, input.accessToken);
+    const phoneNumber = phoneNumbers.find((number) => number.id === channel.externalAccountId);
+    if (!phoneNumber) {
+      throw AppError.badRequest(
+        "That token does not have access to this channel's phone number on its WhatsApp Business Account.",
+      );
+    }
+
+    const { webhookSubscription, subscriptionWarning } = await subscribeBestEffort(
+      provider,
+      wabaId,
+      input.accessToken,
+    );
+    await channelCredentialService.setChannelCredential(actorUserId, workspaceId, channel.id, {
+      accessToken: input.accessToken,
+      scopes: [...WHATSAPP_SCOPES],
+    });
+    const oldConfig =
+      channel.config && typeof channel.config === "object" && !Array.isArray(channel.config)
+        ? (channel.config as Record<string, unknown>)
+        : {};
+    const nextConfig: Record<string, unknown> = { ...oldConfig };
+    delete nextConfig.lastError;
+    delete nextConfig.lastErrorAt;
+    const updated = await prisma.channel.update({
+      where: { id: channel.id },
+      data: {
+        status: "CONNECTED",
+        config: {
+          ...nextConfig,
+          webhookSubscription,
+          ...(phoneNumber.qualityRating ? { qualityRating: phoneNumber.qualityRating } : {}),
+          ...(phoneNumber.status ? { phoneNumberStatus: phoneNumber.status } : {}),
+        } as Prisma.InputJsonValue,
+      },
+    });
+    return { channel: updated, ...(subscriptionWarning ? { subscriptionWarning } : {}) };
   },
 
   /** Register a connected phone number with its 6-digit PIN. */

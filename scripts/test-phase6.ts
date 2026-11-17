@@ -693,9 +693,22 @@ async function main(): Promise<void> {
   // ── 6. Manual connect ──────────────────────────────────────────────────────
   console.log("6. Manual connect");
   {
+    // One WhatsApp number per workspace: wsA already holds phone-1 (section
+    // 5), so a manual connect of a DIFFERENT number is rejected there…
+    await expectThrows("Manual: second WhatsApp number in a workspace is rejected", () =>
+      whatsappConnectionService.connectManually(
+        userA.id,
+        wsA.id,
+        { wabaId: "waba-1", phoneNumberId: "phone-2", accessToken: "manual-system-token" },
+        { whatsapp: waProvider },
+      ),
+    );
+    // …and succeeds in a fresh workspace.
+    const wsC = await workspaceService.createWorkspace(userA.id, { name: `WS C ${runId}` });
+    createdWorkspaceIds.push(wsC.id);
     const manual = await whatsappConnectionService.connectManually(
       userA.id,
-      wsA.id,
+      wsC.id,
       { wabaId: "waba-1", phoneNumberId: "phone-2", accessToken: "manual-system-token" },
       { whatsapp: waProvider },
     );
@@ -704,17 +717,60 @@ async function main(): Promise<void> {
       "Manual: channel created with connectionMethod manual",
       manual.channel.externalAccountId === "phone-2" && config?.connectionMethod === "manual",
     );
-    const channelsBefore = await prisma.channel.count({ where: { workspaceId: wsA.id } });
+    const channelsBefore = await prisma.channel.count({ where: { workspaceId: wsC.id } });
     await expectThrows("Manual: token that cannot read the WABA is rejected", () =>
       whatsappConnectionService.connectManually(
         userA.id,
-        wsA.id,
+        wsC.id,
         { wabaId: "waba-bad", phoneNumberId: "phone-9", accessToken: "bad-token" },
         { whatsapp: waProvider },
       ),
     );
-    const channelsAfter = await prisma.channel.count({ where: { workspaceId: wsA.id } });
+    const channelsAfter = await prisma.channel.count({ where: { workspaceId: wsC.id } });
     assert("Manual: rejected connect created no channel", channelsAfter === channelsBefore);
+
+    // ── 6b. Update credentials (Edit) + same-number reconnect ────────────────
+    console.log("6b. Update credentials");
+    const updated = await whatsappConnectionService.updateManualCredentials(
+      userA.id,
+      wsC.id,
+      manual.channel.id,
+      { accessToken: "manual-system-token-2" },
+      { whatsapp: waProvider },
+    );
+    assert("Update creds: channel stays CONNECTED", updated.channel.status === "CONNECTED");
+    const credAfterUpdate = await channelCredentialService.getDecryptedChannelCredentialForServer(
+      manual.channel.id,
+    );
+    assert(
+      "Update creds: stored token replaced",
+      credAfterUpdate?.accessToken === "manual-system-token-2",
+    );
+    await expectThrows("Update creds: a user outside the workspace cannot update", () =>
+      whatsappConnectionService.updateManualCredentials(
+        userB.id,
+        wsC.id,
+        manual.channel.id,
+        { accessToken: "manual-system-token-3" },
+        { whatsapp: waProvider },
+      ),
+    );
+    const reconnected = await whatsappConnectionService.connectManually(
+      userA.id,
+      wsC.id,
+      { wabaId: "waba-1", phoneNumberId: "phone-2", accessToken: "manual-system-token-3" },
+      { whatsapp: waProvider },
+    );
+    assert(
+      "Manual: reconnecting the SAME number is allowed",
+      reconnected.channel.id === manual.channel.id,
+    );
+    const credAfterReconnect =
+      await channelCredentialService.getDecryptedChannelCredentialForServer(manual.channel.id);
+    assert(
+      "Manual: reconnect stored the new token",
+      credAfterReconnect?.accessToken === "manual-system-token-3",
+    );
   }
 
   // ── 7. Webhook pipeline ────────────────────────────────────────────────────
