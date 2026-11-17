@@ -3,7 +3,12 @@
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-import { Header, type HeaderNotification } from "@/components/layout/header";
+import {
+  Header,
+  type HeaderNotification,
+  type HeaderSearchContact,
+  type HeaderSearchConversation,
+} from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import type { WorkspaceOption } from "@/components/layout/workspace-switcher";
 import { cn } from "@/lib/utils";
@@ -15,6 +20,8 @@ export function AppShell({
   activeWorkspaceId = null,
   notifications = [],
   inboxOpenCount = 0,
+  searchContacts = [],
+  searchConversations = [],
 }: {
   children: ReactNode;
   user?: { name: string; email: string };
@@ -22,6 +29,8 @@ export function AppShell({
   activeWorkspaceId?: string | null;
   notifications?: HeaderNotification[];
   inboxOpenCount?: number;
+  searchContacts?: HeaderSearchContact[];
+  searchConversations?: HeaderSearchConversation[];
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -55,7 +64,13 @@ export function AppShell({
         </div>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header user={user} notifications={notifications} onMenuClick={() => setMobileOpen(true)} />
+        <Header
+          user={user}
+          notifications={notifications}
+          searchContacts={searchContacts}
+          searchConversations={searchConversations}
+          onMenuClick={() => setMobileOpen(true)}
+        />
         <main className={cn("min-w-0 flex-1", fullBleed ? "" : "px-6 py-6")}>{children}</main>
       </div>
     </div>

@@ -24,8 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { SAMPLE_CONTACTS } from "@/features/contacts/sample-data";
-import { SAMPLE_CONVERSATIONS } from "@/features/inbox/sample-data";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +33,19 @@ export interface HeaderNotification {
   body: string | null;
   isRead: boolean;
   createdAtLabel: string;
+}
+
+/** Real rows for the ⌘K search, loaded server-side by the layout. */
+export interface HeaderSearchContact {
+  id: string;
+  name: string;
+  email: string | null;
+}
+
+export interface HeaderSearchConversation {
+  id: string;
+  contactName: string;
+  snippet: string;
 }
 
 const TITLES: Record<string, string> = {
@@ -54,10 +65,14 @@ const NAV_PAGES = Object.entries(TITLES).map(([href, label]) => ({ href, label }
 export function Header({
   user,
   notifications = [],
+  searchContacts = [],
+  searchConversations = [],
   onMenuClick,
 }: {
   user?: { name: string; email: string };
   notifications?: HeaderNotification[];
+  searchContacts?: HeaderSearchContact[];
+  searchConversations?: HeaderSearchConversation[];
   onMenuClick?: () => void;
 }) {
   const pathname = usePathname();
@@ -83,14 +98,18 @@ export function Header({
     if (!q) return { pages: NAV_PAGES, conversations: [], contacts: [] };
     return {
       pages: NAV_PAGES.filter((p) => p.label.toLowerCase().includes(q)),
-      conversations: SAMPLE_CONVERSATIONS.filter(
-        (c) => c.contactName.toLowerCase().includes(q) || c.snippet.toLowerCase().includes(q),
-      ).slice(0, 5),
-      contacts: SAMPLE_CONTACTS.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q),
-      ).slice(0, 5),
+      conversations: searchConversations
+        .filter(
+          (c) => c.contactName.toLowerCase().includes(q) || c.snippet.toLowerCase().includes(q),
+        )
+        .slice(0, 5),
+      contacts: searchContacts
+        .filter(
+          (c) => c.name.toLowerCase().includes(q) || (c.email ?? "").toLowerCase().includes(q),
+        )
+        .slice(0, 5),
     };
-  }, [query]);
+  }, [query, searchContacts, searchConversations]);
 
   function go(href: string) {
     setSearchOpen(false);
@@ -230,9 +249,7 @@ export function Header({
         <DialogContent className="top-[20%] translate-y-0 sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Search</DialogTitle>
-            <DialogDescription>
-              Search pages, sample conversations and sample contacts.
-            </DialogDescription>
+            <DialogDescription>Search pages, conversations and contacts.</DialogDescription>
           </DialogHeader>
           <Input
             autoFocus
@@ -262,7 +279,7 @@ export function Header({
             {results.conversations.length > 0 ? (
               <div className="pb-2">
                 <p className="text-muted-foreground px-1 py-1.5 text-[11px] font-medium tracking-wide uppercase">
-                  Sample conversations
+                  Conversations
                 </p>
                 {results.conversations.map((conversation) => (
                   <button
@@ -282,7 +299,7 @@ export function Header({
             {results.contacts.length > 0 ? (
               <div>
                 <p className="text-muted-foreground px-1 py-1.5 text-[11px] font-medium tracking-wide uppercase">
-                  Sample contacts
+                  Contacts
                 </p>
                 {results.contacts.map((contact) => (
                   <button
@@ -294,7 +311,9 @@ export function Header({
                     )}
                   >
                     <span className="text-sm font-medium">{contact.name}</span>
-                    <span className="text-muted-foreground truncate text-xs">{contact.email}</span>
+                    {contact.email ? (
+                      <span className="text-muted-foreground truncate text-xs">{contact.email}</span>
+                    ) : null}
                   </button>
                 ))}
               </div>

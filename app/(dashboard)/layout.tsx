@@ -16,24 +16,60 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   if (!user) redirect("/api/session-expired");
 
   const activeWorkspace = await getActiveWorkspace(user.id);
-  const [workspaces, notifications, inboxOpenCount] = await Promise.all([
-    workspaceService.listWorkspacesForUser(user.id),
-    prisma.notification.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    }),
-    activeWorkspace
-      ? prisma.conversation.count({
-          where: { workspaceId: activeWorkspace.id, status: "OPEN" },
-        })
-      : Promise.resolve(0),
-  ]);
+  const [workspaces, notifications, inboxOpenCount, searchContacts, searchConversations] =
+    await Promise.all([
+      workspaceService.listWorkspacesForUser(user.id),
+      prisma.notification.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+      activeWorkspace
+        ? prisma.conversation.count({
+            where: { workspaceId: activeWorkspace.id, status: "OPEN" },
+          })
+        : Promise.resolve(0),
+      // Real rows for the header ⌘K search (contacts + recent threads).
+      activeWorkspace
+        ? prisma.contact.findMany({
+            where: { workspaceId: activeWorkspace.id },
+            orderBy: { updatedAt: "desc" },
+            take: 100,
+            select: { id: true, displayName: true, email: true },
+          })
+        : Promise.resolve([]),
+      activeWorkspace
+        ? prisma.conversation.findMany({
+            where: { workspaceId: activeWorkspace.id },
+            orderBy: { lastMessageAt: "desc" },
+            take: 50,
+            select: {
+              id: true,
+              contact: { select: { displayName: true } },
+              messages: {
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { body: true },
+              },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
 
   return (
     <AppShell
       user={{ name: user.name, email: user.email }}
       inboxOpenCount={inboxOpenCount}
+      searchContacts={searchContacts.map((c) => ({
+        id: c.id,
+        name: c.displayName,
+        email: c.email,
+      }))}
+      searchConversations={searchConversations.map((c) => ({
+        id: c.id,
+        contactName: c.contact.displayName,
+        snippet: c.messages[0]?.body ?? "Attachment",
+      }))}
       workspaces={workspaces.map((w) => ({ id: w.id, name: w.name, slug: w.slug }))}
       activeWorkspaceId={activeWorkspace?.id ?? null}
       notifications={notifications.map((n) => ({

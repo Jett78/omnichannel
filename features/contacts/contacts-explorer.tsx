@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
 import { ChannelBadge, PROVIDER_META } from "@/components/channel-icon";
 import { PageHeader } from "@/components/layout/page-header";
-import { SampleBadge } from "@/components/sample-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,49 +24,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { SAMPLE_CONTACTS, type SampleContact } from "@/features/contacts/sample-data";
+import { formatLastActive, type RealContact } from "@/features/contacts/real-data";
 import type { Provider } from "@/generated/prisma/client";
 
 type SortMode = "recent" | "name";
 
-export function ContactsExplorer() {
+export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
   const [query, setQuery] = useState("");
   const [channelFilter, setChannelFilter] = useState<string>("ALL");
   const [sort, setSort] = useState<SortMode>("recent");
-  const [selected, setSelected] = useState<SampleContact | null>(null);
+  const [selected, setSelected] = useState<RealContact | null>(null);
   const [addOpen, setAddOpen] = useState(false);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = SAMPLE_CONTACTS.filter((contact) => {
+    const filtered = contacts.filter((contact) => {
       if (channelFilter !== "ALL" && !contact.providers.includes(channelFilter as Provider))
         return false;
       if (
         q &&
         !contact.name.toLowerCase().includes(q) &&
-        !contact.email.toLowerCase().includes(q) &&
-        !contact.phone.replace(/\s/g, "").includes(q.replace(/\s/g, ""))
+        !(contact.email ?? "").toLowerCase().includes(q) &&
+        !(contact.phone ?? "").replace(/\s/g, "").includes(q.replace(/\s/g, ""))
       )
         return false;
       return true;
     });
-    return [...filtered].sort((a, b) =>
-      sort === "name" ? a.name.localeCompare(b.name) : a.lastActiveMinutes - b.lastActiveMinutes,
-    );
-  }, [query, channelFilter, sort]);
+    return [...filtered].sort((a, b) => {
+      if (sort === "name") return a.name.localeCompare(b.name);
+      // Most recently active first; contacts without activity last.
+      if (a.lastActiveAt === b.lastActiveAt) return 0;
+      if (!a.lastActiveAt) return 1;
+      if (!b.lastActiveAt) return -1;
+      return b.lastActiveAt.localeCompare(a.lastActiveAt);
+    });
+  }, [contacts, query, channelFilter, sort]);
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Contacts"
-        description="Customers unified across channels by identity. Real contacts appear automatically when messages arrive."
+        description="Customers unified across channels by identity. Contacts are created automatically when messages arrive on a connected channel."
         actions={
-          <>
-            <SampleBadge />
-            <Button onClick={() => setAddOpen(true)}>
-              <UserPlus className="size-4" /> Add contact
-            </Button>
-          </>
+          <Button onClick={() => setAddOpen(true)}>
+            <UserPlus className="size-4" /> Add contact
+          </Button>
         }
       />
 
@@ -129,11 +130,11 @@ export function ContactsExplorer() {
                   >
                     <td className="py-3 pr-3">
                       <span className="flex items-center gap-2.5">
-                        <AvatarWithBadge name={contact.name} size="sm" />
+                        <AvatarWithBadge name={contact.name} image={contact.avatarUrl} size="sm" />
                         <span className="leading-tight">
                           <span className="block font-medium">{contact.name}</span>
                           <span className="text-muted-foreground block text-xs">
-                            {contact.email} · {contact.phone}
+                            {[contact.email, contact.phone].filter(Boolean).join(" · ") || "—"}
                           </span>
                         </span>
                       </span>
@@ -148,6 +149,9 @@ export function ContactsExplorer() {
                             />
                           </span>
                         ))}
+                        {contact.providers.length === 0 ? (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        ) : null}
                       </span>
                     </td>
                     <td className="py-3 pr-3">
@@ -157,16 +161,23 @@ export function ContactsExplorer() {
                             {tag}
                           </Badge>
                         ))}
+                        {contact.tags.length === 0 ? (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        ) : null}
                       </span>
                     </td>
                     <td className="py-3 pr-3">{contact.conversationsCount}</td>
-                    <td className="text-muted-foreground py-3">{contact.lastActiveLabel}</td>
+                    <td className="text-muted-foreground py-3">
+                      {formatLastActive(contact.lastActiveAt)}
+                    </td>
                   </tr>
                 ))}
                 {visible.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="text-muted-foreground py-10 text-center">
-                      No sample contacts match your filters.
+                      {contacts.length === 0
+                        ? "No contacts yet. Contacts appear here automatically when a customer messages one of your connected channels."
+                        : "No contacts match your filters."}
                     </td>
                   </tr>
                 ) : null}
@@ -182,27 +193,26 @@ export function ContactsExplorer() {
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-3">
-                  <AvatarWithBadge name={selected.name} />
+                  <AvatarWithBadge name={selected.name} image={selected.avatarUrl} />
                   {selected.name}
                 </DialogTitle>
                 <DialogDescription>
-                  Sample contact — {selected.location}. Real contact profiles are built from channel
-                  identities.
+                  Built from this customer&apos;s channel identities.
                 </DialogDescription>
               </DialogHeader>
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Email</dt>
-                  <dd className="font-medium">{selected.email}</dd>
+                  <dd className="font-medium">{selected.email ?? "—"}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Phone</dt>
-                  <dd className="font-medium">{selected.phone}</dd>
+                  <dd className="font-medium">{selected.phone ?? "—"}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Channels</dt>
                   <dd className="font-medium">
-                    {selected.providers.map((p) => PROVIDER_META[p].shortLabel).join(", ")}
+                    {selected.providers.map((p) => PROVIDER_META[p].shortLabel).join(", ") || "—"}
                   </dd>
                 </div>
                 <div className="flex justify-between gap-3">
@@ -211,16 +221,20 @@ export function ContactsExplorer() {
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Last active</dt>
-                  <dd className="font-medium">{selected.lastActiveLabel}</dd>
+                  <dd className="font-medium">{formatLastActive(selected.lastActiveAt)}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted-foreground">Tags</dt>
                   <dd className="flex gap-1">
-                    {selected.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
+                    {selected.tags.length > 0 ? (
+                      selected.tags.map((tag) => (
+                        <Badge key={tag} variant="secondary">
+                          {tag}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="font-medium">—</span>
+                    )}
                   </dd>
                 </div>
               </dl>
@@ -235,8 +249,9 @@ export function ContactsExplorer() {
             <DialogTitle>Add contact</DialogTitle>
             <DialogDescription>
               Contacts are created automatically when a customer first messages one of your
-              connected channels, so there is nothing to add by hand yet. Manual contact creation
-              becomes available when the first channel is connected.
+              connected channels, so there is nothing to add by hand. To edit a contact&apos;s
+              phone or email, open their conversation in the Inbox and use Edit in Customer
+              details.
             </DialogDescription>
           </DialogHeader>
         </DialogContent>
