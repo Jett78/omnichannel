@@ -175,6 +175,16 @@ function facebookHandler(call: RecordedCall): { status?: number; json: unknown }
   if (call.method === "POST" && path === "/v25.0/page-1001/messages") {
     return { json: { recipient_id: "psid-9", message_id: "fb-out-mid-1" } };
   }
+  if (call.method === "GET" && path === "/v25.0/psid-9") {
+    // User Profile API for the webhook test sender.
+    return {
+      json: {
+        first_name: "Hook",
+        last_name: "Tester",
+        profile_pic: "https://example.com/psid-9.jpg",
+      },
+    };
+  }
   if (call.method === "POST" && path === "/v25.0/page-error/messages") {
     return {
       status: 400,
@@ -879,6 +889,18 @@ async function main(): Promise<void> {
     );
     const processedEvent = await prisma.webhookEvent.findUnique({ where: { id: event.id } });
     assert("Pipeline: event marked PROCESSED", processedEvent?.status === "PROCESSED");
+
+    // Ingest enriches the contact from the User Profile API when the
+    // webhook carried only a PSID (no sender name in the payload).
+    const hookContact = conversation
+      ? await prisma.contact.findUnique({ where: { id: conversation.contactId } })
+      : null;
+    assert(
+      "Pipeline: contact enriched with profile name + avatar (was PSID-only)",
+      hookContact?.displayName === "Hook Tester" &&
+        hookContact?.avatarUrl === "https://example.com/psid-9.jpg",
+      `displayName=${hookContact?.displayName} avatar=${hookContact?.avatarUrl}`,
+    );
 
     // Outbound message awaiting receipts.
     const outbound = await prisma.message.create({

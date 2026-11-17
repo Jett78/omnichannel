@@ -27,6 +27,70 @@ import {
  * works on the unified message shape (types/messaging.ts).
  */
 
+/**
+ * Best-effort contact profile enrichment. Some providers' webhooks
+ * carry only a channel-scoped user id and no name (Messenger sends a
+ * PSID; the name lives behind the provider's profile API). When the
+ * stored display name is still just that raw id, ask the provider for
+ * the profile once and store the real name/avatar. Any failure —
+ * provider without a profile API, platform privacy rules, network —
+ * leaves the id in place and never blocks message ingest.
+ */
+async function enrichContactProfileIfNeeded(
+  workspaceId: string,
+  channel: {
+    id: string;
+    provider: import("@/generated/prisma/client").Provider;
+    externalAccountId: string;
+    config: unknown;
+  },
+  contactId: string,
+  externalUserId: string,
+): Promise<void> {
+  try {
+    const contact = await prisma.contact.findFirst({
+      where: { id: contactId, workspaceId },
+      select: { displayName: true, avatarUrl: true },
+    });
+    if (!contact || contact.displayName !== externalUserId) return;
+
+    const provider = getProvider(providerEnumToId(channel.provider));
+    const credential = await channelCredentialService.getDecryptedChannelCredentialForServer(
+      channel.id,
+    );
+    if (!credential?.accessToken) return;
+    const channelContext: ChannelContext = {
+      channelId: channel.id,
+      workspaceId,
+      provider: providerEnumToId(channel.provider),
+      externalAccountId: channel.externalAccountId,
+      credentials: {
+        accessToken: credential.accessToken,
+        ...(credential.refreshToken ? { refreshToken: credential.refreshToken } : {}),
+        ...(credential.tokenExpiresAt ? { expiresAt: credential.tokenExpiresAt } : {}),
+        scopes: credential.scopes ?? [],
+      },
+      ...(channel.config &&
+      typeof channel.config === "object" &&
+      !Array.isArray(channel.config)
+        ? { config: channel.config as Record<string, unknown> }
+        : {}),
+    };
+    const profile = await provider.getContactProfile(channelContext, externalUserId);
+    if (!profile.name && !profile.avatarUrl) return;
+    await prisma.contact.update({
+      where: { id: contactId },
+      data: {
+        ...(profile.name ? { displayName: profile.name } : {}),
+        ...(profile.avatarUrl && !contact.avatarUrl ? { avatarUrl: profile.avatarUrl } : {}),
+      },
+    });
+  } catch {
+    // Enrichment is opportunistic — ingest must not fail because a
+    // profile lookup did.
+  }
+}
+
 // ─── The single Prisma → Unified mapper ───────────────────────────────────────
 
 export interface MessageRowForMapping extends Message {
@@ -140,6 +204,12 @@ export const messagingService = {
       });
     }
     const contactId = identity.contactId;
+
+    // If all we have for this contact is the raw channel-scoped id,
+    // try to replace it with the real profile name/avatar (Messenger
+    // webhooks carry only a PSID). Best-effort; runs before the
+    // conversation is assembled so the UI sees the enriched contact.
+    await enrichContactProfileIfNeeded(workspaceId, channel, contactId, normalized.senderExternalId);
 
     // Find-or-create the conversation for this contact on this channel.
     // A RESOLVED conversation reopens when the customer writes again.
