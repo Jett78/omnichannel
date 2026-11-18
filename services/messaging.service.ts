@@ -609,6 +609,20 @@ export const messagingService = {
       },
       include: { attachments: true },
     });
+    // Keep our own copy of the bytes: some platforms (Meta) return an
+    // attachment id that can be re-sent but never downloaded again, so
+    // without this the thread could only show a file chip for media the
+    // agent sent. The media route serves these bytes for previews.
+    const createdAttachment = created.attachments[0];
+    if (createdAttachment) {
+      await prisma.storedMedia.create({
+        data: {
+          attachmentId: createdAttachment.id,
+          mimeType: input.mimeType,
+          data: Uint8Array.from(input.bytes),
+        },
+      });
+    }
     await prisma.conversation.update({
       where: { id: conversationId },
       data: { lastMessageAt: new Date() },

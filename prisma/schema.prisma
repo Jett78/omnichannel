@@ -428,7 +428,27 @@ model MessageAttachment {
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
+  storedMedia StoredMedia?
+
   @@index([messageId])
+}
+
+/**
+ * Our own copy of an outbound attachment's bytes. Some platforms
+ * (Meta) hand back an attachment id that can be re-sent but never
+ * downloaded again, so without this copy the inbox thread could only
+ * show a file chip for images the agent sent. The media route serves
+ * these bytes for thread previews; platform downloads remain the
+ * fallback for references without a stored copy.
+ */
+model StoredMedia {
+  id           String   @id @default(cuid())
+  attachmentId String   @unique
+  mimeType     String
+  data         Bytes
+  createdAt    DateTime @default(now())
+
+  attachment MessageAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
 }
 
 // ─── Tags & Canned Responses ──────────────────────────────────────────────────

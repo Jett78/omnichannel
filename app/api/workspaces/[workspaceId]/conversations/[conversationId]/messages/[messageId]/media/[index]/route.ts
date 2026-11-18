@@ -20,11 +20,12 @@ interface RouteContext {
 
 /**
  * GET …/messages/{messageId}/media/{index} — stream one attachment's
- * bytes for the inbox thread preview. Platform references that resolve
+ * bytes for the inbox thread preview. Our own stored copy (kept for
+ * every outbound send, because Meta attachment ids cannot be fetched
+ * back) is served first; otherwise platform references that resolve
  * to bytes (WhatsApp "whatsapp-media:{id}") are downloaded live with
- * the channel's credential; references that cannot be fetched back
- * (Meta "meta-attachment:{id}") return 404 and the UI shows a file chip
- * instead of a preview.
+ * the channel's credential. References with neither return 404 and
+ * the UI shows a file chip instead of a preview.
  */
 export async function GET(request: Request, context: RouteContext) {
   try {
@@ -43,7 +44,24 @@ export async function GET(request: Request, context: RouteContext) {
       throw AppError.notFound("Message not found");
     }
     const attachment = message.attachments[Number(index)];
-    if (!attachment?.originalUrl) throw AppError.notFound("Attachment not found");
+    if (!attachment) throw AppError.notFound("Attachment not found");
+    const stored = await prisma.storedMedia.findUnique({
+      where: { attachmentId: attachment.id },
+    });
+    if (stored) {
+      return new NextResponse(new Uint8Array(stored.data), {
+        headers: {
+          "Content-Type": stored.mimeType,
+          "Cache-Control": "private, max-age=300",
+          ...(attachment.fileName
+            ? {
+                "Content-Disposition": `inline; filename="${attachment.fileName.replace(/"/g, "")}"`,
+              }
+            : {}),
+        },
+      });
+    }
+    if (!attachment.originalUrl) throw AppError.notFound("Attachment not found");
     const ref = attachment.originalUrl;
     if (ref.startsWith("meta-attachment:") || ref.startsWith("mock-media:")) {
       throw AppError.notFound("A preview is not available for this attachment");

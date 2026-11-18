@@ -129,9 +129,10 @@ function formatFileSize(bytes: number): string {
 
 /**
  * Where an attachment can be previewed from, if anywhere: public URLs
- * directly, WhatsApp media references through our media route (they
- * need the channel credential to download). Meta attachment ids cannot
- * be fetched back, so those render as a file chip.
+ * directly; platform references through our media route — WhatsApp
+ * media ids are downloaded live with the channel credential, and
+ * Meta/mock references are served from the copy we stored at send
+ * time (Meta attachment ids cannot be fetched back from Meta).
  */
 function attachmentPreviewSrc(
   workspaceId: string,
@@ -142,10 +143,48 @@ function attachmentPreviewSrc(
   const url = attachment.url;
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("whatsapp-media:")) {
+  if (
+    url.startsWith("whatsapp-media:") ||
+    url.startsWith("meta-attachment:") ||
+    url.startsWith("mock-media:")
+  ) {
     return `/api/workspaces/${workspaceId}/conversations/${message.conversationId}/messages/${message.id}/media/${index}`;
   }
   return null;
+}
+
+type RealAttachment = NonNullable<RealMessageItem["attachments"]>[number];
+
+function AttachmentChip({ attachment }: { attachment: RealAttachment }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 self-start rounded-md bg-black/5 px-2 py-1 text-xs dark:bg-white/10">
+      <Paperclip className="size-3 shrink-0" />
+      <span className="max-w-48 truncate">{attachment.fileName ?? "Attachment"}</span>
+      {attachment.size ? <span>· {formatFileSize(attachment.size)}</span> : null}
+    </span>
+  );
+}
+
+/** Image preview that falls back to a file chip if the bytes can't load
+ *  (e.g. media sent before stored copies existed). */
+function AttachmentPreviewImage({
+  src,
+  attachment,
+}: {
+  src: string;
+  attachment: RealAttachment;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <AttachmentChip attachment={attachment} />;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={attachment.fileName ?? "Image attachment"}
+      className="max-h-64 w-auto rounded-lg object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 function MessageAttachments({
@@ -162,25 +201,20 @@ function MessageAttachments({
         const src = attachmentPreviewSrc(workspaceId, message, attachment, index);
         if (src && attachment.mimeType?.startsWith("image/")) {
           return (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <AttachmentPreviewImage key={attachment.id} src={src} attachment={attachment} />
+          );
+        }
+        if (src && attachment.mimeType?.startsWith("video/")) {
+          return (
+            <video
               key={attachment.id}
               src={src}
-              alt={attachment.fileName ?? "Image attachment"}
-              className="max-h-64 w-auto rounded-lg object-contain"
+              controls
+              className="max-h-64 w-auto rounded-lg"
             />
           );
         }
-        return (
-          <span
-            key={attachment.id}
-            className="inline-flex items-center gap-1.5 self-start rounded-md bg-black/5 px-2 py-1 text-xs dark:bg-white/10"
-          >
-            <Paperclip className="size-3 shrink-0" />
-            <span className="max-w-48 truncate">{attachment.fileName ?? "Attachment"}</span>
-            {attachment.size ? <span>· {formatFileSize(attachment.size)}</span> : null}
-          </span>
-        );
+        return <AttachmentChip key={attachment.id} attachment={attachment} />;
       })}
     </div>
   );

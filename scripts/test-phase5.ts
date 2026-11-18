@@ -1426,6 +1426,15 @@ async function main(): Promise<void> {
         mediaMessage.attachments[0]?.url === "meta-attachment:att-fb-1" &&
         mediaMessage.attachments[0]?.fileName === "photo.png",
     );
+    const storedCopy = await prisma.storedMedia.findFirst({
+      where: { attachment: { messageId: mediaMessage.id } },
+    });
+    assert(
+      "sendOutboundMedia: our own byte copy stored for thread previews",
+      storedCopy !== null &&
+        storedCopy.mimeType === "image/png" &&
+        Buffer.from(storedCopy.data).toString() === "fake-png-bytes",
+    );
     const mediaResult = await messagingService.deliverOutboundMessage(mediaMessage.id, {
       isFinalAttempt: true,
     });
