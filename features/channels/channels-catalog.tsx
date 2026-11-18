@@ -657,14 +657,13 @@ export function ChannelsCatalog({
               </DialogHeader>
               <div className="flex flex-col gap-3 text-sm">
                 <p>
-                  This app connects Instagram through <strong>Unified Login</strong> (Facebook
-                  Login for Business) — the only option Meta offers newer apps. Set these
-                  environment variables on the server and restart the app:{" "}
-                  <code>META_APP_ID</code>, <code>META_APP_SECRET</code> (the same values as
-                  Facebook) and <code>INSTAGRAM_LOGIN_CONFIG_ID</code> — the configuration ID
-                  created under the Instagram use case → “API setup with Unified login” in the
-                  Meta dashboard. <code>INSTAGRAM_WEBHOOK_VERIFY_TOKEN</code> is optional and
-                  falls back to <code>META_WEBHOOK_VERIFY_TOKEN</code>.
+                  This app connects Instagram through <strong>Facebook Login</strong> — the only
+                  option Meta offers newer apps (Instagram Login is no longer available to them).
+                  Set these environment variables on the server and restart the app:{" "}
+                  <code>META_APP_ID</code>, <code>META_APP_SECRET</code> — the same Meta app
+                  credentials used for Facebook; no separate Instagram credentials exist.{" "}
+                  <code>INSTAGRAM_WEBHOOK_VERIFY_TOKEN</code> is optional and falls back to{" "}
+                  <code>META_WEBHOOK_VERIFY_TOKEN</code>.
                 </p>
                 <p>
                   In Facebook Login for Business settings, register this OAuth redirect URI:

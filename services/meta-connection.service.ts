@@ -19,7 +19,7 @@ import {
 import {
   getFacebookConfig,
   getInstagramConfig,
-  getInstagramUnifiedConfig,
+  getInstagramFacebookLoginConfig,
   instagramAuthModel,
 } from "@/integrations/meta/meta-config";
 import {
@@ -69,8 +69,12 @@ interface FacebookSessionData {
   pages: MetaPageAccount[];
 }
 
-/** Permissions carried by the Unified Login configuration (dashboard-side). */
-export const UNIFIED_INSTAGRAM_SCOPES = ["instagram_basic", "instagram_manage_messages"] as const;
+/** Scopes requested on the Facebook Login dialog for Instagram connects. */
+export const FACEBOOK_LOGIN_INSTAGRAM_SCOPES = [
+  "pages_show_list",
+  "instagram_basic",
+  "instagram_manage_messages",
+] as const;
 
 type InstagramSessionData =
   | {
@@ -80,7 +84,7 @@ type InstagramSessionData =
       account: MetaInstagramAccount;
     }
   | {
-      kind: "unified";
+      kind: "facebook-login";
       userAccessToken: string;
       userTokenExpiresAt: string | null;
       pages: MetaPageAccount[];
@@ -92,9 +96,9 @@ function parseInstagramSessionData(
 ): InstagramSessionData | null {
   const raw = parseSessionData<Record<string, unknown>>(session);
   if (!raw) return null;
-  if (raw.kind === "unified" || (raw.pages && !raw.account)) {
+  if (raw.kind === "facebook-login" || raw.kind === "unified" || (raw.pages && !raw.account)) {
     return {
-      kind: "unified",
+      kind: "facebook-login",
       userAccessToken: String(raw.userAccessToken ?? ""),
       userTokenExpiresAt: (raw.userTokenExpiresAt as string | null) ?? null,
       pages: (raw.pages as MetaPageAccount[]) ?? [],
@@ -260,30 +264,35 @@ export const metaConnectionService = {
   ): Promise<{ authUrl: string; state: string }> {
     await requireWorkspacePermission(actorUserId, workspaceId, "channels.manage");
     const model = instagramAuthModel();
-    if (model === "unified") {
-      // Newer Meta apps: Instagram connects through Facebook Login for
-      // Business with the Instagram configuration (Unified Login).
-      const unified = getInstagramUnifiedConfig();
+    if (model === "facebook-login") {
+      // Newer Meta apps: Instagram connects through the classic
+      // Facebook Login dialog with instagram scopes (the Instagram
+      // use case's "API setup with Facebook login").
+      const fbLogin = getInstagramFacebookLoginConfig();
       const facebook = deps.facebook ?? facebookProvider;
       const state = await createSession(
         actorUserId,
         workspaceId,
         "INSTAGRAM",
-        UNIFIED_INSTAGRAM_SCOPES,
+        FACEBOOK_LOGIN_INSTAGRAM_SCOPES,
       );
       return {
-        authUrl: facebook.buildBusinessLoginUrl(state, unified.loginConfigId, unified.redirectUri),
+        authUrl: facebook.buildScopedAuthUrl(
+          state,
+          FACEBOOK_LOGIN_INSTAGRAM_SCOPES,
+          fbLogin.redirectUri,
+        ),
         state,
       };
     }
     if (model === null) {
       // Name the missing env vars for the model this deployment is
       // closest to: partially-set Instagram Login vars → that error,
-      // otherwise the Unified Login requirements.
+      // otherwise the Facebook Login (Meta app) requirements.
       if (process.env.INSTAGRAM_APP_ID?.trim() || process.env.INSTAGRAM_APP_SECRET?.trim()) {
         getInstagramConfig();
       }
-      getInstagramUnifiedConfig();
+      getInstagramFacebookLoginConfig();
     }
     getInstagramConfig(); // throws a 503 naming the missing env vars
     const provider = deps.instagram ?? instagramProvider;
@@ -320,16 +329,16 @@ export const metaConnectionService = {
     deps: MetaConnectionDeps = {},
   ): Promise<{ sessionId: string; workspaceId: string }> {
     const session = await loadCallbackSession(actorUserId, state, "INSTAGRAM");
-    if (instagramAuthModel() === "unified") {
+    if (instagramAuthModel() === "facebook-login") {
       // The code comes back to the Instagram callback URI, so the
       // token exchange must present that same redirect_uri.
-      const unified = getInstagramUnifiedConfig();
+      const fbLogin = getInstagramFacebookLoginConfig();
       const facebook = deps.facebook ?? facebookProvider;
-      const shortLived = await facebook.exchangeCodeForUserToken(code, unified.redirectUri);
+      const shortLived = await facebook.exchangeCodeForUserToken(code, fbLogin.redirectUri);
       const longLived = await facebook.exchangeLongLivedUserToken(shortLived.accessToken);
       const pages = await facebook.listAccessiblePages(longLived.accessToken);
       const data: InstagramSessionData = {
-        kind: "unified",
+        kind: "facebook-login",
         userAccessToken: longLived.accessToken,
         userTokenExpiresAt: longLived.expiresAt?.toISOString() ?? null,
         pages,
@@ -409,7 +418,7 @@ export const metaConnectionService = {
     }
 
     const data = parseInstagramSessionData(session);
-    if (data?.kind === "unified") {
+    if (data?.kind === "facebook-login") {
       return {
         sessionId: session.id,
         provider: session.provider,
@@ -562,8 +571,14 @@ export const metaConnectionService = {
     deps: MetaConnectionDeps = {},
   ): Promise<SelectResult> {
     const data = parseInstagramSessionData(session);
-    if (data?.kind === "unified") {
-      return this.selectUnifiedInstagramAccount(actorUserId, session, data, externalAccountId, deps);
+    if (data?.kind === "facebook-login") {
+      return this.selectFacebookLoginInstagramAccount(
+        actorUserId,
+        session,
+        data,
+        externalAccountId,
+        deps,
+      );
     }
     const account = data?.kind === "instagram-login" ? data.account : undefined;
     if (!account || account.id !== externalAccountId) {
@@ -635,15 +650,16 @@ export const metaConnectionService = {
   },
 
   /**
-   * Unified Login selection: the channel is the Instagram account, but
-   * the stored credential is the linked Page's access token — sends,
-   * profile lookups and history reads run on graph.facebook.com via
-   * the Page edge (see InstagramProvider.transportFor).
+   * Facebook Login selection: the channel is the Instagram account,
+   * but the stored credential is the linked Page's access token —
+   * sends, profile lookups and history reads run on
+   * graph.facebook.com via the Page edge (see
+   * InstagramProvider.transportFor).
    */
-  async selectUnifiedInstagramAccount(
+  async selectFacebookLoginInstagramAccount(
     actorUserId: string,
     session: OAuthConnectionSession,
-    data: Extract<InstagramSessionData, { kind: "unified" }>,
+    data: Extract<InstagramSessionData, { kind: "facebook-login" }>,
     externalAccountId: string,
     deps: MetaConnectionDeps = {},
   ): Promise<SelectResult> {
@@ -663,7 +679,7 @@ export const metaConnectionService = {
     const workspaceId = session.workspaceId;
 
     const baseConfig: Record<string, unknown> = {
-      authModel: "facebook-unified-login",
+      authModel: "facebook-login",
       pageId: page.id,
       pageName: page.name,
       ...(ig.username ? { username: ig.username } : {}),
@@ -694,7 +710,7 @@ export const metaConnectionService = {
 
     await channelCredentialService.setChannelCredential(actorUserId, workspaceId, channel.id, {
       accessToken: page.pageAccessToken,
-      scopes: [...UNIFIED_INSTAGRAM_SCOPES],
+      scopes: [...FACEBOOK_LOGIN_INSTAGRAM_SCOPES],
     });
 
     let subscriptionWarning: string | undefined;

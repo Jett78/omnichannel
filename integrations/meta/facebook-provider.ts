@@ -223,18 +223,18 @@ export class FacebookProvider implements IMessagingProvider {
   }
 
   /**
-   * Facebook Login for Business authorization URL (configuration-based
-   * login: the configuration carries the permissions/assets, so no
-   * `scope` parameter is sent). Used by Instagram Unified Login.
+   * Classic Facebook Login authorization URL with an explicit scope
+   * set and redirect URI. Used by the Instagram connect flow, which
+   * presents instagram scopes but returns to the Instagram callback.
    */
-  buildBusinessLoginUrl(state: string, configId: string, redirectUri: string): string {
+  buildScopedAuthUrl(state: string, scopes: readonly string[], redirectUri: string): string {
     const config = getFacebookConfig();
     const params = new URLSearchParams({
       client_id: config.appId,
-      config_id: configId,
       redirect_uri: redirectUri,
       state,
       response_type: "code",
+      scope: scopes.join(","),
     });
     return `https://www.facebook.com/${config.graphApiVersion}/dialog/oauth?${params.toString()}`;
   }

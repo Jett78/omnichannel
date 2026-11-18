@@ -53,8 +53,10 @@ const envSchema = z.object({
   INSTAGRAM_APP_SECRET: z.string().optional(),
   INSTAGRAM_REDIRECT_URI: z.string().optional(),
   INSTAGRAM_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
-  // Meta — Instagram via Unified Login (Facebook Login for Business
-  // configuration id; newer apps cannot use Instagram Login at all).
+  // Meta — Instagram via Facebook Login. INSTAGRAM_LOGIN_CONFIG_ID is
+  // legacy/unused (the configuration dialog's token cannot access the
+  // user's Pages — see meta-config.ts); kept so existing deployments
+  // that set it do not break validation.
   INSTAGRAM_LOGIN_CONFIG_ID: z.string().optional(),
   // WhatsApp Business Platform Cloud API (Phase 6). The app secret /
   // verify token fall back to the Meta values in meta-config.ts.

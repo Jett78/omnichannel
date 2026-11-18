@@ -14,11 +14,12 @@ import { AppError } from "@/lib/errors";
  *  - Instagram API with Instagram Login: INSTAGRAM_APP_ID /
  *    INSTAGRAM_APP_SECRET — the Instagram product's OWN app id/secret
  *    from the Meta dashboard (distinct from the Facebook app secret).
- *  - Instagram via Unified Login (newer Meta apps, where Instagram
- *    Login is not offered at all): INSTAGRAM_LOGIN_CONFIG_ID — the
- *    Facebook Login for Business configuration created in the
- *    Instagram use case. Reuses META_APP_ID / META_APP_SECRET; the
- *    Instagram professional account must be linked to a Facebook Page.
+ *  - Instagram via Facebook Login (newer Meta apps, where Instagram
+ *    Login is not offered at all): reuses META_APP_ID /
+ *    META_APP_SECRET with instagram scopes on the classic Facebook
+ *    Login dialog; the Instagram professional account must be linked
+ *    to a Facebook Page. (INSTAGRAM_LOGIN_CONFIG_ID is no longer used:
+ *    the configuration dialog's token cannot see the user's Pages.)
  *
  * Nothing in this module ever returns a secret to the browser; the
  * `*Configured()` helpers and redirect URIs are the only pieces the
@@ -129,52 +130,53 @@ export function getInstagramConfig(): InstagramMetaConfig {
   };
 }
 
-export interface InstagramUnifiedConfig {
+export interface InstagramFacebookLoginConfig {
   appId: string;
   appSecret: string;
-  /** Facebook Login for Business configuration id (Instagram use case). */
-  loginConfigId: string;
   graphApiVersion: string;
   redirectUri: string;
   webhookVerifyToken: string | undefined;
   appsecretProof: boolean;
 }
 
-export type InstagramAuthModel = "unified" | "instagram-login";
+export type InstagramAuthModel = "facebook-login" | "instagram-login";
 
 /**
- * Which Instagram auth model this deployment uses. Unified Login wins
- * when its configuration id is present: newer Meta apps cannot use
- * Instagram Login at all (the dashboard states this explicitly), so a
- * deployment that has both configured is a newer app.
+ * Which Instagram auth model this deployment uses.
+ *
+ * - "instagram-login" when the Instagram product's own credentials
+ *   exist (apps that still offer the Instagram API with Instagram
+ *   Login).
+ * - "facebook-login" otherwise, when the Meta app credentials exist:
+ *   newer apps cannot use Instagram Login, and Instagram connects
+ *   through the classic Facebook Login dialog (the Instagram use
+ *   case's "API setup with Facebook login") with instagram scopes.
+ *   NOTE: the Facebook Login for Business *configuration* dialog
+ *   (config_id) is deliberately NOT used — its token only carries the
+ *   assets picked in that dialog (an Instagram account, no Pages),
+ *   so /me/accounts returns nothing and Page-based messaging is
+ *   impossible. Verified live 2026-11-18.
  */
 export function instagramAuthModel(): InstagramAuthModel | null {
-  if (
-    process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() &&
-    process.env.META_APP_ID?.trim() &&
-    process.env.META_APP_SECRET?.trim()
-  ) {
-    return "unified";
-  }
   if (process.env.INSTAGRAM_APP_ID?.trim() && process.env.INSTAGRAM_APP_SECRET?.trim()) {
     return "instagram-login";
+  }
+  if (process.env.META_APP_ID?.trim() && process.env.META_APP_SECRET?.trim()) {
+    return "facebook-login";
   }
   return null;
 }
 
-export function getInstagramUnifiedConfig(): InstagramUnifiedConfig {
+export function getInstagramFacebookLoginConfig(): InstagramFacebookLoginConfig {
   const missing: string[] = [];
   const appId = process.env.META_APP_ID?.trim();
   const appSecret = process.env.META_APP_SECRET?.trim();
-  const loginConfigId = process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim();
   if (!appId) missing.push("META_APP_ID");
   if (!appSecret) missing.push("META_APP_SECRET");
-  if (!loginConfigId) missing.push("INSTAGRAM_LOGIN_CONFIG_ID");
-  if (missing.length > 0) throw missingConfigError("Instagram (Unified Login)", missing);
+  if (missing.length > 0) throw missingConfigError("Instagram (Facebook Login)", missing);
   return {
     appId: appId as string,
     appSecret: appSecret as string,
-    loginConfigId: loginConfigId as string,
     graphApiVersion: graphApiVersion(),
     redirectUri: instagramRedirectUri(),
     webhookVerifyToken:

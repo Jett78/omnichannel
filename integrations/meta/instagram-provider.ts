@@ -52,10 +52,10 @@ import {
  * NOT the Facebook app secret.
  *
  * A second auth model is supported per channel (config.authModel):
- * "facebook-unified-login" — newer Meta apps no longer offer Instagram
- * Login at all; Instagram connects through Facebook Login for Business
- * (Unified Login) instead. Those channels store the linked Facebook
- * Page's access token as the credential and talk to
+ * "facebook-login" — newer Meta apps no longer offer Instagram Login
+ * at all; Instagram connects through the classic Facebook Login
+ * dialog with instagram scopes instead. Those channels store the
+ * linked Facebook Page's access token as the credential and talk to
  * graph.facebook.com, sending via the Page edge (/{page-id}/messages)
  * while the channel's externalAccountId stays the Instagram account
  * id. See transportFor() below.
@@ -244,23 +244,23 @@ export class InstagramProvider implements IMessagingProvider {
   private transportFor(channel: ChannelContext): {
     host: typeof GRAPH_HOST | typeof FB_GRAPH_HOST;
     baseId: string;
-    unified: boolean;
+    viaPage: boolean;
     proof: { appSecret?: string; appsecretProof?: boolean };
   } {
     const config = channel.config ?? {};
     const pageId = typeof config.pageId === "string" ? config.pageId : undefined;
-    if (config.authModel === "facebook-unified-login" && pageId) {
+    if (config.authModel === "facebook-login" && pageId) {
       return {
         host: FB_GRAPH_HOST,
         baseId: pageId,
-        unified: true,
+        viaPage: true,
         proof: this.facebookProofOptions(),
       };
     }
     return {
       host: GRAPH_HOST,
       baseId: channel.externalAccountId,
-      unified: false,
+      viaPage: false,
       proof: this.proofOptions(),
     };
   }
@@ -385,10 +385,10 @@ export class InstagramProvider implements IMessagingProvider {
   }
 
   /**
-   * Unified Login: subscribe the linked Facebook Page to the app's
-   * webhooks with the Page access token (same subscribed_apps edge and
-   * field set as Messenger — Instagram message/delivery/read events
-   * for Facebook-Login accounts flow through it).
+   * Facebook Login model: subscribe the linked Facebook Page to the
+   * app's webhooks with the Page access token (same subscribed_apps
+   * edge and field set as Messenger — Instagram message/delivery/read
+   * events for Facebook-Login accounts flow through it).
    */
   async subscribeViaPage(pageId: string, pageAccessToken: string): Promise<void> {
     const response = await this.client.post<GraphSuccessResponse>(
@@ -434,7 +434,7 @@ export class InstagramProvider implements IMessagingProvider {
     try {
       if (channel.credentials.accessToken) {
         const transport = this.transportFor(channel);
-        if (transport.unified) {
+        if (transport.viaPage) {
           await this.unsubscribeViaPage(transport.baseId, channel.credentials.accessToken);
         } else {
           await this.unsubscribeAccount(channel.credentials.accessToken);

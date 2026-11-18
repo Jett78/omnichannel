@@ -34,8 +34,12 @@ META_FACEBOOK_REDIRECT_URI=             # optional override; default ${APP_URL}/
 META_APPSECRET_PROOF=true               # optional; sends appsecret_proof with Graph calls
 ```
 
-Instagram (the Instagram product's **own** app id/secret from the
-dashboard — different values from the Facebook app secret):
+Instagram — two auth models, picked automatically by which env vars
+exist:
+
+- **Instagram Login** (apps that still offer it): the Instagram
+  product's **own** app id/secret from the dashboard — different
+  values from the Facebook app secret:
 
 ```
 INSTAGRAM_APP_ID=<instagram app id>
@@ -43,6 +47,22 @@ INSTAGRAM_APP_SECRET=<instagram app secret>
 INSTAGRAM_REDIRECT_URI=                 # optional override; default ${APP_URL}/api/oauth/instagram/callback
 INSTAGRAM_WEBHOOK_VERIFY_TOKEN=         # optional; falls back to META_WEBHOOK_VERIFY_TOKEN
 ```
+
+- **Facebook Login** (newer apps — Meta's dashboard states "API setup
+  with Instagram login is not available for newer apps"): no extra
+  env vars; the flow reuses `META_APP_ID` / `META_APP_SECRET` and
+  presents the scopes `pages_show_list`, `instagram_basic`,
+  `instagram_manage_messages` on the classic Facebook Login dialog
+  (the Instagram use case's "API setup with Facebook login" tab). The
+  Instagram professional account must be linked to a Facebook Page;
+  the channel stores that Page's access token and sends via
+  graph.facebook.com. Do NOT use a Facebook Login for Business
+  configuration (config_id) for this: its token only carries the
+  assets picked in that dialog (an Instagram account, no Pages), so
+  /me/accounts returns nothing. `INSTAGRAM_LOGIN_CONFIG_ID` is
+  therefore unused. For this model, register the Instagram callback
+  under **Facebook Login for Business → Settings → Valid OAuth
+  Redirect URIs** instead of the Instagram product.
 
 ## 3. Register redirect URIs
 
