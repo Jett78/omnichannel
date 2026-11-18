@@ -405,6 +405,40 @@ export function RealInboxShell({
   const selected = conversations.find((c) => c.id === selectedId) ?? conversations[0];
   const messages = selected ? (messagesByConversation[selected.id] ?? []) : [];
 
+  // Chat threads open at the BOTTOM (latest message), like every
+  // messaging app: scroll there when a conversation is opened, and
+  // follow new messages only while the reader is already near the
+  // bottom (or sent the message themselves) so reading history is
+  // never interrupted.
+  const threadEndRef = useRef<HTMLDivElement>(null);
+  const prevThreadRef = useRef<{ selectedId: string | null; lastMessageId: string | null }>({
+    selectedId: null,
+    lastMessageId: null,
+  });
+  const lastMessageId = messages.at(-1)?.id ?? null;
+  const lastMessageDirection = messages.at(-1)?.direction ?? null;
+  const selectedThreadId = selected?.id ?? null;
+  useEffect(() => {
+    const anchor = threadEndRef.current;
+    if (!anchor || !selectedThreadId) return;
+    const switched = prevThreadRef.current.selectedId !== selectedThreadId;
+    const viewport = anchor.closest("[data-radix-scroll-area-viewport]");
+    const nearBottom = viewport
+      ? viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 200
+      : true;
+    const lastIsOwn = lastMessageDirection === "OUTBOUND";
+    if (switched || nearBottom || lastIsOwn) {
+      anchor.scrollIntoView({ block: "end" });
+      if (switched) {
+        // Images still loading grow the thread after the first jump.
+        const timer = setTimeout(() => anchor.scrollIntoView({ block: "end" }), 350);
+        prevThreadRef.current = { selectedId: selectedThreadId, lastMessageId };
+        return () => clearTimeout(timer);
+      }
+    }
+    prevThreadRef.current = { selectedId: selectedThreadId, lastMessageId };
+  }, [selectedThreadId, lastMessageId, lastMessageDirection]);
+
   const isWhatsApp = selected?.channel.provider === "WHATSAPP";
   const channelTemplates = selected ? templatesByChannel[selected.channel.id] : undefined;
   const selectedTemplate = (channelTemplates ?? []).find(
@@ -1488,6 +1522,7 @@ export function RealInboxShell({
                     No messages in this conversation yet.
                   </p>
                 ) : null}
+                <div ref={threadEndRef} aria-hidden="true" />
               </div>
             </ScrollArea>
 

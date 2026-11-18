@@ -79,8 +79,36 @@ type ConversationRow = Conversation & {
   channel: ConversationListItem["channel"];
   assignee: ConversationListItem["assignee"];
   tags: Array<{ tag: Tag }>;
-  messages: Array<{ body: string | null; createdAt: Date; direction: "INBOUND" | "OUTBOUND" }>;
+  messages: Array<{
+    body: string | null;
+    createdAt: Date;
+    direction: "INBOUND" | "OUTBOUND";
+    type: string;
+  }>;
 };
+
+/** List preview for a message with no text body (media, templates). */
+function mediaPreview(type: string, direction: "INBOUND" | "OUTBOUND"): string | null {
+  const outbound = direction === "OUTBOUND";
+  switch (type) {
+    case "IMAGE":
+      return outbound ? "You sent a photo" : "Photo";
+    case "VIDEO":
+      return outbound ? "You sent a video" : "Video";
+    case "AUDIO":
+      return outbound ? "You sent a voice message" : "Voice message";
+    case "FILE":
+      return outbound ? "You sent a file" : "File";
+    case "LOCATION":
+      return outbound ? "You sent a location" : "Location";
+    case "STICKER":
+      return outbound ? "You sent a sticker" : "Sticker";
+    case "TEMPLATE":
+      return outbound ? "You sent a template" : "Template";
+    default:
+      return null;
+  }
+}
 
 function toListItem(row: ConversationRow): ConversationListItem {
   const last = row.messages[0];
@@ -102,7 +130,7 @@ function toListItem(row: ConversationRow): ConversationListItem {
     channel: row.channel,
     assignee: row.assignee,
     tags: row.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, color: t.tag.color })),
-    preview: last?.body ?? null,
+    preview: last ? (last.body ?? mediaPreview(last.type, last.direction)) : null,
     previewAt: last?.createdAt ?? null,
   };
 }

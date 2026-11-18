@@ -346,6 +346,22 @@ async function main(): Promise<void> {
     "list: preview ignores SYSTEM activity entries",
     listedItem9b?.preview === "Actually, one more thing…",
   );
+  await prisma.message.create({
+    data: {
+      conversationId,
+      direction: "OUTBOUND",
+      type: "IMAGE",
+      body: null,
+      senderType: "AGENT",
+      senderUserId: userA.id,
+      status: "SENT",
+    },
+  });
+  const listedMedia = await conversationService.listConversations(userA.id, wa.id);
+  assert(
+    "list: outbound image preview reads 'You sent a photo'",
+    listedMedia.items.find((i) => i.id === conversationId)?.preview === "You sent a photo",
+  );
 
   const prioritized = await conversationService.setPriority(
     userA.id,
