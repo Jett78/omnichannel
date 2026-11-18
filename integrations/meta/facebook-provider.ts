@@ -235,6 +235,35 @@ export class FacebookProvider implements IMessagingProvider {
   }
 
   /**
+   * Inspect a user token with the app access token (GET /debug_token):
+   * which scopes were actually granted, and any per-target granular
+   * restrictions (e.g. pages_show_list limited to specific Pages).
+   * Diagnostic aid — the caller must never log the token itself.
+   */
+  async debugUserToken(userAccessToken: string): Promise<{
+    scopes: string[];
+    granular: { scope: string; targetIds?: string[] }[];
+  }> {
+    const config = getFacebookConfig();
+    const response = await this.client.get<{
+      data?: {
+        scopes?: string[];
+        granular_scopes?: { scope: string; target_ids?: string[] }[];
+      };
+    }>(GRAPH_HOST, `/debug_token`, {
+      accessToken: `${config.appId}|${config.appSecret}`,
+      params: { input_token: userAccessToken },
+    });
+    return {
+      scopes: response.data?.scopes ?? [],
+      granular: (response.data?.granular_scopes ?? []).map((entry) => ({
+        scope: entry.scope,
+        ...(entry.target_ids ? { targetIds: entry.target_ids } : {}),
+      })),
+    };
+  }
+
+  /**
    * Classic Facebook Login authorization URL with an explicit scope
    * set and redirect URI. Used by the Instagram connect flow, which
    * presents instagram scopes but returns to the Instagram callback.

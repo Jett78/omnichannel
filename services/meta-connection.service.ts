@@ -265,6 +265,18 @@ async function logMetaConnectDebug(
       `[meta-connect-debug] provider=${providerLabel} identity lookup failed; pages=${pages.length}`,
     );
   }
+  try {
+    const debug = await facebook.debugUserToken(userAccessToken);
+    const granular = debug.granular
+      .filter((entry) => entry.targetIds && entry.targetIds.length > 0)
+      .map((entry) => `${entry.scope}:[${(entry.targetIds ?? []).join(",")}]`)
+      .join(" ");
+    console.log(
+      `[meta-connect-debug] granted=${debug.scopes.join(",") || "-"} granular=${granular || "-"}`,
+    );
+  } catch {
+    console.log(`[meta-connect-debug] token debug lookup failed`);
+  }
 }
 
 export const metaConnectionService = {
