@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { loginSchema } from "@/lib/validations";
 
-export function LoginForm() {
+export function LoginForm({ nextPath }: { nextPath?: string | null }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -45,7 +45,14 @@ export function LoginForm() {
         setError(result.error.message ?? "Sign-in failed. Check your email and password.");
         return;
       }
-      // Route by workspace ownership: none → onboarding, else dashboard.
+      // An explicit post-auth destination (e.g. an invitation link)
+      // wins; otherwise route by workspace ownership: none →
+      // onboarding, else dashboard.
+      if (nextPath) {
+        router.push(nextPath);
+        router.refresh();
+        return;
+      }
       let destination = "/dashboard";
       try {
         const res = await fetch("/api/workspaces");
@@ -103,7 +110,10 @@ export function LoginForm() {
             <Link href="/forgot-password" className="underline underline-offset-4">
               Forgot password?
             </Link>
-            <Link href="/register" className="underline underline-offset-4">
+            <Link
+              href={nextPath ? `/register?next=${encodeURIComponent(nextPath)}` : "/register"}
+              className="underline underline-offset-4"
+            >
               Create account
             </Link>
           </div>

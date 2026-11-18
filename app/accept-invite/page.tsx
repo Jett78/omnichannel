@@ -65,7 +65,7 @@ function AcceptInviteInner() {
               ? "Checking your session…"
               : session
                 ? `Signed in as ${session.user.email}. The invitation must have been sent to this email address.`
-                : "Sign in (or create an account) with the email address the invitation was sent to, then come back here."}
+                : "Sign in (or create an account) with the email address the invitation was sent to — we'll bring you right back here to join."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -93,10 +93,16 @@ function AcceptInviteInner() {
           ) : (
             <div className="flex gap-2">
               <Button asChild className="flex-1">
-                <Link href="/login">Sign in</Link>
+                <Link href={`/login?next=${encodeURIComponent(`/accept-invite?token=${token}`)}`}>
+                  Sign in
+                </Link>
               </Button>
               <Button asChild variant="outline" className="flex-1">
-                <Link href="/register">Create account</Link>
+                <Link
+                  href={`/register?next=${encodeURIComponent(`/accept-invite?token=${token}`)}`}
+                >
+                  Create account
+                </Link>
               </Button>
             </div>
           )}

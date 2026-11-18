@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 import { registerSchema } from "@/lib/validations";
 
-export function RegisterForm() {
+export function RegisterForm({ nextPath }: { nextPath?: string | null }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -48,7 +48,7 @@ export function RegisterForm() {
         setError(result.error.message ?? "Registration failed. Please try again.");
         return;
       }
-      router.push("/onboarding");
+      router.push(nextPath ?? "/onboarding");
       router.refresh();
     } catch {
       setError("Something went wrong while creating your account. Please try again.");
@@ -104,7 +104,10 @@ export function RegisterForm() {
           </Button>
           <p className="text-muted-foreground text-center text-sm">
             Already have an account?{" "}
-            <Link href="/login" className="underline underline-offset-4">
+            <Link
+              href={nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login"}
+              className="underline underline-offset-4"
+            >
               Sign in
             </Link>
           </p>
