@@ -166,7 +166,7 @@ export function TeamManagement({
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="shadow-none">
+      <Card>
         <CardHeader>
           <CardTitle>Team members</CardTitle>
           <CardDescription>
@@ -312,7 +312,7 @@ export function TeamManagement({
       </Card>
 
       {can(currentRole, "members.invite") && invitations.length > 0 ? (
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <CardTitle>Pending invitations</CardTitle>
             <CardDescription>
@@ -378,7 +378,7 @@ export function TeamManagement({
         </Card>
       ) : null}
 
-      <Card className="shadow-none">
+      <Card>
         <CardHeader>
           <CardTitle>Teams</CardTitle>
           <CardDescription>Group members into teams inside this workspace.</CardDescription>

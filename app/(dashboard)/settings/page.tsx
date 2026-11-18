@@ -40,7 +40,7 @@ export default async function SettingsPage() {
         description={`Profile, workspace, team and preferences for ${active.name}.`}
       />
 
-      <Card className="shadow-none">
+      <Card>
         <CardHeader>
           <CardTitle>Profile</CardTitle>
           <CardDescription>Your account across every workspace you belong to.</CardDescription>
@@ -117,7 +117,7 @@ export default async function SettingsPage() {
 
       <NotificationPreferences />
 
-      <Card className="border-destructive/40 shadow-none">
+      <Card className="border-destructive/40">
         <CardHeader>
           <CardTitle className="text-destructive flex items-center gap-2">
             <TriangleAlert className="size-4" /> Danger zone

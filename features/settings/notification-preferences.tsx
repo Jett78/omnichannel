@@ -34,7 +34,7 @@ export function NotificationPreferences() {
   );
 
   return (
-    <Card className="shadow-none">
+    <Card>
       <CardHeader>
         <CardTitle>Notification preferences</CardTitle>
         <CardDescription>

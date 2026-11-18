@@ -19,14 +19,14 @@ import {
 import { PROVIDER_META } from "@/components/channel-icon";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import type { AnalyticsRange, RealAnalyticsData } from "@/features/analytics/real-data";
+import { cn } from "@/lib/utils";
+
+const RANGE_OPTIONS: Array<{ value: AnalyticsRange; label: string }> = [
+  { value: "7", label: "7D" },
+  { value: "30", label: "30D" },
+  { value: "90", label: "90D" },
+];
 
 function formatMinutes(minutes: number | null): string {
   if (minutes === null) return "—";
@@ -46,13 +46,21 @@ export function AnalyticsDashboard({
   const tickInterval = range === "7" ? 0 : range === "30" ? 4 : 14;
   const hasData = data.totals.conversationsInRange > 0;
 
-  const stats: Array<{ label: string; value: string }> = [
-    { label: "Open now", value: String(data.totals.openNow) },
-    { label: "Unassigned", value: String(data.totals.unassignedNow) },
-    { label: "Conversations", value: String(data.totals.conversationsInRange) },
-    { label: "Messages", value: String(data.totals.messagesInRange) },
-    { label: "Resolved", value: String(data.totals.resolvedInRange) },
-    { label: "Avg first response", value: formatMinutes(data.totals.avgResponseMinutes) },
+  const stats: Array<{ label: string; value: string; dot: string }> = [
+    { label: "Open now", value: String(data.totals.openNow), dot: "bg-indigo-500" },
+    { label: "Unassigned", value: String(data.totals.unassignedNow), dot: "bg-amber-500" },
+    {
+      label: "Conversations",
+      value: String(data.totals.conversationsInRange),
+      dot: "bg-violet-500",
+    },
+    { label: "Messages", value: String(data.totals.messagesInRange), dot: "bg-sky-500" },
+    { label: "Resolved", value: String(data.totals.resolvedInRange), dot: "bg-emerald-500" },
+    {
+      label: "Avg first response",
+      value: formatMinutes(data.totals.avgResponseMinutes),
+      dot: "bg-slate-400",
+    },
   ];
 
   return (
@@ -61,19 +69,30 @@ export function AnalyticsDashboard({
         title="Analytics"
         description="Volume, response times and team output across every channel — computed live from this workspace's real conversations."
         actions={
-          <Select
-            value={range}
-            onValueChange={(value) => router.push(`/analytics?range=${value}`)}
+          <div
+            className="bg-muted/70 flex rounded-lg p-0.5"
+            role="tablist"
+            aria-label="Date range"
           >
-            <SelectTrigger className="w-[150px]" aria-label="Date range">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
+            {RANGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={range === option.value}
+                title={`Last ${option.value} days`}
+                onClick={() => router.push(`/analytics?range=${option.value}`)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-xs font-medium transition-all",
+                  range === option.value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
         }
       />
 
@@ -84,19 +103,22 @@ export function AnalyticsDashboard({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat) => (
-          <Card key={stat.label} className="shadow-none">
-            <CardContent className="pt-4">
-              <p className="text-2xl font-semibold tracking-tight">{stat.value}</p>
-              <p className="text-muted-foreground pt-1 text-xs">{stat.label}</p>
+          <Card key={stat.label} className="gap-0 py-4 transition-shadow hover:shadow-md">
+            <CardContent className="px-4">
+              <p className="text-[26px] leading-none font-bold tracking-tight">{stat.value}</p>
+              <p className="text-muted-foreground flex items-center gap-1.5 pt-2 text-xs">
+                <span className={cn("size-2 shrink-0 rounded-full", stat.dot)} />
+                {stat.label}
+              </p>
             </CardContent>
           </Card>
         ))}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <CardTitle>Conversation trend</CardTitle>
             <CardDescription>Conversations started and resolved per day</CardDescription>
@@ -117,7 +139,7 @@ export function AnalyticsDashboard({
           </CardContent>
         </Card>
 
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <CardTitle>Conversations by channel</CardTitle>
             <CardDescription>Share of conversations started in the selected period</CardDescription>
@@ -173,7 +195,7 @@ export function AnalyticsDashboard({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <CardTitle>First response time</CardTitle>
             <CardDescription>
@@ -195,7 +217,7 @@ export function AnalyticsDashboard({
           </CardContent>
         </Card>
 
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <CardTitle>Agent leaderboard</CardTitle>
             <CardDescription>Assignments, resolutions and speed in the selected period</CardDescription>

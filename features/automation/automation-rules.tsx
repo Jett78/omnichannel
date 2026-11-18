@@ -39,7 +39,7 @@ export function AutomationRules() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {rules.map((rule) => (
-          <Card key={rule.id} className="shadow-none">
+          <Card key={rule.id}>
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2.5">

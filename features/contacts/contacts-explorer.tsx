@@ -72,7 +72,7 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
         }
       />
 
-      <Card className="shadow-none">
+      <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-center gap-2 pb-4">
             <div className="relative min-w-56 flex-1">
@@ -86,7 +86,7 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
               />
             </div>
             <Select value={channelFilter} onValueChange={setChannelFilter}>
-              <SelectTrigger className="w-[160px]" aria-label="Filter by channel">
+              <SelectTrigger className="w-full min-[480px]:w-[160px]" aria-label="Filter by channel">
                 <SelectValue placeholder="All channels" />
               </SelectTrigger>
               <SelectContent>
@@ -99,7 +99,7 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
               </SelectContent>
             </Select>
             <Select value={sort} onValueChange={(value) => setSort(value as SortMode)}>
-              <SelectTrigger className="w-[170px]" aria-label="Sort contacts">
+              <SelectTrigger className="w-full min-[480px]:w-[170px]" aria-label="Sort contacts">
                 <ArrowUpDown className="size-4" />
                 <SelectValue />
               </SelectTrigger>

@@ -124,7 +124,7 @@ export function MetaConnectionPanel({
         : "Choose the WhatsApp number to connect";
 
   return (
-    <Card className="border-indigo-200 shadow-none">
+    <Card className="border-indigo-200">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ChannelIcon provider={providerEnum} size="sm" />

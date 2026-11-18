@@ -60,26 +60,47 @@ export default async function DashboardPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         <StatCard
           label="Total conversations"
           value={String(total)}
           note={noDataNote}
           icon={MessagesSquare}
+          tone="violet"
         />
-        <StatCard label="Open conversations" value={String(open)} note={noDataNote} icon={Inbox} />
+        <StatCard
+          label="Open conversations"
+          value={String(open)}
+          note={noDataNote}
+          icon={Inbox}
+          tone="indigo"
+        />
         <StatCard
           label="Unassigned"
           value={String(unassigned)}
           note="Waiting for an agent"
           icon={UserX}
+          tone="amber"
         />
-        <StatCard label="Resolved" value={String(resolved)} note={noDataNote} icon={CheckCheck} />
-        <StatCard label="Avg. response time" value="—" note="No data yet" icon={Clock} />
+        <StatCard
+          label="Resolved"
+          value={String(resolved)}
+          note={noDataNote}
+          icon={CheckCheck}
+          tone="emerald"
+        />
+        <StatCard
+          label="Avg. response time"
+          value="—"
+          note="No data yet"
+          icon={Clock}
+          tone="sky"
+          className="col-span-2 xl:col-span-1"
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -93,7 +114,7 @@ export default async function DashboardPage() {
             <VolumeChart />
           </CardContent>
         </Card>
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -110,7 +131,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
               <CardTitle>Recent conversations</CardTitle>
@@ -150,7 +171,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-none">
+        <Card>
           <CardHeader>
             <CardTitle>Channel health</CardTitle>
             <CardDescription>
@@ -189,7 +210,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <Card className="shadow-none">
+      <Card>
         <CardHeader>
           <CardTitle>Your workspaces</CardTitle>
           <CardDescription>
@@ -198,7 +219,10 @@ export default async function DashboardPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {workspaces.map((workspace) => (
-            <div key={workspace.id} className="flex items-center justify-between text-sm">
+            <div
+              key={workspace.id}
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg px-2 py-1.5 text-sm hover:bg-accent/50"
+            >
               <span>
                 <span className="font-medium">{workspace.name}</span>{" "}
                 <span className="text-muted-foreground">/{workspace.slug}</span>

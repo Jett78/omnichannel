@@ -65,7 +65,7 @@ export function WorkspaceSettings({
   }
 
   return (
-    <Card className="shadow-none">
+    <Card>
       <CardHeader>
         <CardTitle>Workspace profile</CardTitle>
         <CardDescription>

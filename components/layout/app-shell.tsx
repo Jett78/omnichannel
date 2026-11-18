@@ -63,7 +63,7 @@ export function AppShell({
           />
         </div>
       ) : null}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="bg-muted/40 flex min-w-0 flex-1 flex-col">
         <Header
           user={user}
           notifications={notifications}
@@ -71,7 +71,9 @@ export function AppShell({
           searchConversations={searchConversations}
           onMenuClick={() => setMobileOpen(true)}
         />
-        <main className={cn("min-w-0 flex-1", fullBleed ? "" : "px-6 py-6")}>{children}</main>
+        <main className={cn("min-w-0 flex-1", fullBleed ? "" : "px-4 py-5 sm:px-6 sm:py-6 lg:px-8")}>
+          {children}
+        </main>
       </div>
     </div>
   );

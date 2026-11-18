@@ -56,8 +56,22 @@ function AcceptInviteInner() {
   }
 
   return (
-    <div className="bg-muted/40 flex min-h-screen items-center justify-center p-6">
-      <Card className="w-full max-w-md">
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-6 overflow-hidden bg-gradient-to-br from-indigo-100 via-slate-50 to-violet-100 p-6 dark:from-indigo-950 dark:via-neutral-950 dark:to-violet-950">
+      <div
+        aria-hidden
+        className="absolute -top-24 -left-24 size-72 rounded-full bg-indigo-400/20 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="absolute -right-24 -bottom-24 size-72 rounded-full bg-violet-400/20 blur-3xl"
+      />
+      <div className="relative flex items-center gap-2">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white shadow-md">
+          U
+        </span>
+        <span className="text-lg font-semibold">Unified Inbox</span>
+      </div>
+      <Card className="relative w-full max-w-md">
         <CardHeader>
           <CardTitle>Accept invitation</CardTitle>
           <CardDescription>

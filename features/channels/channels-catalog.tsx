@@ -321,7 +321,7 @@ export function ChannelsCatalog({
       ) : null}
 
       {mockEnabled && workspaceId ? (
-        <Card className="border-dashed shadow-none">
+        <Card className="border-dashed">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FlaskConical className="size-5 text-zinc-500" />
