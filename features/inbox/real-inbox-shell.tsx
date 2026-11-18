@@ -1131,9 +1131,9 @@ export function RealInboxShell({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex gap-2 px-4 pb-3">
+        <div className="grid grid-cols-2 gap-2 px-4 pb-3">
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="h-8 flex-1" aria-label="Filter by status">
+            <SelectTrigger className="h-8 w-full min-w-0" aria-label="Filter by status">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1145,7 +1145,7 @@ export function RealInboxShell({
             </SelectContent>
           </Select>
           <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
-            <SelectTrigger className="h-8 flex-1" aria-label="Sort conversations">
+            <SelectTrigger className="h-8 w-full min-w-0" aria-label="Sort conversations">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1155,19 +1155,21 @@ export function RealInboxShell({
             </SelectContent>
           </Select>
           {knownChannels.length > 1 ? (
-            <Select value={channelFilter} onValueChange={setChannelFilter}>
-              <SelectTrigger className="h-8 flex-1" aria-label="Filter by channel">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All channels</SelectItem>
-                {knownChannels.map((channel) => (
-                  <SelectItem key={channel.id} value={channel.id}>
-                    {channel.displayName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="col-span-2">
+              <Select value={channelFilter} onValueChange={setChannelFilter}>
+                <SelectTrigger className="h-8 w-full min-w-0" aria-label="Filter by channel">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All channels</SelectItem>
+                  {knownChannels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      {channel.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           ) : null}
         </div>
         <ScrollArea className="min-h-0 flex-1">
@@ -1297,7 +1299,11 @@ export function RealInboxShell({
               {selected.status === "OPEN" || selected.status === "PENDING" ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                    >
                       <AlarmClock className="size-3.5" /> Snooze
                     </Button>
                   </DropdownMenuTrigger>
@@ -1324,11 +1330,20 @@ export function RealInboxShell({
                 </DropdownMenu>
               ) : null}
               {selected.status === "RESOLVED" || selected.status === "SNOOZED" ? (
-                <Button variant="outline" size="sm" onClick={() => void changeStatus("reopen")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/20"
+                  onClick={() => void changeStatus("reopen")}
+                >
                   {selected.status === "SNOOZED" ? "Unsnooze" : "Reopen"}
                 </Button>
               ) : (
-                <Button variant="outline" size="sm" onClick={() => void changeStatus("resolve")}>
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                  onClick={() => void changeStatus("resolve")}
+                >
                   Resolve
                 </Button>
               )}
@@ -1508,8 +1523,8 @@ export function RealInboxShell({
                       className={cn(
                         "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
                         composerMode === "reply"
-                          ? "bg-accent text-foreground"
-                          : "text-muted-foreground",
+                          ? "bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-100"
+                          : "text-muted-foreground hover:text-indigo-700",
                       )}
                     >
                       <Send className="size-3.5" /> Reply
@@ -1520,8 +1535,8 @@ export function RealInboxShell({
                       className={cn(
                         "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
                         composerMode === "note"
-                          ? "bg-amber-100 text-amber-900"
-                          : "text-muted-foreground",
+                          ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100"
+                          : "text-muted-foreground hover:text-amber-700",
                       )}
                     >
                       <StickyNote className="size-3.5" /> Private note
@@ -1533,8 +1548,8 @@ export function RealInboxShell({
                         className={cn(
                           "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
                           composerMode === "template"
-                            ? "bg-accent text-foreground"
-                            : "text-muted-foreground",
+                            ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100"
+                            : "text-muted-foreground hover:text-emerald-700",
                         )}
                       >
                         <FileText className="size-3.5" /> Template
@@ -1684,7 +1699,7 @@ export function RealInboxShell({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-8 shrink-0"
+                        className="size-8 shrink-0 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-500/15 dark:hover:text-indigo-300"
                         aria-label="Attach a file"
                         title="Attach an image or file (max 16 MB)"
                         onClick={() => fileInputRef.current?.click()}
@@ -1696,7 +1711,7 @@ export function RealInboxShell({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-8 shrink-0"
+                        className="size-8 shrink-0 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-500/15 dark:hover:text-amber-300"
                         aria-label="Insert emoji"
                         title="Insert emoji"
                         onClick={() => setEmojiOpen((open) => !open)}
@@ -1708,7 +1723,7 @@ export function RealInboxShell({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-8 shrink-0"
+                        className="size-8 shrink-0 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-500/15 dark:hover:text-violet-300"
                         aria-label="Saved replies"
                         title="Saved replies — or type / in the message box"
                         onClick={() => setCannedManageOpen(true)}
@@ -1724,7 +1739,14 @@ export function RealInboxShell({
                           : `Sending as ${currentUserName}`}
                     </span>
                     <Button
-                      className="ml-auto"
+                      className={cn(
+                        "ml-auto text-white",
+                        composerMode === "note"
+                          ? "bg-amber-500 hover:bg-amber-600"
+                          : composerMode === "template"
+                            ? "bg-emerald-600 hover:bg-emerald-700"
+                            : "bg-indigo-600 hover:bg-indigo-700",
+                      )}
                       onClick={() => void send()}
                       disabled={
                         composerMode === "template"
@@ -1827,7 +1849,7 @@ export function RealInboxShell({
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-2 w-full"
+                className="mt-2 w-full border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100 hover:text-violet-900 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
                 onClick={() => void assign(currentUserId)}
               >
                 Assign to me
@@ -1872,6 +1894,7 @@ export function RealInboxShell({
                 <Button
                   size="sm"
                   variant="outline"
+                  className="border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 hover:text-indigo-900 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200 dark:hover:bg-indigo-500/20"
                   onClick={() => void addTag()}
                   disabled={!tagInput.trim()}
                 >
@@ -1887,7 +1910,7 @@ export function RealInboxShell({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 px-2 text-xs"
+                    className="h-6 px-2 text-xs text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 dark:text-indigo-300 dark:hover:bg-indigo-500/15"
                     onClick={startContactEdit}
                   >
                     Edit
