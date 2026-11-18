@@ -57,10 +57,17 @@ export const FACEBOOK_SCOPES = [
   "pages_read_engagement",
   "pages_messaging",
   "pages_manage_metadata",
+  // Lets the connect flow discover Pages the user reaches through a
+  // business portfolio (owned_pages / client_pages) — /me/accounts
+  // omits those when the user has no direct Page role.
+  "business_management",
 ] as const;
 
 export const FACEBOOK_SUBSCRIBED_FIELDS =
   "messages,messaging_postbacks,message_deliveries,message_reads";
+
+const PAGE_FIELDS =
+  "id,name,category,access_token,tasks,instagram_business_account{id,username,name,profile_picture_url}";
 
 export interface MetaInstagramAccountSummary {
   id: string;
@@ -222,47 +229,6 @@ export class FacebookProvider implements IMessagingProvider {
     return `https://www.facebook.com/${config.graphApiVersion}/dialog/oauth?${params.toString()}`;
   }
 
-  /** The authorizing user's own id + name (GET /me). Diagnostic aid. */
-  async getUserIdentity(
-    userAccessToken: string,
-  ): Promise<{ id: string; name?: string }> {
-    const me = await this.client.get<{ id: string; name?: string }>(
-      GRAPH_HOST,
-      `/${this.version()}/me`,
-      { accessToken: userAccessToken, params: { fields: "id,name" } },
-    );
-    return { id: me.id, ...(me.name ? { name: me.name } : {}) };
-  }
-
-  /**
-   * Inspect a user token with the app access token (GET /debug_token):
-   * which scopes were actually granted, and any per-target granular
-   * restrictions (e.g. pages_show_list limited to specific Pages).
-   * Diagnostic aid — the caller must never log the token itself.
-   */
-  async debugUserToken(userAccessToken: string): Promise<{
-    scopes: string[];
-    granular: { scope: string; targetIds?: string[] }[];
-  }> {
-    const config = getFacebookConfig();
-    const response = await this.client.get<{
-      data?: {
-        scopes?: string[];
-        granular_scopes?: { scope: string; target_ids?: string[] }[];
-      };
-    }>(GRAPH_HOST, `/debug_token`, {
-      accessToken: `${config.appId}|${config.appSecret}`,
-      params: { input_token: userAccessToken },
-    });
-    return {
-      scopes: response.data?.scopes ?? [],
-      granular: (response.data?.granular_scopes ?? []).map((entry) => ({
-        scope: entry.scope,
-        ...(entry.target_ids ? { targetIds: entry.target_ids } : {}),
-      })),
-    };
-  }
-
   /**
    * Classic Facebook Login authorization URL with an explicit scope
    * set and redirect URI. Used by the Instagram connect flow, which
@@ -334,6 +300,43 @@ export class FacebookProvider implements IMessagingProvider {
    * (cursor-based, max 5 result pages). Page access tokens in the
    * result are SERVER-ONLY.
    */
+  private shapePageAccount(page: GraphPage): MetaPageAccount {
+    const tasks = page.tasks ?? [];
+    const canManage = tasks.includes("MANAGE") || tasks.includes("MODERATE");
+    const eligible = Boolean(page.access_token) && canManage;
+    return {
+      id: page.id,
+      name: page.name ?? page.id,
+      ...(page.category ? { category: page.category } : {}),
+      pageAccessToken: page.access_token ?? "",
+      tasks,
+      eligible,
+      ...(!eligible
+        ? {
+            ineligibleReason: !page.access_token
+              ? "Meta did not return a Page access token for this Page — your Facebook user may not administer it."
+              : "Your Facebook user does not have a Page role that can manage Messenger for this Page (a MANAGE or MODERATE task is required).",
+          }
+        : {}),
+      ...(page.instagram_business_account
+        ? {
+            instagramAccount: {
+              id: page.instagram_business_account.id,
+              ...(page.instagram_business_account.username
+                ? { username: page.instagram_business_account.username }
+                : {}),
+              ...(page.instagram_business_account.name
+                ? { name: page.instagram_business_account.name }
+                : {}),
+              ...(page.instagram_business_account.profile_picture_url
+                ? { profilePictureUrl: page.instagram_business_account.profile_picture_url }
+                : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
   async listAccessiblePages(userAccessToken: string): Promise<MetaPageAccount[]> {
     const pages: MetaPageAccount[] = [];
     let after: string | undefined;
@@ -345,53 +348,71 @@ export class FacebookProvider implements IMessagingProvider {
           accessToken: userAccessToken,
           ...this.proofOptions(),
           params: {
-            fields:
-              "id,name,category,access_token,tasks,instagram_business_account{id,username,name,profile_picture_url}",
+            fields: PAGE_FIELDS,
             limit: 100,
             ...(after ? { after } : {}),
           },
         },
       );
       for (const page of response.data ?? []) {
-        const tasks = page.tasks ?? [];
-        const canManage = tasks.includes("MANAGE") || tasks.includes("MODERATE");
-        const eligible = Boolean(page.access_token) && canManage;
-        pages.push({
-          id: page.id,
-          name: page.name ?? page.id,
-          ...(page.category ? { category: page.category } : {}),
-          pageAccessToken: page.access_token ?? "",
-          tasks,
-          eligible,
-          ...(!eligible
-            ? {
-                ineligibleReason: !page.access_token
-                  ? "Meta did not return a Page access token for this Page — your Facebook user may not administer it."
-                  : "Your Facebook user does not have a Page role that can manage Messenger for this Page (a MANAGE or MODERATE task is required).",
-              }
-            : {}),
-          ...(page.instagram_business_account
-            ? {
-                instagramAccount: {
-                  id: page.instagram_business_account.id,
-                  ...(page.instagram_business_account.username
-                    ? { username: page.instagram_business_account.username }
-                    : {}),
-                  ...(page.instagram_business_account.name
-                    ? { name: page.instagram_business_account.name }
-                    : {}),
-                  ...(page.instagram_business_account.profile_picture_url
-                    ? { profilePictureUrl: page.instagram_business_account.profile_picture_url }
-                    : {}),
-                },
-              }
-            : {}),
-        });
+        pages.push(this.shapePageAccount(page));
       }
       if (!response.paging?.next || !response.paging.cursors?.after) break;
       after = response.paging.cursors.after;
     }
+    // /me/accounts only lists Pages where the user holds a DIRECT Page
+    // role. Pages reached through a business portfolio (the user is a
+    // business admin but has no direct role — common once a Page is
+    // claimed by a business) are silently omitted even when the token
+    // is explicitly granted for them, so discover those through the
+    // businesses the user belongs to. Best-effort: without the
+    // business_management permission this simply yields nothing.
+    const seen = new Set(pages.map((page) => page.id));
+    for (const page of await this.listBusinessPages(userAccessToken)) {
+      if (!seen.has(page.id)) {
+        seen.add(page.id);
+        pages.push(page);
+      }
+    }
     return pages;
+  }
+
+  private async listBusinessPages(userAccessToken: string): Promise<MetaPageAccount[]> {
+    try {
+      const businesses = await this.client.get<GraphListResponse<{ id: string }>>(
+        GRAPH_HOST,
+        `/${this.version()}/me/businesses`,
+        {
+          accessToken: userAccessToken,
+          ...this.proofOptions(),
+          params: { fields: "id,name", limit: 25 },
+        },
+      );
+      const pages: MetaPageAccount[] = [];
+      for (const business of (businesses.data ?? []).slice(0, 5)) {
+        for (const edge of ["owned_pages", "client_pages"] as const) {
+          try {
+            const response = await this.client.get<GraphListResponse<GraphPage>>(
+              GRAPH_HOST,
+              `/${this.version()}/${business.id}/${edge}`,
+              {
+                accessToken: userAccessToken,
+                ...this.proofOptions(),
+                params: { fields: PAGE_FIELDS, limit: 100 },
+              },
+            );
+            for (const page of response.data ?? []) {
+              pages.push(this.shapePageAccount(page));
+            }
+          } catch {
+            // A single business/edge failing must not hide the rest.
+          }
+        }
+      }
+      return pages;
+    } catch {
+      return [];
+    }
   }
 
   async subscribePage(pageId: string, pageAccessToken: string): Promise<void> {

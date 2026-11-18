@@ -147,9 +147,26 @@ const FB_PAGES_RESPONSE = {
   paging: {},
 };
 
+/** A Page reachable only through a business portfolio: it never
+ * appears in /me/accounts (the user has no direct Page role), only in
+ * the business's owned_pages. Mirrors the Biolife case of 2026-11-18. */
+const FB_BIZ_OWNED_PAGE = {
+  id: "page-3000",
+  name: "Biz Owned Page",
+  category: "Store",
+  access_token: "page-token-3000",
+  tasks: ["MANAGE", "MODERATE", "CREATE_CONTENT", "MESSAGING"],
+  instagram_business_account: {
+    id: "ig-biz-3000",
+    username: "bizowned.shop",
+    name: "Biz Owned Shop",
+  },
+};
+
 /** Mutable fake state: the page-autherr send route fails with a Meta
- * 190 (dead token) until a test flips this off to simulate recovery. */
-const fakeState = { authErrorPageFails: true };
+ * 190 (dead token) until a test flips this off to simulate recovery.
+ * businessPagesEnabled gates the /me/businesses + owned_pages routes. */
+const fakeState = { authErrorPageFails: true, businessPagesEnabled: false };
 
 function facebookHandler(call: RecordedCall): { status?: number; json: unknown } | null {
   const url = new URL(call.url);
@@ -170,6 +187,22 @@ function facebookHandler(call: RecordedCall): { status?: number; json: unknown }
     };
   }
   if (call.method === "GET" && path === "/v25.0/me/accounts") return { json: FB_PAGES_RESPONSE };
+  if (call.method === "GET" && path === "/v25.0/me/businesses") {
+    return {
+      json: fakeState.businessPagesEnabled
+        ? { data: [{ id: "biz-900", name: "Acme Business" }] }
+        : { data: [] },
+    };
+  }
+  if (call.method === "GET" && path === "/v25.0/biz-900/owned_pages") {
+    return { json: { data: fakeState.businessPagesEnabled ? [FB_BIZ_OWNED_PAGE] : [] } };
+  }
+  if (call.method === "GET" && path === "/v25.0/biz-900/client_pages") {
+    return { json: { data: [] } };
+  }
+  if (call.method === "POST" && path === "/v25.0/page-3000/subscribed_apps") {
+    return { json: { success: true } };
+  }
   if (call.method === "POST" && path === "/v25.0/page-1001/subscribed_apps") {
     return { json: { success: true } };
   }
@@ -1039,6 +1072,93 @@ async function main(): Promise<void> {
     } finally {
       if (savedIgId !== undefined) process.env.INSTAGRAM_APP_ID = savedIgId;
       if (savedIgSecret !== undefined) process.env.INSTAGRAM_APP_SECRET = savedIgSecret;
+    }
+  }
+
+  // ── 7c. Business-owned Page discovery (not in /me/accounts) ───────────────
+  console.log("7c. Business-owned Page discovery");
+  {
+    fakeState.businessPagesEnabled = true;
+    try {
+      const deps = { facebook: fbProvider };
+      const start = await metaConnectionService.startFacebookConnect(userA.id, wsA.id, deps);
+      const callback = await metaConnectionService.handleFacebookCallback(
+        userA.id,
+        start.state,
+        "auth-code-biz",
+        deps,
+      );
+      const view = await metaConnectionService.getConnectionSession(
+        userA.id,
+        wsA.id,
+        callback.sessionId,
+      );
+      const bizAccount = view.accounts.find((a) => a.externalAccountId === "page-3000");
+      assert(
+        "FB biz discovery: business-owned Page listed + eligible alongside /me/accounts Pages",
+        bizAccount?.displayName === "Biz Owned Page" &&
+          bizAccount.eligible === true &&
+          view.accounts.some((a) => a.externalAccountId === "page-1001"),
+        JSON.stringify(view.accounts.map((a) => a.externalAccountId)),
+      );
+      const selected = await metaConnectionService.selectConnectionAccount(
+        userA.id,
+        wsA.id,
+        callback.sessionId,
+        "page-3000",
+        deps,
+      );
+      const credential = await channelCredentialService.getDecryptedChannelCredentialForServer(
+        selected.channel.id,
+      );
+      assert(
+        "FB biz discovery: select connects the business-owned Page with its token",
+        selected.channel.status === "CONNECTED" &&
+          selected.channel.externalAccountId === "page-3000" &&
+          credential?.accessToken === "page-token-3000" &&
+          selected.subscriptionWarning === undefined,
+      );
+
+      // The same discovery feeds Instagram: the business Page's linked
+      // IG account becomes selectable in the facebook-login flow.
+      const savedIgId = process.env.INSTAGRAM_APP_ID;
+      const savedIgSecret = process.env.INSTAGRAM_APP_SECRET;
+      delete process.env.INSTAGRAM_APP_ID;
+      delete process.env.INSTAGRAM_APP_SECRET;
+      try {
+        const igDeps = {
+          facebook: fbProvider,
+          instagram: new InstagramProvider(fbFake.fetchImpl),
+        };
+        const igStart = await metaConnectionService.startInstagramConnect(
+          userA.id,
+          wsA.id,
+          igDeps,
+        );
+        const igCallback = await metaConnectionService.handleInstagramCallback(
+          userA.id,
+          igStart.state,
+          "auth-code-biz-ig",
+          igDeps,
+        );
+        const igView = await metaConnectionService.getConnectionSession(
+          userA.id,
+          wsA.id,
+          igCallback.sessionId,
+        );
+        const igAccount = igView.accounts.find((a) => a.externalAccountId === "ig-biz-3000");
+        assert(
+          "IG biz discovery: business Page's Instagram account is eligible via its Page",
+          igAccount?.eligible === true &&
+            (igAccount?.detail ?? "").includes("Biz Owned Page"),
+          JSON.stringify(igView.accounts),
+        );
+      } finally {
+        if (savedIgId !== undefined) process.env.INSTAGRAM_APP_ID = savedIgId;
+        if (savedIgSecret !== undefined) process.env.INSTAGRAM_APP_SECRET = savedIgSecret;
+      }
+    } finally {
+      fakeState.businessPagesEnabled = false;
     }
   }
 
