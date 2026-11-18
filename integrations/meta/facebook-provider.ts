@@ -222,7 +222,27 @@ export class FacebookProvider implements IMessagingProvider {
     return `https://www.facebook.com/${config.graphApiVersion}/dialog/oauth?${params.toString()}`;
   }
 
-  async exchangeCodeForUserToken(code: string): Promise<{ accessToken: string; expiresAt?: Date }> {
+  /**
+   * Facebook Login for Business authorization URL (configuration-based
+   * login: the configuration carries the permissions/assets, so no
+   * `scope` parameter is sent). Used by Instagram Unified Login.
+   */
+  buildBusinessLoginUrl(state: string, configId: string, redirectUri: string): string {
+    const config = getFacebookConfig();
+    const params = new URLSearchParams({
+      client_id: config.appId,
+      config_id: configId,
+      redirect_uri: redirectUri,
+      state,
+      response_type: "code",
+    });
+    return `https://www.facebook.com/${config.graphApiVersion}/dialog/oauth?${params.toString()}`;
+  }
+
+  async exchangeCodeForUserToken(
+    code: string,
+    redirectUriOverride?: string,
+  ): Promise<{ accessToken: string; expiresAt?: Date }> {
     const config = getFacebookConfig();
     const response = await this.client.post<GraphTokenResponse>(
       GRAPH_HOST,
@@ -231,7 +251,7 @@ export class FacebookProvider implements IMessagingProvider {
         body: {
           client_id: config.appId,
           client_secret: config.appSecret,
-          redirect_uri: config.redirectUri,
+          redirect_uri: redirectUriOverride ?? config.redirectUri,
           code,
         },
       },

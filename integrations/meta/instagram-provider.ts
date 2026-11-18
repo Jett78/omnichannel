@@ -18,9 +18,11 @@ import type {
 } from "@/types/messaging";
 
 import {
+  getFacebookConfig,
   getInstagramConfig,
   instagramAppSecret,
   metaGraphApiVersion,
+  type FacebookMetaConfig,
   type InstagramMetaConfig,
 } from "@/integrations/meta/meta-config";
 import {
@@ -49,10 +51,20 @@ import {
  * Instagram product's own credentials from the Meta app dashboard —
  * NOT the Facebook app secret.
  *
+ * A second auth model is supported per channel (config.authModel):
+ * "facebook-unified-login" — newer Meta apps no longer offer Instagram
+ * Login at all; Instagram connects through Facebook Login for Business
+ * (Unified Login) instead. Those channels store the linked Facebook
+ * Page's access token as the credential and talk to
+ * graph.facebook.com, sending via the Page edge (/{page-id}/messages)
+ * while the channel's externalAccountId stays the Instagram account
+ * id. See transportFor() below.
+ *
  * Messaging window: 24h standard window, enforced by the engine.
  */
 
 const GRAPH_HOST = "graph.instagram.com" as const;
+const FB_GRAPH_HOST = "graph.facebook.com" as const;
 const API_HOST = "api.instagram.com" as const;
 
 export const INSTAGRAM_SCOPES = [
@@ -206,6 +218,53 @@ export class InstagramProvider implements IMessagingProvider {
     return cfg.appsecretProof ? { appSecret: cfg.appSecret, appsecretProof: true } : {};
   }
 
+  private facebookProofOptions(config?: FacebookMetaConfig): {
+    appSecret?: string;
+    appsecretProof?: boolean;
+  } {
+    let cfg = config;
+    if (!cfg) {
+      try {
+        cfg = getFacebookConfig();
+      } catch {
+        return {};
+      }
+    }
+    return cfg.appsecretProof ? { appSecret: cfg.appSecret, appsecretProof: true } : {};
+  }
+
+  /**
+   * Per-channel transport: Instagram Login channels talk to
+   * graph.instagram.com with the account token and address edges by
+   * the Instagram account id. Unified Login channels talk to
+   * graph.facebook.com with the linked Page's token and address
+   * send/conversation edges by the PAGE id (the Instagram account id
+   * remains the channel's externalAccountId and the webhook key).
+   */
+  private transportFor(channel: ChannelContext): {
+    host: typeof GRAPH_HOST | typeof FB_GRAPH_HOST;
+    baseId: string;
+    unified: boolean;
+    proof: { appSecret?: string; appsecretProof?: boolean };
+  } {
+    const config = channel.config ?? {};
+    const pageId = typeof config.pageId === "string" ? config.pageId : undefined;
+    if (config.authModel === "facebook-unified-login" && pageId) {
+      return {
+        host: FB_GRAPH_HOST,
+        baseId: pageId,
+        unified: true,
+        proof: this.facebookProofOptions(),
+      };
+    }
+    return {
+      host: GRAPH_HOST,
+      baseId: channel.externalAccountId,
+      unified: false,
+      proof: this.proofOptions(),
+    };
+  }
+
   // ─── Instagram Login OAuth (used by services/meta-connection.service.ts) ──
 
   buildAuthUrl(state: string): string {
@@ -325,6 +384,40 @@ export class InstagramProvider implements IMessagingProvider {
     );
   }
 
+  /**
+   * Unified Login: subscribe the linked Facebook Page to the app's
+   * webhooks with the Page access token (same subscribed_apps edge and
+   * field set as Messenger — Instagram message/delivery/read events
+   * for Facebook-Login accounts flow through it).
+   */
+  async subscribeViaPage(pageId: string, pageAccessToken: string): Promise<void> {
+    const response = await this.client.post<GraphSuccessResponse>(
+      FB_GRAPH_HOST,
+      `/${this.version()}/${pageId}/subscribed_apps`,
+      {
+        accessToken: pageAccessToken,
+        ...this.facebookProofOptions(),
+        params: {
+          subscribed_fields: "messages,messaging_postbacks,message_deliveries,message_reads",
+        },
+      },
+    );
+    if (response.success !== true) {
+      throw new MetaGraphError(
+        `Webhook subscription for Page ${pageId} was not confirmed by Meta`,
+        { status: 502 },
+      );
+    }
+  }
+
+  async unsubscribeViaPage(pageId: string, pageAccessToken: string): Promise<void> {
+    await this.client.del<GraphSuccessResponse>(
+      FB_GRAPH_HOST,
+      `/${this.version()}/${pageId}/subscribed_apps`,
+      { accessToken: pageAccessToken, ...this.facebookProofOptions() },
+    );
+  }
+
   // ─── IMessagingProvider ───────────────────────────────────────────────────
 
   async connectAccount(): Promise<ConnectResult> {
@@ -340,7 +433,12 @@ export class InstagramProvider implements IMessagingProvider {
     // unreachable or the token is already invalid.
     try {
       if (channel.credentials.accessToken) {
-        await this.unsubscribeAccount(channel.credentials.accessToken);
+        const transport = this.transportFor(channel);
+        if (transport.unified) {
+          await this.unsubscribeViaPage(transport.baseId, channel.credentials.accessToken);
+        } else {
+          await this.unsubscribeAccount(channel.credentials.accessToken);
+        }
       }
     } catch (error) {
       console.warn(
@@ -411,12 +509,13 @@ export class InstagramProvider implements IMessagingProvider {
       new Blob([new Uint8Array(media.bytes)], { type: media.mimeType }),
       media.fileName,
     );
+    const transport = this.transportFor(channel);
     const response = await this.client.postMultipart<{ attachment_id?: string }>(
-      GRAPH_HOST,
-      `/${this.version()}/${channel.externalAccountId}/message_attachments`,
+      transport.host,
+      `/${this.version()}/${transport.baseId}/message_attachments`,
       {
         accessToken: channel.credentials.accessToken,
-        ...this.proofOptions(),
+        ...transport.proof,
         formData,
       },
     );
@@ -434,14 +533,14 @@ export class InstagramProvider implements IMessagingProvider {
     message: OutboundMessage;
   }): Promise<{ externalMessageId: string }> {
     const { channel, toExternalId, message } = input;
-    const igAccountId = channel.externalAccountId;
+    const transport = this.transportFor(channel);
     const sendOne = async (messageBody: Record<string, unknown>): Promise<string> => {
       const response = await this.client.post<SendMessageResponse>(
-        GRAPH_HOST,
-        `/${this.version()}/${igAccountId}/messages`,
+        transport.host,
+        `/${this.version()}/${transport.baseId}/messages`,
         {
           accessToken: channel.credentials.accessToken,
-          ...this.proofOptions(),
+          ...transport.proof,
           body: {
             recipient: { id: toExternalId },
             messaging_type: "RESPONSE",
@@ -486,12 +585,13 @@ export class InstagramProvider implements IMessagingProvider {
   }): Promise<ImportedThread[]> {
     const { channel, conversationLimit, messageLimit } = input;
     const igAccountId = channel.externalAccountId;
+    const transport = this.transportFor(channel);
     const response = await this.client.get<GraphListResponse<GraphConversationWithMessages>>(
-      GRAPH_HOST,
-      `/${this.version()}/${igAccountId}/conversations`,
+      transport.host,
+      `/${this.version()}/${transport.baseId}/conversations`,
       {
         accessToken: channel.credentials.accessToken,
-        ...this.proofOptions(),
+        ...transport.proof,
         params: {
           platform: "instagram",
           fields: `id,participants{id,username,name},messages.limit(${messageLimit}){id,message,from{id,username,name},created_time,attachments{data{id,mime_type,name,size,image_data{url},video_data{url},file_url}}}`,
@@ -551,12 +651,13 @@ export class InstagramProvider implements IMessagingProvider {
     options?: { limit?: number },
   ): Promise<NormalizedConversation[]> {
     const igAccountId = channel.externalAccountId;
+    const transport = this.transportFor(channel);
     const response = await this.client.get<GraphListResponse<GraphConversation>>(
-      GRAPH_HOST,
-      `/${this.version()}/${igAccountId}/conversations`,
+      transport.host,
+      `/${this.version()}/${transport.baseId}/conversations`,
       {
         accessToken: channel.credentials.accessToken,
-        ...this.proofOptions(),
+        ...transport.proof,
         params: {
           platform: "instagram",
           fields: "id,participants{id,username},updated_time",
@@ -591,12 +692,13 @@ export class InstagramProvider implements IMessagingProvider {
     options?: { limit?: number },
   ): Promise<NormalizedInboundMessage[]> {
     const igAccountId = channel.externalAccountId;
+    const transport = this.transportFor(channel);
     const response = await this.client.get<GraphListResponse<GraphThreadMessage>>(
-      GRAPH_HOST,
+      transport.host,
       `/${this.version()}/${externalThreadId}/messages`,
       {
         accessToken: channel.credentials.accessToken,
-        ...this.proofOptions(),
+        ...transport.proof,
         params: {
           fields: "id,message,from{id,username},created_time,attachments",
           limit: options?.limit ?? 25,
@@ -635,12 +737,13 @@ export class InstagramProvider implements IMessagingProvider {
     // Best-effort: Instagram profile lookups can fail for users who
     // have not messaged recently; a failed lookup must not break ingest.
     try {
+      const transport = this.transportFor(channel);
       const profile = await this.client.get<GraphContactProfile>(
-        GRAPH_HOST,
+        transport.host,
         `/${this.version()}/${externalUserId}`,
         {
           accessToken: channel.credentials.accessToken,
-          ...this.proofOptions(),
+          ...transport.proof,
           params: { fields: "name,username,profile_pic" },
         },
       );
@@ -655,12 +758,13 @@ export class InstagramProvider implements IMessagingProvider {
   }
 
   async sendTyping(channel: ChannelContext, toExternalId: string): Promise<void> {
+    const transport = this.transportFor(channel);
     await this.client.post<GraphSuccessResponse>(
-      GRAPH_HOST,
-      `/${this.version()}/${channel.externalAccountId}/messages`,
+      transport.host,
+      `/${this.version()}/${transport.baseId}/messages`,
       {
         accessToken: channel.credentials.accessToken,
-        ...this.proofOptions(),
+        ...transport.proof,
         body: { recipient: { id: toExternalId }, sender_action: "typing_on" },
       },
     );

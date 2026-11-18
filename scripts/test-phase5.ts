@@ -912,6 +912,135 @@ async function main(): Promise<void> {
   }
 
   // ── 8. Webhook pipeline + delivery/read status application ─────────────────
+  // ── 7b. Instagram Unified Login flow (newer Meta apps) ─────────────────────
+  console.log("7b. Instagram Unified Login flow");
+  {
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID = "test-ig-config-1";
+    try {
+      // The unified flow's Instagram provider talks to
+      // graph.facebook.com, so its test double is backed by the
+      // Facebook fake fetch (in production both use the real fetch).
+      const deps = { facebook: fbProvider, instagram: new InstagramProvider(fbFake.fetchImpl) };
+      const start = await metaConnectionService.startInstagramConnect(userA.id, wsA.id, deps);
+      assert(
+        "IG unified: auth URL is the Facebook dialog with config_id + Instagram redirect",
+        start.authUrl.startsWith("https://www.facebook.com/v25.0/dialog/oauth?") &&
+          start.authUrl.includes("config_id=test-ig-config-1") &&
+          start.authUrl.includes("oauth%2Finstagram%2Fcallback") &&
+          !start.authUrl.includes("instagram.com"),
+        start.authUrl,
+      );
+      const fbCallsBefore = fbFake.calls.length;
+      const callback = await metaConnectionService.handleInstagramCallback(
+        userA.id,
+        start.state,
+        "ig-unified-code",
+        deps,
+      );
+      const exchangeCall = fbFake.calls
+        .slice(fbCallsBefore)
+        .find((c) => c.method === "POST" && c.url.includes("/oauth/access_token"));
+      assert(
+        "IG unified: code exchanged on graph.facebook.com with the Instagram redirect_uri",
+        Boolean(exchangeCall) && (exchangeCall?.bodyText ?? "").includes("oauth/instagram/callback"),
+        exchangeCall?.bodyText,
+      );
+      const view = await metaConnectionService.getConnectionSession(
+        userA.id,
+        wsA.id,
+        callback.sessionId,
+      );
+      const igAccount = view.accounts.find((a) => a.externalAccountId === "ig-biz-2001");
+      const noIgPage = view.accounts.find((a) => a.externalAccountId === "page-1002");
+      assert(
+        "IG unified session: linked IG account eligible via its Page, Page token never leaks",
+        igAccount?.eligible === true &&
+          (igAccount?.detail ?? "").includes("via Page Acme Store") &&
+          !JSON.stringify(view).includes("page-token"),
+      );
+      assert(
+        "IG unified session: Page without a linked IG account is ineligible with the link reason",
+        noIgPage?.eligible === false &&
+          (noIgPage?.ineligibleReason ?? "").includes(
+            "No Instagram professional account is linked",
+          ),
+      );
+      const selected = await metaConnectionService.selectConnectionAccount(
+        userA.id,
+        wsA.id,
+        callback.sessionId,
+        "ig-biz-2001",
+        deps,
+      );
+      const credential = await channelCredentialService.getDecryptedChannelCredentialForServer(
+        selected.channel.id,
+      );
+      const config = (selected.channel.config ?? {}) as Record<string, unknown>;
+      assert(
+        "IG unified select: INSTAGRAM channel keyed by IG id, Page token stored, unified config",
+        selected.channel.provider === "INSTAGRAM" &&
+          selected.channel.externalAccountId === "ig-biz-2001" &&
+          credential?.accessToken === "page-token-1001" &&
+          config.authModel === "facebook-unified-login" &&
+          config.pageId === "page-1001" &&
+          (config.webhookSubscription as { status?: string })?.status === "subscribed",
+        JSON.stringify({
+          provider: selected.channel.provider,
+          externalAccountId: selected.channel.externalAccountId,
+          token: credential?.accessToken,
+          config,
+        }),
+      );
+
+      // Unified send: with the unified auth model in the channel
+      // config, the Instagram provider must talk to graph.facebook.com
+      // via the Page edge, not graph.instagram.com.
+      const fbBackedIg = new InstagramProvider(fbFake.fetchImpl);
+      const sendContext: ChannelContext = {
+        channelId: selected.channel.id,
+        workspaceId: wsA.id,
+        provider: "instagram",
+        externalAccountId: "ig-biz-2001",
+        credentials: { accessToken: "page-token-1001", scopes: [] },
+        config,
+      };
+      const before = fbFake.calls.length;
+      const sent = await fbBackedIg.sendMessage({
+        channel: sendContext,
+        toExternalId: "igsid-7",
+        message: { type: "TEXT", body: "Unified hello" },
+      });
+      const sendCall = fbFake.calls[before];
+      assert(
+        "IG unified send: POSTs to graph.facebook.com/{page-id}/messages",
+        sent.externalMessageId === "fb-out-mid-1" &&
+          sendCall?.url === "https://graph.facebook.com/v25.0/page-1001/messages",
+        sendCall?.url,
+      );
+
+      // Webhook signature fallback: with no INSTAGRAM_APP_SECRET set
+      // (the Unified Login deployment shape), Instagram webhooks are
+      // signed with the Meta (Facebook) app secret.
+      const savedIgSecret = process.env.INSTAGRAM_APP_SECRET;
+      delete process.env.INSTAGRAM_APP_SECRET;
+      try {
+        const body = JSON.stringify({ object: "instagram", entry: [] });
+        assert(
+          "IG unified webhook: signature verifies against the Meta app secret",
+          igProvider.verifyWebhook({
+            headers: new Headers({ "x-hub-signature-256": sign(body, FB_SECRET) }),
+            rawBody: body,
+            searchParams: new URLSearchParams(),
+          }),
+        );
+      } finally {
+        process.env.INSTAGRAM_APP_SECRET = savedIgSecret;
+      }
+    } finally {
+      delete process.env.INSTAGRAM_LOGIN_CONFIG_ID;
+    }
+  }
+
   console.log("8. Webhook pipeline + status updates");
   let conversationId = "";
   {

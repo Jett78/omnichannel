@@ -16,7 +16,12 @@ import {
   instagramProvider,
   type MetaInstagramAccount,
 } from "@/integrations/meta/instagram-provider";
-import { getFacebookConfig, getInstagramConfig } from "@/integrations/meta/meta-config";
+import {
+  getFacebookConfig,
+  getInstagramConfig,
+  getInstagramUnifiedConfig,
+  instagramAuthModel,
+} from "@/integrations/meta/meta-config";
 import {
   WhatsAppProvider,
   whatsappProvider,
@@ -64,10 +69,46 @@ interface FacebookSessionData {
   pages: MetaPageAccount[];
 }
 
-interface InstagramSessionData {
-  accessToken: string;
-  expiresAt: string | null;
-  account: MetaInstagramAccount;
+/** Permissions carried by the Unified Login configuration (dashboard-side). */
+export const UNIFIED_INSTAGRAM_SCOPES = ["instagram_basic", "instagram_manage_messages"] as const;
+
+type InstagramSessionData =
+  | {
+      kind: "instagram-login";
+      accessToken: string;
+      expiresAt: string | null;
+      account: MetaInstagramAccount;
+    }
+  | {
+      kind: "unified";
+      userAccessToken: string;
+      userTokenExpiresAt: string | null;
+      pages: MetaPageAccount[];
+    };
+
+/** Tolerates session rows written before the `kind` discriminator existed. */
+function parseInstagramSessionData(
+  session: OAuthConnectionSession,
+): InstagramSessionData | null {
+  const raw = parseSessionData<Record<string, unknown>>(session);
+  if (!raw) return null;
+  if (raw.kind === "unified" || (raw.pages && !raw.account)) {
+    return {
+      kind: "unified",
+      userAccessToken: String(raw.userAccessToken ?? ""),
+      userTokenExpiresAt: (raw.userTokenExpiresAt as string | null) ?? null,
+      pages: (raw.pages as MetaPageAccount[]) ?? [],
+    };
+  }
+  if (raw.account) {
+    return {
+      kind: "instagram-login",
+      accessToken: String(raw.accessToken ?? ""),
+      expiresAt: (raw.expiresAt as string | null) ?? null,
+      account: raw.account as MetaInstagramAccount,
+    };
+  }
+  return null;
 }
 
 /** Written by services/whatsapp-connection.service.ts (Embedded Signup). */
@@ -218,6 +259,32 @@ export const metaConnectionService = {
     deps: MetaConnectionDeps = {},
   ): Promise<{ authUrl: string; state: string }> {
     await requireWorkspacePermission(actorUserId, workspaceId, "channels.manage");
+    const model = instagramAuthModel();
+    if (model === "unified") {
+      // Newer Meta apps: Instagram connects through Facebook Login for
+      // Business with the Instagram configuration (Unified Login).
+      const unified = getInstagramUnifiedConfig();
+      const facebook = deps.facebook ?? facebookProvider;
+      const state = await createSession(
+        actorUserId,
+        workspaceId,
+        "INSTAGRAM",
+        UNIFIED_INSTAGRAM_SCOPES,
+      );
+      return {
+        authUrl: facebook.buildBusinessLoginUrl(state, unified.loginConfigId, unified.redirectUri),
+        state,
+      };
+    }
+    if (model === null) {
+      // Name the missing env vars for the model this deployment is
+      // closest to: partially-set Instagram Login vars → that error,
+      // otherwise the Unified Login requirements.
+      if (process.env.INSTAGRAM_APP_ID?.trim() || process.env.INSTAGRAM_APP_SECRET?.trim()) {
+        getInstagramConfig();
+      }
+      getInstagramUnifiedConfig();
+    }
     getInstagramConfig(); // throws a 503 naming the missing env vars
     const provider = deps.instagram ?? instagramProvider;
     const state = await createSession(actorUserId, workspaceId, "INSTAGRAM", INSTAGRAM_SCOPES);
@@ -253,9 +320,27 @@ export const metaConnectionService = {
     deps: MetaConnectionDeps = {},
   ): Promise<{ sessionId: string; workspaceId: string }> {
     const session = await loadCallbackSession(actorUserId, state, "INSTAGRAM");
+    if (instagramAuthModel() === "unified") {
+      // The code comes back to the Instagram callback URI, so the
+      // token exchange must present that same redirect_uri.
+      const unified = getInstagramUnifiedConfig();
+      const facebook = deps.facebook ?? facebookProvider;
+      const shortLived = await facebook.exchangeCodeForUserToken(code, unified.redirectUri);
+      const longLived = await facebook.exchangeLongLivedUserToken(shortLived.accessToken);
+      const pages = await facebook.listAccessiblePages(longLived.accessToken);
+      const data: InstagramSessionData = {
+        kind: "unified",
+        userAccessToken: longLived.accessToken,
+        userTokenExpiresAt: longLived.expiresAt?.toISOString() ?? null,
+        pages,
+      };
+      await storeSessionData(session.id, data);
+      return { sessionId: session.id, workspaceId: session.workspaceId };
+    }
     const provider = deps.instagram ?? instagramProvider;
     const account = await provider.authorizeWithCode(code);
     const data: InstagramSessionData = {
+      kind: "instagram-login",
       accessToken: account.accessToken,
       expiresAt: account.expiresAt?.toISOString() ?? null,
       account,
@@ -323,7 +408,34 @@ export const metaConnectionService = {
       };
     }
 
-    const data = parseSessionData<InstagramSessionData>(session);
+    const data = parseInstagramSessionData(session);
+    if (data?.kind === "unified") {
+      return {
+        sessionId: session.id,
+        provider: session.provider,
+        expiresAt: session.expiresAt,
+        accounts: data.pages.map((page): SanitizedConnectionAccount => {
+          const ig = page.instagramAccount;
+          if (!ig) {
+            return {
+              externalAccountId: page.id,
+              displayName: page.name,
+              detail: "Facebook Page — no Instagram account linked",
+              eligible: false,
+              ineligibleReason:
+                "No Instagram professional account is linked to this Page. Link one from the Page's settings (the Instagram account must be Business or Creator), then connect again.",
+            };
+          }
+          return {
+            externalAccountId: ig.id,
+            displayName: ig.name ?? (ig.username ? `@${ig.username}` : page.name),
+            detail: ig.username ? `@${ig.username} · via Page ${page.name}` : `via Page ${page.name}`,
+            eligible: page.eligible,
+            ...(page.ineligibleReason ? { ineligibleReason: page.ineligibleReason } : {}),
+          };
+        }),
+      };
+    }
     const account = data?.account;
     return {
       sessionId: session.id,
@@ -449,8 +561,11 @@ export const metaConnectionService = {
     externalAccountId: string,
     deps: MetaConnectionDeps = {},
   ): Promise<SelectResult> {
-    const data = parseSessionData<InstagramSessionData>(session);
-    const account = data?.account;
+    const data = parseInstagramSessionData(session);
+    if (data?.kind === "unified") {
+      return this.selectUnifiedInstagramAccount(actorUserId, session, data, externalAccountId, deps);
+    }
+    const account = data?.kind === "instagram-login" ? data.account : undefined;
     if (!account || account.id !== externalAccountId) {
       throw AppError.badRequest(
         "That Instagram account was not returned by Meta for this connection session.",
@@ -503,6 +618,89 @@ export const metaConnectionService = {
     let webhookSubscription: Record<string, unknown>;
     try {
       await provider.subscribeAccount(account.accessToken);
+      webhookSubscription = { status: "subscribed", at: new Date().toISOString() };
+    } catch (error) {
+      subscriptionWarning = error instanceof Error ? error.message : "Webhook subscription failed";
+      webhookSubscription = { status: "failed", error: subscriptionWarning };
+    }
+    const saved = await prisma.channel.update({
+      where: { id: channel.id },
+      data: {
+        config: { ...baseConfig, webhookSubscription } as Prisma.InputJsonValue,
+      },
+    });
+
+    await consumeSession(session.id);
+    return { channel: saved, ...(subscriptionWarning ? { subscriptionWarning } : {}) };
+  },
+
+  /**
+   * Unified Login selection: the channel is the Instagram account, but
+   * the stored credential is the linked Page's access token — sends,
+   * profile lookups and history reads run on graph.facebook.com via
+   * the Page edge (see InstagramProvider.transportFor).
+   */
+  async selectUnifiedInstagramAccount(
+    actorUserId: string,
+    session: OAuthConnectionSession,
+    data: Extract<InstagramSessionData, { kind: "unified" }>,
+    externalAccountId: string,
+    deps: MetaConnectionDeps = {},
+  ): Promise<SelectResult> {
+    const page = data.pages.find((p) => p.instagramAccount?.id === externalAccountId);
+    const ig = page?.instagramAccount;
+    if (!page || !ig) {
+      throw AppError.badRequest(
+        "That Instagram account was not returned by Meta for this connection session.",
+      );
+    }
+    if (!page.eligible) {
+      throw AppError.badRequest(
+        page.ineligibleReason ?? "The linked Page is not eligible to connect.",
+      );
+    }
+    const provider = deps.instagram ?? instagramProvider;
+    const workspaceId = session.workspaceId;
+
+    const baseConfig: Record<string, unknown> = {
+      authModel: "facebook-unified-login",
+      pageId: page.id,
+      pageName: page.name,
+      ...(ig.username ? { username: ig.username } : {}),
+    };
+
+    const channel = await prisma.channel.upsert({
+      where: {
+        workspaceId_provider_externalAccountId: {
+          workspaceId,
+          provider: "INSTAGRAM",
+          externalAccountId: ig.id,
+        },
+      },
+      create: {
+        workspaceId,
+        provider: "INSTAGRAM",
+        externalAccountId: ig.id,
+        displayName: ig.name ?? ig.username ?? page.name,
+        status: "CONNECTED",
+        config: baseConfig as Prisma.InputJsonValue,
+      },
+      update: {
+        displayName: ig.name ?? ig.username ?? page.name,
+        status: "CONNECTED",
+        config: baseConfig as Prisma.InputJsonValue,
+      },
+    });
+
+    await channelCredentialService.setChannelCredential(actorUserId, workspaceId, channel.id, {
+      accessToken: page.pageAccessToken,
+      scopes: [...UNIFIED_INSTAGRAM_SCOPES],
+    });
+
+    let subscriptionWarning: string | undefined;
+    let webhookSubscription: Record<string, unknown>;
+    try {
+      await provider.subscribeViaPage(page.id, page.pageAccessToken);
       webhookSubscription = { status: "subscribed", at: new Date().toISOString() };
     } catch (error) {
       subscriptionWarning = error instanceof Error ? error.message : "Webhook subscription failed";

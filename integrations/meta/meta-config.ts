@@ -14,6 +14,11 @@ import { AppError } from "@/lib/errors";
  *  - Instagram API with Instagram Login: INSTAGRAM_APP_ID /
  *    INSTAGRAM_APP_SECRET — the Instagram product's OWN app id/secret
  *    from the Meta dashboard (distinct from the Facebook app secret).
+ *  - Instagram via Unified Login (newer Meta apps, where Instagram
+ *    Login is not offered at all): INSTAGRAM_LOGIN_CONFIG_ID — the
+ *    Facebook Login for Business configuration created in the
+ *    Instagram use case. Reuses META_APP_ID / META_APP_SECRET; the
+ *    Instagram professional account must be linked to a Facebook Page.
  *
  * Nothing in this module ever returns a secret to the browser; the
  * `*Configured()` helpers and redirect URIs are the only pieces the
@@ -124,8 +129,64 @@ export function getInstagramConfig(): InstagramMetaConfig {
   };
 }
 
+export interface InstagramUnifiedConfig {
+  appId: string;
+  appSecret: string;
+  /** Facebook Login for Business configuration id (Instagram use case). */
+  loginConfigId: string;
+  graphApiVersion: string;
+  redirectUri: string;
+  webhookVerifyToken: string | undefined;
+  appsecretProof: boolean;
+}
+
+export type InstagramAuthModel = "unified" | "instagram-login";
+
+/**
+ * Which Instagram auth model this deployment uses. Unified Login wins
+ * when its configuration id is present: newer Meta apps cannot use
+ * Instagram Login at all (the dashboard states this explicitly), so a
+ * deployment that has both configured is a newer app.
+ */
+export function instagramAuthModel(): InstagramAuthModel | null {
+  if (
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() &&
+    process.env.META_APP_ID?.trim() &&
+    process.env.META_APP_SECRET?.trim()
+  ) {
+    return "unified";
+  }
+  if (process.env.INSTAGRAM_APP_ID?.trim() && process.env.INSTAGRAM_APP_SECRET?.trim()) {
+    return "instagram-login";
+  }
+  return null;
+}
+
+export function getInstagramUnifiedConfig(): InstagramUnifiedConfig {
+  const missing: string[] = [];
+  const appId = process.env.META_APP_ID?.trim();
+  const appSecret = process.env.META_APP_SECRET?.trim();
+  const loginConfigId = process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim();
+  if (!appId) missing.push("META_APP_ID");
+  if (!appSecret) missing.push("META_APP_SECRET");
+  if (!loginConfigId) missing.push("INSTAGRAM_LOGIN_CONFIG_ID");
+  if (missing.length > 0) throw missingConfigError("Instagram (Unified Login)", missing);
+  return {
+    appId: appId as string,
+    appSecret: appSecret as string,
+    loginConfigId: loginConfigId as string,
+    graphApiVersion: graphApiVersion(),
+    redirectUri: instagramRedirectUri(),
+    webhookVerifyToken:
+      process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN?.trim() ||
+      process.env.META_WEBHOOK_VERIFY_TOKEN?.trim() ||
+      undefined,
+    appsecretProof: appsecretProofEnabled(),
+  };
+}
+
 export function isInstagramConfigured(): boolean {
-  return Boolean(process.env.INSTAGRAM_APP_ID?.trim() && process.env.INSTAGRAM_APP_SECRET?.trim());
+  return instagramAuthModel() !== null;
 }
 
 /** Redirect URI to register in the Meta app — safe to display (no secrets). */
@@ -133,9 +194,16 @@ export function instagramRedirectUri(): string {
   return process.env.INSTAGRAM_REDIRECT_URI?.trim() || `${appUrl()}/api/oauth/instagram/callback`;
 }
 
-/** App secret for webhook signature checks; undefined when unconfigured. */
+/**
+ * App secret for webhook signature checks; undefined when unconfigured.
+ * Instagram Login signs with the Instagram product's own secret;
+ * Unified Login webhooks are signed with the Facebook app secret
+ * (same fallback pattern as WhatsApp), so fall back to it.
+ */
 export function instagramAppSecret(): string | undefined {
-  return process.env.INSTAGRAM_APP_SECRET?.trim() || undefined;
+  return (
+    process.env.INSTAGRAM_APP_SECRET?.trim() || process.env.META_APP_SECRET?.trim() || undefined
+  );
 }
 
 /** Webhook verify token for the GET handshake, per provider. */

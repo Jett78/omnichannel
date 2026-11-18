@@ -657,15 +657,17 @@ export function ChannelsCatalog({
               </DialogHeader>
               <div className="flex flex-col gap-3 text-sm">
                 <p>
-                  Set these environment variables on the server and restart the app:{" "}
-                  <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> (the Instagram
-                  product&apos;s own app id/secret from the Meta dashboard — not the Facebook app
-                  secret). <code>INSTAGRAM_WEBHOOK_VERIFY_TOKEN</code> is optional and falls back to{" "}
-                  <code>META_WEBHOOK_VERIFY_TOKEN</code>.
+                  This app connects Instagram through <strong>Unified Login</strong> (Facebook
+                  Login for Business) — the only option Meta offers newer apps. Set these
+                  environment variables on the server and restart the app:{" "}
+                  <code>META_APP_ID</code>, <code>META_APP_SECRET</code> (the same values as
+                  Facebook) and <code>INSTAGRAM_LOGIN_CONFIG_ID</code> — the configuration ID
+                  created under the Instagram use case → “API setup with Unified login” in the
+                  Meta dashboard. <code>INSTAGRAM_WEBHOOK_VERIFY_TOKEN</code> is optional and
+                  falls back to <code>META_WEBHOOK_VERIFY_TOKEN</code>.
                 </p>
                 <p>
-                  In the Meta app&apos;s Instagram product settings, register this OAuth redirect
-                  URI:
+                  In Facebook Login for Business settings, register this OAuth redirect URI:
                   <br />
                   <code className="break-all">{metaConfig.instagramRedirectUri}</code>
                 </p>
@@ -674,10 +676,11 @@ export function ChannelsCatalog({
                   <code className="break-all">{metaConfig.instagramWebhookUrl}</code>.
                 </p>
                 <p className="text-muted-foreground">
-                  This uses the Instagram API with Instagram Login: only professional
-                  (Business/Creator) accounts are eligible, and no Facebook Page is required.
-                  Messaging accounts beyond your app&apos;s test users requires Advanced Access for
-                  instagram_business_manage_messages via App Review. See docs/META-APP-REVIEW.md.
+                  The Instagram account must be a professional (Business/Creator) account{" "}
+                  <em>linked to a Facebook Page you manage</em> — after logging in with Facebook
+                  you pick which Page&apos;s Instagram account to connect. Messaging accounts
+                  beyond users with a role on the app requires Advanced Access for
+                  instagram_manage_messages via App Review. See docs/META-APP-REVIEW.md.
                 </p>
               </div>
             </>
