@@ -3,11 +3,13 @@
 import {
   AlarmClock,
   ArrowLeft,
+  ArrowUpDown,
   Bookmark,
   CheckCheck,
   Copy,
   FileText,
   Flag,
+  ListFilter,
   Lock,
   MoreHorizontal,
   Paperclip,
@@ -296,6 +298,49 @@ function formatWaiting(iso: string | null): string {
 type AssigneeTab = "all" | "mine" | "unassigned" | "mentions";
 type StatusFilter = "ALL" | "OPEN" | "PENDING" | "RESOLVED" | "SNOOZED";
 type SortMode = "latest" | "waiting" | "priority";
+
+/** Filter-bar design: assignee views as a segmented control, statuses
+ *  as one-tap tinted chips, sort + channel as two compact selects —
+ *  replaces the old stack of four full-width dropdowns. */
+const ASSIGNEE_VIEWS: Array<{ value: AssigneeTab; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "mine", label: "Mine" },
+  { value: "unassigned", label: "Unassigned" },
+  { value: "mentions", label: "Mentions" },
+];
+
+const STATUS_CHIPS: Array<{ value: StatusFilter; label: string; activeClass: string }> = [
+  {
+    value: "ALL",
+    label: "All",
+    activeClass:
+      "border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100",
+  },
+  {
+    value: "OPEN",
+    label: "Open",
+    activeClass:
+      "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300",
+  },
+  {
+    value: "PENDING",
+    label: "Pending",
+    activeClass:
+      "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-300",
+  },
+  {
+    value: "SNOOZED",
+    label: "Snoozed",
+    activeClass:
+      "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300",
+  },
+  {
+    value: "RESOLVED",
+    label: "Resolved",
+    activeClass:
+      "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300",
+  },
+];
 
 const DRAFTS_KEY = "uoi.inbox.drafts.v1";
 
@@ -1237,46 +1282,70 @@ export function RealInboxShell({
             />
           </div>
         </div>
-        <div className="px-4 pb-2">
-          <Select value={assigneeTab} onValueChange={(v) => setAssigneeTab(v as AssigneeTab)}>
-            <SelectTrigger className="h-8 w-full" aria-label="Filter by assignee">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All conversations</SelectItem>
-              <SelectItem value="mine">Mine</SelectItem>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-              <SelectItem value="mentions">Mentions</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid grid-cols-2 gap-2 px-4 pb-3">
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-            <SelectTrigger className="h-8 w-full min-w-0" aria-label="Filter by status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All statuses</SelectItem>
-              <SelectItem value="OPEN">Open</SelectItem>
-              <SelectItem value="PENDING">Pending</SelectItem>
-              <SelectItem value="SNOOZED">Snoozed</SelectItem>
-              <SelectItem value="RESOLVED">Resolved</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
-            <SelectTrigger className="h-8 w-full min-w-0" aria-label="Sort conversations">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="latest">Latest activity</SelectItem>
-              <SelectItem value="waiting">Waiting longest</SelectItem>
-              <SelectItem value="priority">Priority</SelectItem>
-            </SelectContent>
-          </Select>
-          {knownChannels.length > 1 ? (
-            <div className="col-span-2">
+        <div className="space-y-2.5 px-4 pb-3">
+          <div
+            className="bg-muted/70 flex rounded-lg p-0.5"
+            role="tablist"
+            aria-label="Filter by assignee"
+          >
+            {ASSIGNEE_VIEWS.map((view) => (
+              <button
+                key={view.value}
+                type="button"
+                role="tab"
+                aria-selected={assigneeTab === view.value}
+                onClick={() => setAssigneeTab(view.value)}
+                className={cn(
+                  "flex-1 rounded-md px-1 py-1.5 text-[11px] font-medium whitespace-nowrap transition-all",
+                  assigneeTab === view.value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
+            {STATUS_CHIPS.map((chip) => (
+              <button
+                key={chip.value}
+                type="button"
+                aria-pressed={statusFilter === chip.value}
+                onClick={() => setStatusFilter(chip.value)}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  statusFilter === chip.value
+                    ? chip.activeClass
+                    : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                )}
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
+              <SelectTrigger
+                className="h-8 min-w-0 flex-1 gap-1.5 text-xs [&>span]:truncate"
+                aria-label="Sort conversations"
+              >
+                <ArrowUpDown className="text-muted-foreground size-3.5 shrink-0" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="latest">Latest activity</SelectItem>
+                <SelectItem value="waiting">Waiting longest</SelectItem>
+                <SelectItem value="priority">Priority</SelectItem>
+              </SelectContent>
+            </Select>
+            {knownChannels.length > 1 ? (
               <Select value={channelFilter} onValueChange={setChannelFilter}>
-                <SelectTrigger className="h-8 w-full min-w-0" aria-label="Filter by channel">
+                <SelectTrigger
+                  className="h-8 min-w-0 flex-1 gap-1.5 text-xs [&>span]:truncate"
+                  aria-label="Filter by channel"
+                >
+                  <ListFilter className="text-muted-foreground size-3.5 shrink-0" />
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1288,8 +1357,8 @@ export function RealInboxShell({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
         <ScrollArea className="min-h-0 flex-1">
           <ul className="flex flex-col px-2 pb-2">
