@@ -242,6 +242,31 @@ async function storeSessionData(sessionId: string, data: unknown): Promise<void>
   });
 }
 
+/**
+ * TEMPORARY DIAGNOSTIC (added 2026-11-18): some authorizations return
+ * zero Pages from /me/accounts while others succeed minutes apart.
+ * Logs WHO authorized (user id + name) and WHAT Meta returned, so the
+ * pattern is visible in the runtime logs. Never logs tokens. Remove
+ * once the Biolife connect issue is understood.
+ */
+async function logMetaConnectDebug(
+  providerLabel: string,
+  facebook: FacebookProvider,
+  userAccessToken: string,
+  pages: MetaPageAccount[],
+): Promise<void> {
+  try {
+    const me = await facebook.getUserIdentity(userAccessToken);
+    console.log(
+      `[meta-connect-debug] provider=${providerLabel} user=${me.id} name=${me.name ?? "?"} pages=${pages.length} pageIds=${pages.map((p) => p.id).join(",") || "-"}`,
+    );
+  } catch {
+    console.log(
+      `[meta-connect-debug] provider=${providerLabel} identity lookup failed; pages=${pages.length}`,
+    );
+  }
+}
+
 export const metaConnectionService = {
   // ─── Start ────────────────────────────────────────────────────────────────
 
@@ -313,6 +338,7 @@ export const metaConnectionService = {
     const shortLived = await provider.exchangeCodeForUserToken(code);
     const longLived = await provider.exchangeLongLivedUserToken(shortLived.accessToken);
     const pages = await provider.listAccessiblePages(longLived.accessToken);
+    await logMetaConnectDebug("FACEBOOK", provider, longLived.accessToken, pages);
     const data: FacebookSessionData = {
       userAccessToken: longLived.accessToken,
       userTokenExpiresAt: longLived.expiresAt?.toISOString() ?? null,
@@ -337,6 +363,7 @@ export const metaConnectionService = {
       const shortLived = await facebook.exchangeCodeForUserToken(code, fbLogin.redirectUri);
       const longLived = await facebook.exchangeLongLivedUserToken(shortLived.accessToken);
       const pages = await facebook.listAccessiblePages(longLived.accessToken);
+      await logMetaConnectDebug("INSTAGRAM", facebook, longLived.accessToken, pages);
       const data: InstagramSessionData = {
         kind: "facebook-login",
         userAccessToken: longLived.accessToken,

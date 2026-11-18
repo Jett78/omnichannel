@@ -222,6 +222,18 @@ export class FacebookProvider implements IMessagingProvider {
     return `https://www.facebook.com/${config.graphApiVersion}/dialog/oauth?${params.toString()}`;
   }
 
+  /** The authorizing user's own id + name (GET /me). Diagnostic aid. */
+  async getUserIdentity(
+    userAccessToken: string,
+  ): Promise<{ id: string; name?: string }> {
+    const me = await this.client.get<{ id: string; name?: string }>(
+      GRAPH_HOST,
+      `/${this.version()}/me`,
+      { accessToken: userAccessToken, params: { fields: "id,name" } },
+    );
+    return { id: me.id, ...(me.name ? { name: me.name } : {}) };
+  }
+
   /**
    * Classic Facebook Login authorization URL with an explicit scope
    * set and redirect URI. Used by the Instagram connect flow, which
