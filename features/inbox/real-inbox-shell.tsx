@@ -166,7 +166,8 @@ function AttachmentChip({ attachment }: { attachment: RealAttachment }) {
 }
 
 /** Image preview that falls back to a file chip if the bytes can't load
- *  (e.g. media sent before stored copies existed). */
+ *  (e.g. media sent before stored copies existed). Clicking opens a
+ *  fullscreen lightbox, like Messenger. */
 function AttachmentPreviewImage({
   src,
   attachment,
@@ -175,15 +176,65 @@ function AttachmentPreviewImage({
   attachment: RealAttachment;
 }) {
   const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open ]);
+
   if (failed) return <AttachmentChip attachment={attachment} />;
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={src}
-      alt={attachment.fileName ?? "Image attachment"}
-      className="max-h-64 w-auto rounded-lg object-contain"
-      onError={() => setFailed(true)}
-    />
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="block cursor-zoom-in self-start transition-opacity hover:opacity-90"
+        aria-label="View image full screen"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={attachment.fileName ?? "Image attachment"}
+          className="max-h-64 w-auto rounded-lg object-contain"
+          onError={() => setFailed(true)}
+        />
+      </button>
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 sm:p-8"
+          role="dialog"
+          aria-modal="true"
+          aria-label={attachment.fileName ?? "Image attachment"}
+          onClick={() => setOpen(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={attachment.fileName ?? "Image attachment"}
+            className="max-h-[92vh] max-w-[94vw] rounded-lg object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+          <button
+            type="button"
+            aria-label="Close full screen view"
+            className="absolute top-4 right-4 flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/25"
+            onClick={() => setOpen(false)}
+          >
+            <X className="size-5" />
+          </button>
+          {attachment.fileName ? (
+            <p className="absolute bottom-4 left-1/2 max-w-[90vw] -translate-x-1/2 truncate text-xs text-white/70">
+              {attachment.fileName}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </>
   );
 }
 

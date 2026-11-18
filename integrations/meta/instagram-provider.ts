@@ -486,6 +486,15 @@ export class InstagramProvider implements IMessagingProvider {
    * Upload media bytes (POST /{ig-id}/message_attachments) and return
    * the "meta-attachment:{id}" reference sendMessage delivers by
    * attachment_id — same Send API pattern as Messenger.
+   *
+   * The upload MUST target the Instagram account id, not the linked
+   * Page id: for facebook-login channels the message send itself is
+   * accepted via the Page edge, but an attachment uploaded under the
+   * Page is a Messenger attachment — Meta rejects it in an Instagram
+   * message with "(#100) The media ID provided in the API request is
+   * invalid" (seen live 2026-11-18). The IG-scoped upload works for
+   * both auth models (for instagram-login the base id already is the
+   * IG account id).
    */
   async uploadMedia(input: {
     channel: ChannelContext;
@@ -512,7 +521,7 @@ export class InstagramProvider implements IMessagingProvider {
     const transport = this.transportFor(channel);
     const response = await this.client.postMultipart<{ attachment_id?: string }>(
       transport.host,
-      `/${this.version()}/${transport.baseId}/message_attachments`,
+      `/${this.version()}/${channel.externalAccountId}/message_attachments`,
       {
         accessToken: channel.credentials.accessToken,
         ...transport.proof,

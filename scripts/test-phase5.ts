@@ -1455,6 +1455,42 @@ async function main(): Promise<void> {
         mimeType: "application/x-msdownload",
       }),
     );
+
+    // Instagram uploads must target the IG account id, never the
+    // linked Page id (Meta rejects Page-scoped attachments in IG
+    // messages with error #100 — live bug 2026-11-18).
+    const igCalls: Array<{ method: string; url: string }> = [];
+    const igUploadFetch = (async (input: unknown, init?: { method?: string }) => {
+      igCalls.push({
+        method: init?.method ?? "GET",
+        url: typeof input === "string" ? input : ((input as { url?: string })?.url ?? ""),
+      });
+      return new Response(JSON.stringify({ attachment_id: "att-ig-1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as unknown as FetchLike;
+    const igProvider = new InstagramProvider(igUploadFetch);
+    const igUpload = await igProvider.uploadMedia({
+      channel: {
+        channelId: "chan-ig",
+        workspaceId: wsA.id,
+        provider: "instagram",
+        externalAccountId: "ig-777",
+        credentials: { accessToken: "page-token-x", scopes: [] },
+        config: { authModel: "facebook-login", pageId: "page-999" },
+      } as ChannelContext,
+      media: { bytes: Buffer.from("img"), mimeType: "image/png", fileName: "x.png" },
+    });
+    const igFirstCall = igCalls[0];
+    assert(
+      "IG uploadMedia: uploads under the IG account id, not the Page id",
+      igUpload.ref === "meta-attachment:att-ig-1" &&
+        igCalls.length === 1 &&
+        igFirstCall !== undefined &&
+        igFirstCall.url.includes("/ig-777/message_attachments") &&
+        !igFirstCall.url.includes("page-999"),
+    );
   }
 
   // ── 9c. History import ─────────────────────────────────────────────────────
