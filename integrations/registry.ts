@@ -3,6 +3,7 @@ import type { ProviderId } from "@/types/messaging";
 
 import { gmailProvider } from "@/integrations/gmail/gmail-provider";
 import { mockProvider } from "@/integrations/mock/mock.provider";
+import { telegramProvider } from "@/integrations/telegram/telegram-provider";
 import { facebookProvider } from "@/integrations/meta/facebook-provider";
 import { instagramProvider } from "@/integrations/meta/instagram-provider";
 import { tiktokProvider } from "@/integrations/tiktok/tiktok-provider";
@@ -48,6 +49,7 @@ registerProvider(whatsappProvider);
 registerProvider(tiktokProvider);
 registerProvider(xProvider);
 registerProvider(gmailProvider);
+registerProvider(telegramProvider);
 
 if (isMockProviderEnabled()) {
   registerProvider(mockProvider);

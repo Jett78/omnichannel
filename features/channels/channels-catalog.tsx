@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MetaConnectionPanel } from "@/features/channels/meta-connection-panel";
+import { TelegramConnectPanel } from "@/features/channels/telegram-connect-panel";
 import {
   WhatsAppConnectPanel,
   type WhatsAppConfigView,
@@ -144,6 +145,19 @@ export function ChannelsCatalog({
   function openWhatsAppEdit(channelId: string) {
     setWaEditChannelId(channelId);
     setWaEditSignal((signal) => signal + 1);
+  }
+
+  const [tgConnectSignal, setTgConnectSignal] = useState(0);
+  const [tgEditSignal, setTgEditSignal] = useState(0);
+  const [tgEditChannelId, setTgEditChannelId] = useState<string | null>(null);
+
+  function openTelegramConnect() {
+    setTgConnectSignal((signal) => signal + 1);
+  }
+
+  function openTelegramEdit(channelId: string) {
+    setTgEditChannelId(channelId);
+    setTgEditSignal((signal) => signal + 1);
   }
   const connectedProviders = new Set(
     realChannels.filter((c) => c.status === "CONNECTED").map((c) => c.provider),
@@ -350,6 +364,16 @@ export function ChannelsCatalog({
         />
       ) : null}
 
+      {workspaceId ? (
+        <TelegramConnectPanel
+          workspaceId={workspaceId}
+          connectedChannels={realChannels}
+          openSignal={tgConnectSignal}
+          editSignal={tgEditSignal}
+          editChannelId={tgEditChannelId}
+        />
+      ) : null}
+
       {mockEnabled && workspaceId ? (
         <Card className="border-dashed">
           <CardHeader>
@@ -467,7 +491,8 @@ export function ChannelsCatalog({
                   channel.provider === "INSTAGRAM" ||
                   channel.provider === "WHATSAPP" ||
                   channel.provider === "X" ||
-                  channel.provider === "GMAIL" ? (
+                  channel.provider === "GMAIL" ||
+                  channel.provider === "TELEGRAM" ? (
                     <span className="flex items-center gap-1">
                       {(() => {
                         const reconnectHref =
@@ -491,6 +516,14 @@ export function ChannelsCatalog({
                             variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
                             size="sm"
                             onClick={() => openWhatsAppEdit(channel.id)}
+                          >
+                            Reconnect
+                          </Button>
+                        ) : channel.provider === "TELEGRAM" && workspaceId ? (
+                          <Button
+                            variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
+                            size="sm"
+                            onClick={() => openTelegramEdit(channel.id)}
                           >
                             Reconnect
                           </Button>
@@ -621,6 +654,14 @@ export function ChannelsCatalog({
                   ) : provider === "WHATSAPP" && isConnected ? (
                     <Button variant="outline" className="w-full" disabled>
                       Number connected
+                    </Button>
+                  ) : provider === "TELEGRAM" && workspaceId && !isConnected ? (
+                    <Button className="w-full" onClick={openTelegramConnect}>
+                      Connect now
+                    </Button>
+                  ) : provider === "TELEGRAM" && workspaceId && isConnected ? (
+                    <Button variant="outline" className="w-full" onClick={openTelegramConnect}>
+                      Connect another bot
                     </Button>
                   ) : provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId ? (
                     <Button className="w-full" asChild>

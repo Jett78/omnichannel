@@ -98,6 +98,17 @@ export const whatsappManualConnectSchema = z.object({
 });
 export type WhatsAppManualConnectInput = z.infer<typeof whatsappManualConnectSchema>;
 
+export const telegramConnectSchema = z.object({
+  botToken: z
+    .string()
+    .trim()
+    .regex(
+      /^\d{5,}:[A-Za-z0-9_-]{20,}$/,
+      "That does not look like a BotFather token (it should look like 123456789:AA…).",
+    ),
+});
+export type TelegramConnectInput = z.infer<typeof telegramConnectSchema>;
+
 export const whatsappCredentialsUpdateSchema = z.object({
   accessToken: z.string().min(1, "A system-user access token is required"),
 });

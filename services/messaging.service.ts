@@ -6,6 +6,7 @@ import { requireWorkspacePermission } from "@/lib/workspace-auth";
 import { MetaGraphError } from "@/integrations/meta/meta-graph-client";
 import { getProvider } from "@/integrations/registry";
 import type { ChannelContext } from "@/integrations/types";
+import { TelegramApiError } from "@/integrations/telegram/telegram-client";
 import { XApiError } from "@/integrations/x/x-api-client";
 import { channelCredentialService } from "@/services/channel-credential.service";
 import type { Message, MessageAttachment, Prisma } from "@/generated/prisma/client";
@@ -40,6 +41,7 @@ import {
 function isProviderAuthError(error: unknown): boolean {
   if (error instanceof MetaGraphError) return error.code === 190;
   if (error instanceof XApiError) return error.status === 401;
+  if (error instanceof TelegramApiError) return error.status === 401;
   return false;
 }
 
