@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -27,6 +28,14 @@ export default async function AuthLayout({ children }: { children: ReactNode }) 
         </span>
       </div>
       <div className="relative w-full max-w-md">{children}</div>
+      <p className="text-muted-foreground relative flex gap-4 text-xs">
+        <Link href="/privacy" className="underline-offset-4 hover:underline">
+          Privacy Policy
+        </Link>
+        <Link href="/terms" className="underline-offset-4 hover:underline">
+          Terms of Service
+        </Link>
+      </p>
     </div>
   );
 }
