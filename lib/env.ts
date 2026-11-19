@@ -72,6 +72,13 @@ const envSchema = z.object({
   // one-time webhook registration; X_WEBHOOK_ID enables X Activity
   // subscriptions at connect time. Read lazily by
   // integrations/x/x-config.ts.
+  // Gmail channel (Phase 9). GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+  // are the Google Cloud OAuth 2.0 web client used by the Gmail
+  // connect flow and token refresh; read lazily by
+  // integrations/gmail/gmail-config.ts (docs/GMAIL-SETUP.md).
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REDIRECT_URI: z.string().optional(),
   X_CLIENT_ID: z.string().optional(),
   X_CLIENT_SECRET: z.string().optional(),
   X_CONSUMER_KEY: z.string().optional(),

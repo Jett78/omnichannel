@@ -70,7 +70,8 @@
     "realtime": "tsx realtime/server.ts",
     "worker:web": "tsx workers/web.ts",
     "test:phase7": "tsx scripts/test-phase7.ts",
-    "test:phase8": "tsx scripts/test-phase8.ts"
+    "test:phase8": "tsx scripts/test-phase8.ts",
+    "test:phase9": "tsx scripts/test-phase9.ts"
   },
   "version": "0.1.0"
 }

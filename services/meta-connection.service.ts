@@ -27,6 +27,7 @@ import {
   whatsappProvider,
   type WhatsAppPhoneNumber,
 } from "@/integrations/whatsapp/whatsapp-provider";
+import { GmailProvider, gmailProvider } from "@/integrations/gmail/gmail-provider";
 import { XProvider, xProvider } from "@/integrations/x/x-provider";
 import type { ChannelContext } from "@/integrations/types";
 import { channelCredentialService } from "@/services/channel-credential.service";
@@ -61,6 +62,7 @@ export interface MetaConnectionDeps {
   instagram?: InstagramProvider;
   whatsapp?: WhatsAppProvider;
   x?: XProvider;
+  gmail?: GmailProvider;
 }
 
 interface FacebookSessionData {
@@ -753,7 +755,8 @@ export const metaConnectionService = {
       channel.provider === "FACEBOOK" ||
       channel.provider === "INSTAGRAM" ||
       channel.provider === "WHATSAPP" ||
-      channel.provider === "X"
+      channel.provider === "X" ||
+      channel.provider === "GMAIL"
     ) {
       const credential = await channelCredentialService.getDecryptedChannelCredentialForServer(
         channel.id,
@@ -768,7 +771,9 @@ export const metaConnectionService = {
               ? "instagram"
               : channel.provider === "WHATSAPP"
                 ? "whatsapp"
-                : "x",
+                : channel.provider === "GMAIL"
+                  ? "gmail"
+                  : "x",
         externalAccountId: channel.externalAccountId,
         credentials: {
           accessToken: credential?.accessToken ?? "",
@@ -788,7 +793,9 @@ export const metaConnectionService = {
             ? (deps.instagram ?? instagramProvider)
             : channel.provider === "WHATSAPP"
               ? (deps.whatsapp ?? whatsappProvider)
-              : (deps.x ?? xProvider);
+              : channel.provider === "GMAIL"
+                ? (deps.gmail ?? gmailProvider)
+                : (deps.x ?? xProvider);
       // disconnectAccount is best-effort internally (logs, never throws).
       await provider.disconnectAccount(context);
     }

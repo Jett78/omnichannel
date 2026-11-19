@@ -80,6 +80,16 @@ export interface XConfigView {
   webhookIdSet: boolean;
 }
 
+/**
+ * Public Gmail setup facts (no secrets). Gmail is self-serve via a
+ * Google Cloud OAuth client (Phase 9): `configured` says whether the
+ * OAuth credentials exist in env.
+ */
+export interface GmailConfigView {
+  configured: boolean;
+  redirectUri: string;
+}
+
 export function ChannelsCatalog({
   realChannels,
   workspaceId,
@@ -93,6 +103,9 @@ export function ChannelsCatalog({
   xConnected,
   xWarning,
   xError,
+  gmailConfig,
+  gmailConnected,
+  gmailError,
 }: {
   realChannels: RealChannel[];
   workspaceId?: string;
@@ -106,6 +119,9 @@ export function ChannelsCatalog({
   xConnected?: string | null;
   xWarning?: string | null;
   xError?: string | null;
+  gmailConfig?: GmailConfigView;
+  gmailConnected?: string | null;
+  gmailError?: string | null;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Provider | null>(null);
@@ -301,6 +317,20 @@ export function ChannelsCatalog({
         </p>
       ) : null}
 
+      {gmailError ? (
+        <p className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+          Gmail connection failed: {gmailError}
+        </p>
+      ) : null}
+
+      {gmailConnected ? (
+        <p className="rounded-md bg-green-50 p-3 text-sm text-green-700">
+          Gmail connected: <strong>{gmailConnected}</strong>. New mail will appear in the unified
+          inbox within about a minute.
+        </p>
+      ) : null}
+
       {metaSession && workspaceId ? (
         <MetaConnectionPanel
           workspaceId={workspaceId}
@@ -436,7 +466,8 @@ export function ChannelsCatalog({
                   {channel.provider === "FACEBOOK" ||
                   channel.provider === "INSTAGRAM" ||
                   channel.provider === "WHATSAPP" ||
-                  channel.provider === "X" ? (
+                  channel.provider === "X" ||
+                  channel.provider === "GMAIL" ? (
                     <span className="flex items-center gap-1">
                       {(() => {
                         const reconnectHref =
@@ -450,7 +481,11 @@ export function ChannelsCatalog({
                               ? `/api/workspaces/${workspaceId}/channels/instagram/connect`
                               : channel.provider === "X" && xConfig?.configured && workspaceId
                                 ? `/api/workspaces/${workspaceId}/channels/x/connect`
-                                : null;
+                                : channel.provider === "GMAIL" &&
+                                    gmailConfig?.configured &&
+                                    workspaceId
+                                  ? `/api/workspaces/${workspaceId}/channels/gmail/connect`
+                                  : null;
                         return channel.provider === "WHATSAPP" && workspaceId ? (
                           <Button
                             variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
@@ -470,7 +505,9 @@ export function ChannelsCatalog({
                         ) : null;
                       })()}
                       {channel.status === "CONNECTED" &&
-                      (channel.provider === "FACEBOOK" || channel.provider === "INSTAGRAM") ? (
+                      (channel.provider === "FACEBOOK" ||
+                        channel.provider === "INSTAGRAM" ||
+                        channel.provider === "GMAIL") ? (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -566,6 +603,16 @@ export function ChannelsCatalog({
                   ) : provider === "X" && xConfig?.configured && workspaceId && !isConnected ? (
                     <Button className="w-full" asChild>
                       <a href={`/api/workspaces/${workspaceId}/channels/x/connect`}>Connect now</a>
+                    </Button>
+                  ) : provider === "GMAIL" && gmailConfig?.configured && workspaceId && !isConnected ? (
+                    <Button className="w-full" asChild>
+                      <a href={`/api/workspaces/${workspaceId}/channels/gmail/connect`}>
+                        Connect now
+                      </a>
+                    </Button>
+                  ) : provider === "GMAIL" && isConnected ? (
+                    <Button variant="outline" className="w-full" disabled>
+                      Mailbox connected
                     </Button>
                   ) : provider === "WHATSAPP" && workspaceId && !isConnected ? (
                     <Button className="w-full" onClick={openWhatsAppConnect}>
@@ -743,6 +790,46 @@ export function ChannelsCatalog({
                 <p className="text-muted-foreground">
                   Full step-by-step approval guide: docs/TIKTOK-ACCESS.md. Research and sources:
                   docs/TIKTOK-RESEARCH.md.
+                </p>
+              </div>
+            </>
+          ) : selected === "GMAIL" && gmailConfig ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-3">
+                  <ChannelIcon provider="GMAIL" size="md" />
+                  Connect Gmail
+                </DialogTitle>
+                <DialogDescription>
+                  This deployment is not configured for Gmail yet — no mailbox can be connected
+                  until the server environment is set up. Nothing has been connected.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 text-sm">
+                <p>
+                  Gmail connects through Google&apos;s official OAuth sign-in: create a Google
+                  Cloud project, enable the <strong>Gmail API</strong>, configure the OAuth
+                  consent screen, and create a <strong>Web application</strong> OAuth client.
+                </p>
+                <p>
+                  Set these environment variables on the server and restart the app:{" "}
+                  <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code> — the OAuth
+                  client credentials (on the web app AND the worker, which polls for new mail
+                  and sends replies).
+                </p>
+                <p>
+                  On the OAuth client, register this Authorized redirect URI (exact match
+                  required):
+                  <br />
+                  <code className="break-all">{gmailConfig.redirectUri}</code>
+                </p>
+                <p className="text-muted-foreground">
+                  Each workspace connects its own mailbox (scope: read, compose and send mail).
+                  New mail polls in about once a minute and email has no reply window. While the
+                  Google consent screen is in Testing mode only listed test users can connect and
+                  refresh tokens expire after 7 days; publishing the app (with Google&apos;s
+                  OAuth verification for Gmail scopes) is required before selling it publicly.
+                  Full setup: docs/GMAIL-SETUP.md.
                 </p>
               </div>
             </>

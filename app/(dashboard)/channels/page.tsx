@@ -10,6 +10,7 @@ import {
   isInstagramConfigured,
 } from "@/integrations/meta/meta-config";
 import { isTikTokConfigured, tiktokRedirectUri } from "@/integrations/tiktok/tiktok-config";
+import { getGmailAccessState } from "@/integrations/gmail/gmail-config";
 import { getXAccessState } from "@/integrations/x/x-config";
 import type { RealChannelConfig } from "@/features/channels/channels-catalog";
 import { getActiveWorkspace } from "@/lib/active-workspace";
@@ -25,6 +26,8 @@ interface ChannelsPageProps {
     x_connected?: string;
     x_warning?: string;
     x_error?: string;
+    gmail_connected?: string;
+    gmail_error?: string;
   }>;
 }
 
@@ -60,6 +63,7 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
   const params = await searchParams;
   const appUrl = getEnv().APP_URL.replace(/\/+$/, "");
   const xState = getXAccessState();
+  const gmailState = getGmailAccessState();
   const metaSession: { id: string; provider: "facebook" | "instagram" } | null =
     params.meta_session &&
     (params.meta_provider === "facebook" || params.meta_provider === "instagram")
@@ -99,6 +103,12 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
       xConnected={params.x_connected ?? null}
       xWarning={params.x_warning ?? null}
       xError={params.x_error ?? null}
+      gmailConfig={{
+        configured: gmailState.configured,
+        redirectUri: gmailState.redirectUri,
+      }}
+      gmailConnected={params.gmail_connected ?? null}
+      gmailError={params.gmail_error ?? null}
     />
   );
 }

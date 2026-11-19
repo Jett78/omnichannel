@@ -2,6 +2,7 @@ import { Queue } from "bullmq";
 
 import { createRedisConnection } from "@/lib/redis";
 import type {
+  GmailPollJobData,
   MediaJobData,
   OutboundJobData,
   TokenRefreshJobData,
@@ -17,6 +18,7 @@ export const QUEUE_NAMES = {
   outbound: "outbound",
   media: "media",
   tokenRefresh: "token-refresh",
+  gmailPoll: "gmail-poll",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -26,6 +28,7 @@ let queues: {
   outbound: Queue<OutboundJobData>;
   media: Queue<MediaJobData>;
   tokenRefresh: Queue<TokenRefreshJobData>;
+  gmailPoll: Queue<GmailPollJobData>;
 } | null = null;
 
 function buildQueues() {
@@ -64,6 +67,16 @@ function buildQueues() {
         backoff: { type: "fixed", delay: 60_000 },
         removeOnComplete: 100,
         removeOnFail: 1000,
+      },
+    }),
+    gmailPoll: new Queue<GmailPollJobData>(QUEUE_NAMES.gmailPoll, {
+      connection: createRedisConnection(),
+      defaultJobOptions: {
+        // The sweep is periodic and self-healing — a failed tick is
+        // simply retried by the next one, so no per-job retries.
+        attempts: 1,
+        removeOnComplete: 50,
+        removeOnFail: 200,
       },
     }),
   };

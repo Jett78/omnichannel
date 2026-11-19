@@ -148,6 +148,7 @@ function attachmentPreviewSrc(
   if (
     url.startsWith("whatsapp-media:") ||
     url.startsWith("meta-attachment:") ||
+    url.startsWith("gmail-attachment:") ||
     url.startsWith("mock-media:")
   ) {
     return `/api/workspaces/${workspaceId}/conversations/${message.conversationId}/messages/${message.id}/media/${index}`;

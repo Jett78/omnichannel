@@ -322,7 +322,7 @@ export const messagingService = {
           externalMessageId: normalized.externalMessageId,
           status: "RECEIVED",
           sentAt: normalized.sentAt,
-          metadata: { raw: normalized.raw } as Prisma.InputJsonValue,
+          metadata: { ...(normalized.metadata ?? {}), raw: normalized.raw } as Prisma.InputJsonValue,
           attachments: {
             create: (normalized.attachments ?? []).map((a) => ({
               originalUrl: a.url,
@@ -1003,6 +1003,25 @@ export const messagingService = {
       }
     }
 
+    // Email threading (Gmail, Phase 9): replies must carry the
+    // thread id plus the subject / In-Reply-To / References of the
+    // thread's latest inbound message (stored in its metadata at
+    // ingest). Other providers ignore these fields.
+    let emailThreading: { subject?: string; inReplyTo?: string; references?: string } = {};
+    if (channel.provider === "GMAIL") {
+      const latestInbound = await prisma.message.findFirst({
+        where: { conversationId: conversation.id, direction: "INBOUND" },
+        orderBy: { sentAt: "desc" },
+        select: { metadata: true },
+      });
+      const meta = toMetadata(latestInbound?.metadata ?? null);
+      emailThreading = {
+        ...(typeof meta?.subject === "string" ? { subject: meta.subject } : {}),
+        ...(typeof meta?.rfcMessageId === "string" ? { inReplyTo: meta.rfcMessageId } : {}),
+        ...(typeof meta?.references === "string" ? { references: meta.references } : {}),
+      };
+    }
+
     try {
       const result = await provider.sendMessage({
         channel: channelContext,
@@ -1010,6 +1029,10 @@ export const messagingService = {
         message: {
           type: message.type,
           ...(message.body !== null ? { body: message.body } : {}),
+          ...(conversation.externalThreadId
+            ? { externalThreadId: conversation.externalThreadId }
+            : {}),
+          ...emailThreading,
           attachments: message.attachments
             .filter((a) => a.originalUrl !== null)
             .map((a) => ({

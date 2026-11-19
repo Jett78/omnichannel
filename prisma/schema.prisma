@@ -27,6 +27,7 @@ enum Provider {
   TELEGRAM
   X
   TIKTOK
+  GMAIL
   /** Dev/test-only provider (Phase 4). Never a real platform. */
   MOCK
 }

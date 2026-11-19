@@ -2,6 +2,7 @@ import {
   AtSign,
   Camera,
   FlaskConical,
+  Mail,
   MessageCircle,
   Music2,
   Phone,
@@ -81,6 +82,16 @@ export const PROVIDER_META: Record<Provider, ProviderMeta> = {
     color: "#161823",
     icon: Music2,
   },
+  GMAIL: {
+    provider: "GMAIL",
+    label: "Gmail",
+    shortLabel: "Gmail",
+    description:
+      "A shared Gmail mailbox in the inbox — official Gmail API, new mail polls in about once a minute, no reply window.",
+    phase: "Phase 9 — live",
+    color: "#ea4335",
+    icon: Mail,
+  },
   MOCK: {
     provider: "MOCK",
     label: "Mock (dev only)",
@@ -98,6 +109,7 @@ export const PROVIDER_ORDER: Provider[] = [
   "INSTAGRAM",
   "WHATSAPP",
   "X",
+  "GMAIL",
   "TIKTOK",
 ];
 

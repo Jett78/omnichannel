@@ -25,3 +25,8 @@ export interface TokenRefreshJobData {
   channelId: string;
   workspaceId: string;
 }
+
+export interface GmailPollJobData {
+  /** Absent = sweep every CONNECTED Gmail channel (the scheduled job). */
+  channelId?: string;
+}

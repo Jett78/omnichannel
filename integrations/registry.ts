@@ -1,6 +1,7 @@
 import { AppError } from "@/lib/errors";
 import type { ProviderId } from "@/types/messaging";
 
+import { gmailProvider } from "@/integrations/gmail/gmail-provider";
 import { mockProvider } from "@/integrations/mock/mock.provider";
 import { facebookProvider } from "@/integrations/meta/facebook-provider";
 import { instagramProvider } from "@/integrations/meta/instagram-provider";
@@ -46,6 +47,7 @@ registerProvider(instagramProvider);
 registerProvider(whatsappProvider);
 registerProvider(tiktokProvider);
 registerProvider(xProvider);
+registerProvider(gmailProvider);
 
 if (isMockProviderEnabled()) {
   registerProvider(mockProvider);

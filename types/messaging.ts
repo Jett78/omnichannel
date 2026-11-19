@@ -13,6 +13,7 @@ export type ProviderId =
   | "telegram"
   | "x"
   | "tiktok"
+  | "gmail"
   /** Dev/test-only provider (Phase 4). Never a real platform. */
   | "mock";
 
@@ -23,6 +24,7 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
   "telegram",
   "x",
   "tiktok",
+  "gmail",
   "mock",
 ];
 
@@ -75,6 +77,8 @@ export interface NormalizedInboundMessage {
   body?: string;
   attachments?: NormalizedAttachment[];
   sentAt: Date;
+  /** Provider-extracted fields stored alongside `raw` in Message.metadata (e.g. email subject / threading headers). */
+  metadata?: Record<string, unknown>;
   raw: unknown;
 }
 
@@ -119,6 +123,14 @@ export interface OutboundMessage {
   templateName?: string;
   templateLanguage?: string;
   templateParams?: string[];
+  /** Email (Gmail) threading: the provider-side thread to reply in. */
+  externalThreadId?: string;
+  /** Email: the thread's subject (the provider adds "Re:" as needed). */
+  subject?: string;
+  /** Email: RFC Message-ID of the latest inbound message in the thread. */
+  inReplyTo?: string;
+  /** Email: RFC References chain of the thread. */
+  references?: string;
 }
 
 export interface DeliveryStatusUpdate {
