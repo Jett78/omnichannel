@@ -159,6 +159,30 @@ interface ExtractedContent {
   attachments: NormalizedAttachment[];
 }
 
+/**
+ * Tidy a decoded Gmail body for the inbox thread view:
+ *  - drop `[image: …]` placeholders — Gmail's plain-text rendering of
+ *    an inline image; the image itself arrives as an attachment and
+ *    is previewed separately, so the placeholder is pure noise;
+ *  - cut the quoted history tail (the `On … wrote:` line and the
+ *    `>`-quoted lines after it) — Gmail's own UI collapses it, and in
+ *    a threaded inbox the earlier messages are already visible.
+ * Returns "" when nothing but placeholders/quotes remain; the caller
+ * then falls back to the message snippet.
+ */
+export function cleanGmailPlainText(text: string): string {
+  const withoutImages = text.replace(/\[image:\s*[^\]]*\]/gi, "");
+  const lines = withoutImages.split("\n");
+  const quoteStart = lines.findIndex((line) => /^On .+ wrote:\s*$/.test(line.trim()));
+  const kept = quoteStart >= 0 ? lines.slice(0, quoteStart) : lines;
+  while (kept.length > 0 && /^\s*>/.test(kept[kept.length - 1] ?? "")) kept.pop();
+  return kept
+    .join("\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function extractContent(part: GmailPart | undefined, messageId: string): ExtractedContent {
   let plain: string | undefined;
   let html: string | undefined;
@@ -182,7 +206,8 @@ function extractContent(part: GmailPart | undefined, messageId: string): Extract
     for (const child of node.parts ?? []) walk(child);
   };
   walk(part);
-  const body = plain?.trim() ? plain.trim() : html?.trim() ? stripHtml(html) : undefined;
+  const rawBody = plain?.trim() ? plain.trim() : html?.trim() ? stripHtml(html) : undefined;
+  const body = rawBody ? cleanGmailPlainText(rawBody) || undefined : undefined;
   return { ...(body ? { body } : {}), attachments };
 }
 

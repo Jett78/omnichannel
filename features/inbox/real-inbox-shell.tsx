@@ -158,12 +158,36 @@ function attachmentPreviewSrc(
 
 type RealAttachment = NonNullable<RealMessageItem["attachments"]>[number];
 
-function AttachmentChip({ attachment }: { attachment: RealAttachment }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 self-start rounded-md bg-black/5 px-2 py-1 text-xs dark:bg-white/10">
+function AttachmentChip({
+  attachment,
+  href,
+}: {
+  attachment: RealAttachment;
+  href?: string | null;
+}) {
+  const content = (
+    <>
       <Paperclip className="size-3 shrink-0" />
       <span className="max-w-48 truncate">{attachment.fileName ?? "Attachment"}</span>
       {attachment.size ? <span>· {formatFileSize(attachment.size)}</span> : null}
+    </>
+  );
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        title={`Open ${attachment.fileName ?? "attachment"}`}
+        className="inline-flex items-center gap-1.5 self-start rounded-md bg-black/5 px-2 py-1 text-xs transition-colors hover:bg-black/10 hover:underline dark:bg-white/10 dark:hover:bg-white/20"
+      >
+        {content}
+      </a>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 self-start rounded-md bg-black/5 px-2 py-1 text-xs dark:bg-white/10">
+      {content}
     </span>
   );
 }
@@ -190,7 +214,7 @@ function AttachmentPreviewImage({
     return () => window.removeEventListener("keydown", onKey);
   }, [open ]);
 
-  if (failed) return <AttachmentChip attachment={attachment} />;
+  if (failed) return <AttachmentChip attachment={attachment} href={src} />;
   return (
     <>
       <button
@@ -268,7 +292,7 @@ function MessageAttachments({
             />
           );
         }
-        return <AttachmentChip key={attachment.id} attachment={attachment} />;
+        return <AttachmentChip key={attachment.id} attachment={attachment} href={src} />;
       })}
     </div>
   );

@@ -16,6 +16,7 @@ import {
 import type { FetchLike } from "@/integrations/gmail/gmail-client";
 import {
   GmailProvider,
+  cleanGmailPlainText,
   gravatarAvatarUrl,
   normalizeGmailMessage,
   parseEmailAddress,
@@ -373,6 +374,34 @@ async function main(): Promise<void> {
     "Normalize: HTML-only mail → stripped plain text",
     nHtml?.body === "Hello there\nSecond line",
     JSON.stringify(nHtml?.body),
+  );
+  assert(
+    "Body cleanup: [image:] placeholders dropped, quoted history tail cut",
+    cleanGmailPlainText(
+      "Here is my resume.\n[image: download.png]\n\nOn Thu, Nov 19, 2026 at 2:35 PM Jet Deula <jetdeula@gmail.com> wrote:\n> hello\n>",
+    ) === "Here is my resume." &&
+      cleanGmailPlainText("First line\nSecond line") === "First line\nSecond line",
+  );
+  const messyMail: GmailMessageResource = {
+    id: "gm-messy",
+    threadId: "th-3",
+    labelIds: ["INBOX"],
+    internalDate: String(Date.now()),
+    payload: {
+      mimeType: "text/plain",
+      headers: [{ name: "From", value: CUSTOMER }],
+      body: {
+        size: 90,
+        data: b64url(
+          "Application attached. [image: logo.png]\n\nOn Wed, Nov 18, 2026 at 9:00 AM Someone <s@example.com> wrote:\n> earlier text",
+        ),
+      },
+    },
+  };
+  assert(
+    "Normalize: body cleanup applies at ingest (no placeholders, no quote tail)",
+    normalizeGmailMessage(messyMail, MAILBOX)?.body === "Application attached.",
+    JSON.stringify(normalizeGmailMessage(messyMail, MAILBOX)?.body),
   );
 
   // ── Provider OAuth + API via the fake ────────────────────────────
