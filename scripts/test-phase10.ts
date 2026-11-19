@@ -67,6 +67,7 @@ interface FakeCall {
   body?: string;
   formChatId?: string;
   formKind?: string;
+  formFileName?: string;
 }
 
 function makeFakeFetch() {
@@ -84,6 +85,7 @@ function makeFakeFetch() {
     let body: string | undefined;
     let formChatId: string | undefined;
     let formKind: string | undefined;
+    let formFileName: string | undefined;
     if (typeof init?.body === "string") body = init.body;
     if (init?.body instanceof FormData) {
       formChatId = String(init.body.get("chat_id") ?? "");
@@ -94,8 +96,16 @@ function makeFakeFetch() {
           : init.body.has("audio")
             ? "audio"
             : "document";
+      const file = init.body.get(formKind);
+      if (file instanceof File) formFileName = file.name;
     }
-    calls.push({ url, method, ...(body ? { body } : {}), ...(formChatId ? { formChatId, formKind } : {}) });
+    calls.push({
+      url,
+      method,
+      ...(body ? { body } : {}),
+      ...(formChatId ? { formChatId, formKind } : {}),
+      ...(formFileName ? { formFileName } : {}),
+    });
 
     if (url.includes(`/file/bot${BOT_TOKEN}/`)) {
       return new Response(Buffer.from("JPEGDATA"), { status: 200 });
@@ -126,12 +136,31 @@ function makeFakeFetch() {
           result: { message_id: 9001, chat: { id: Number(payload.chat_id) || 0 } },
         });
       case "sendPhoto":
+        // Telegram rejects photos whose width + height exceed
+        // 10,000 px — the fake reproduces that verdict for the
+        // oversized fixture name.
+        if (formFileName === "big-photo.jpg") {
+          return json(400, {
+            ok: false,
+            error_code: 400,
+            description: "Bad Request: PHOTO_INVALID_DIMENSIONS",
+          });
+        }
         return json(200, {
           ok: true,
           result: {
             message_id: 9002,
             chat: { id: Number(formChatId ?? payload.chat_id) || 0 },
             photo: [{ file_id: "sent-photo-file-1", file_unique_id: "uq1", width: 10, height: 10 }],
+          },
+        });
+      case "sendDocument":
+        return json(200, {
+          ok: true,
+          result: {
+            message_id: 9003,
+            chat: { id: Number(formChatId ?? payload.chat_id) || 0 },
+            document: { file_id: "sent-doc-file-1" },
           },
         });
       case "getFile":
@@ -461,6 +490,30 @@ async function main(): Promise<void> {
     "Media: the stash is single-use — a second send of the same ref fails honestly",
     expiredError !== null && expiredError.includes("no longer available"),
     expiredError ?? "no error",
+  );
+
+  const bigUpload = await provider.uploadMedia({
+    channel: channelContext,
+    media: { bytes: Buffer.from("BIGJPEG"), mimeType: "image/jpeg", fileName: "big-photo.jpg" },
+  });
+  const bigSent = await provider.sendMessage({
+    channel: channelContext,
+    toExternalId: String(CUSTOMER_ID),
+    message: {
+      type: "IMAGE",
+      body: "Full size original",
+      externalThreadId: String(CUSTOMER_ID),
+      attachments: [{ url: bigUpload.ref, mimeType: "image/jpeg", fileName: "big-photo.jpg" }],
+    },
+  });
+  const docCall = fake.calls.find((call) => call.url.endsWith("/sendDocument"));
+  assert(
+    "Media: oversized photo falls back to sendDocument and still delivers",
+    bigSent.externalMessageId === "9003" &&
+      docCall?.formChatId === String(CUSTOMER_ID) &&
+      docCall?.formKind === "document" &&
+      docCall?.formFileName === "big-photo.jpg",
+    JSON.stringify(docCall),
   );
 
   const downloaded = await provider.downloadMedia("telegram-file:photo-large", channelContext);

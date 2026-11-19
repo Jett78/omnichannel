@@ -3,9 +3,11 @@ import { randomUUID } from "node:crypto";
 import { AppError } from "@/lib/errors";
 import { getRedis } from "@/lib/redis";
 import {
+  TelegramApiError,
   TelegramClient,
   telegramMediaKind,
   type FetchLike,
+  type TelegramSentMessage,
   type TelegramUser,
 } from "@/integrations/telegram/telegram-client";
 import type {
@@ -283,14 +285,33 @@ export class TelegramProvider implements IMessagingProvider {
             502,
           );
         }
-        const sent = await this.client.sendMediaBytes(
-          token,
-          kind,
-          chatId,
-          Buffer.from(stashed, "base64"),
-          attachment.fileName ?? "file",
-          caption,
-        );
+        const bytes = Buffer.from(stashed, "base64");
+        const fileName = attachment.fileName ?? "file";
+        let sent: TelegramSentMessage;
+        try {
+          sent = await this.client.sendMediaBytes(token, kind, chatId, bytes, fileName, caption);
+        } catch (error) {
+          // Telegram's sendPhoto rejects photos whose width + height
+          // exceed 10,000 px ("PHOTO_INVALID_DIMENSIONS") — every
+          // full-resolution phone portrait hits this. Deliver the
+          // same bytes as a document instead: no dimension limits,
+          // and the customer gets the full-quality original.
+          if (
+            kind !== "photo" ||
+            !(error instanceof TelegramApiError) ||
+            !error.message.includes("PHOTO_INVALID_DIMENSIONS")
+          ) {
+            throw error;
+          }
+          sent = await this.client.sendMediaBytes(
+            token,
+            "document",
+            chatId,
+            bytes,
+            fileName,
+            caption,
+          );
+        }
         await getRedis().del(stashKey);
         return { externalMessageId: String(sent.message_id) };
       }
