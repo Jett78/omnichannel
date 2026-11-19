@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { Job } from "bullmq";
 
 import { auth } from "@/lib/auth";
@@ -14,6 +16,7 @@ import {
 import type { FetchLike } from "@/integrations/gmail/gmail-client";
 import {
   GmailProvider,
+  gravatarAvatarUrl,
   normalizeGmailMessage,
   parseEmailAddress,
   type GmailMessageResource,
@@ -333,6 +336,14 @@ async function main(): Promise<void> {
       n1?.metadata?.rfcMessageId === "<m1@example.com>" &&
       n1?.metadata?.references === "<m0@example.com>",
   );
+  const EXPECTED_AVATAR = `https://www.gravatar.com/avatar/${createHash("md5")
+    .update(CUSTOMER)
+    .digest("hex")}?s=128&d=404`;
+  assert(
+    "Normalize: sender avatar is the Gravatar URL of the From address (Gmail API has no sender photo)",
+    n1?.senderAvatarUrl === EXPECTED_AVATAR && gravatarAvatarUrl(CUSTOMER) === EXPECTED_AVATAR,
+    n1?.senderAvatarUrl,
+  );
   const n2 = normalizeGmailMessage(MESSAGE_2, MAILBOX);
   assert(
     "Normalize: attachment → gmail-attachment ref with filename/mime/size",
@@ -462,6 +473,12 @@ async function main(): Promise<void> {
   assert(
     "Poll: thread conversation created with the customer as contact",
     !!conversation && conversation.contact.displayName === "Customer One",
+  );
+  assert(
+    "Poll: contact email + Gravatar avatar recorded at ingest",
+    conversation?.contact.email === CUSTOMER &&
+      conversation?.contact.avatarUrl === EXPECTED_AVATAR,
+    JSON.stringify(conversation?.contact),
   );
   assert(
     "Poll: both customer messages ingested, own SENT mail skipped",

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { AppError } from "@/lib/errors";
 import { GOOGLE_AUTH_URL, GmailClient, type FetchLike } from "@/integrations/gmail/gmail-client";
 import { getGmailConfig } from "@/integrations/gmail/gmail-config";
@@ -211,6 +213,19 @@ export function gmailThreadingMetadata(raw: GmailMessageResource): Record<string
  * inbox: the mailbox's own mail (From == the connected address) and
  * SENT/DRAFT/SPAM/TRASH labels.
  */
+/**
+ * The Gmail API exposes no sender profile photo (unlike Meta's PSID
+ * profile endpoint), so the best available public source is Gravatar,
+ * keyed by the MD5 of the sender's email address. `d=404` makes
+ * Gravatar return an error for addresses without a profile instead of
+ * a placeholder image, and the avatar component falls back to the
+ * sender's initials in that case.
+ */
+export function gravatarAvatarUrl(email: string): string {
+  const hash = createHash("md5").update(email.trim().toLowerCase()).digest("hex");
+  return `https://www.gravatar.com/avatar/${hash}?s=128&d=404`;
+}
+
 export function normalizeGmailMessage(
   raw: GmailMessageResource,
   ownEmail: string,
@@ -236,6 +251,7 @@ export function normalizeGmailMessage(
     externalThreadId: raw.threadId,
     senderExternalId: from.email,
     ...(from.name ? { senderName: from.name } : {}),
+    senderAvatarUrl: gravatarAvatarUrl(from.email),
     type: body ? "TEXT" : attachments.length > 0 ? attachmentMessageType(attachments) : "TEXT",
     ...(body ? { body } : raw.snippet ? { body: raw.snippet } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),

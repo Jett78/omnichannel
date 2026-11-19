@@ -240,6 +240,9 @@ export const messagingService = {
           // WhatsApp senders are identified by their phone number
           // (wa_id) — store it as the contact's phone at ingest.
           ...(channel.provider === "WHATSAPP" ? { phone: normalized.senderExternalId } : {}),
+          // Gmail senders are identified by their email address —
+          // store it as the contact's email at ingest.
+          ...(channel.provider === "GMAIL" ? { email: normalized.senderExternalId } : {}),
         },
       });
       identity = await prisma.contactIdentity.create({
@@ -252,6 +255,19 @@ export const messagingService = {
         where: { id: identity.contactId, workspaceId, phone: null },
         data: { phone: normalized.senderExternalId },
       });
+    } else if (channel.provider === "GMAIL") {
+      // Backfill the email (and the best-effort Gravatar avatar) on
+      // Gmail contacts created before they were recorded at ingest.
+      await prisma.contact.updateMany({
+        where: { id: identity.contactId, workspaceId, email: null },
+        data: { email: normalized.senderExternalId },
+      });
+      if (normalized.senderAvatarUrl) {
+        await prisma.contact.updateMany({
+          where: { id: identity.contactId, workspaceId, avatarUrl: null },
+          data: { avatarUrl: normalized.senderAvatarUrl },
+        });
+      }
     }
     const contactId = identity.contactId;
 
