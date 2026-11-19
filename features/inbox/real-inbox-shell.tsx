@@ -1588,7 +1588,7 @@ export function RealInboxShell({
                     </div>
                   ) : message.isPrivateNote ? (
                     <div key={message.id} className="flex justify-center">
-                      <div className="group relative w-full max-w-[85%] rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                      <div className="group relative w-full max-w-[85%] rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
                         <MessageActions
                           message={message}
                           side="left"
@@ -1615,7 +1615,7 @@ export function RealInboxShell({
                           side="right"
                           onCopy={() => copyMessage(message)}
                         />
-                        <div className="bg-background rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-sm shadow-xs">
+                        <div className="bg-background rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap shadow-xs">
                           <MessageAttachments workspaceId={workspaceId} message={message} />
                           {message.content}
                         </div>
@@ -1645,7 +1645,7 @@ export function RealInboxShell({
                             </span>
                           ) : null}
                           <MessageAttachments workspaceId={workspaceId} message={message} />
-                          <div>{message.content}</div>
+                          <div className="break-words whitespace-pre-wrap">{message.content}</div>
                         </div>
                         <p className="text-muted-foreground mt-1 flex items-center justify-end gap-1 pr-1 text-[11px]">
                           {formatMessageTime(message.createdAt)} · {message.status.toLowerCase()}

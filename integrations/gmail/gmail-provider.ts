@@ -166,21 +166,45 @@ interface ExtractedContent {
  *    is previewed separately, so the placeholder is pure noise;
  *  - cut the quoted history tail (the `On … wrote:` line and the
  *    `>`-quoted lines after it) — Gmail's own UI collapses it, and in
- *    a threaded inbox the earlier messages are already visible.
+ *    a threaded inbox the earlier messages are already visible;
+ *  - reflow hard-wrapped lines: plain-text parts wrap paragraphs at
+ *    ~78 columns, so a line is joined onto the previous one when the
+ *    previous line is long (≥55 chars, not ending with ":") and the
+ *    line itself does not start a list item. Short lines — list
+ *    items, signature blocks, greetings — keep their own line, the
+ *    way Gmail's HTML view presents them.
  * Returns "" when nothing but placeholders/quotes remain; the caller
  * then falls back to the message snippet.
  */
 export function cleanGmailPlainText(text: string): string {
-  const withoutImages = text.replace(/\[image:\s*[^\]]*\]/gi, "");
+  const withoutImages = text.replace(/\r\n/g, "\n").replace(/\[image:\s*[^\]]*\]/gi, "");
   const lines = withoutImages.split("\n");
   const quoteStart = lines.findIndex((line) => /^On .+ wrote:\s*$/.test(line.trim()));
   const kept = quoteStart >= 0 ? lines.slice(0, quoteStart) : lines;
   while (kept.length > 0 && /^\s*>/.test(kept[kept.length - 1] ?? "")) kept.pop();
-  return kept
-    .join("\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const blocks = kept.join("\n").split(/\n\s*\n/);
+  const rendered = blocks.map((block) => {
+    const blockLines = block
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const out: string[] = [];
+    for (const line of blockLines) {
+      const prev = out[out.length - 1];
+      if (
+        prev !== undefined &&
+        !/^\s*([-*•]|\d{1,2}[.)])\s/.test(line) &&
+        prev.length >= 55 &&
+        !prev.endsWith(":")
+      ) {
+        out[out.length - 1] = `${prev} ${line}`;
+      } else {
+        out.push(line);
+      }
+    }
+    return out.join("\n");
+  });
+  return rendered.filter(Boolean).join("\n\n").trim();
 }
 
 function extractContent(part: GmailPart | undefined, messageId: string): ExtractedContent {

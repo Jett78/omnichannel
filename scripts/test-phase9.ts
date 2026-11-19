@@ -403,6 +403,18 @@ async function main(): Promise<void> {
     normalizeGmailMessage(messyMail, MAILBOX)?.body === "Application attached.",
     JSON.stringify(normalizeGmailMessage(messyMail, MAILBOX)?.body),
   );
+  assert(
+    "Body cleanup: hard-wrapped paragraphs reflow; lists + signatures keep their lines",
+    cleanGmailPlainText(
+      "I am applying for the Full Stack Developer position (Mid-Baneshwor,\r\nKathmandu) advertised on SathiJob.\r\n\r\nDetails as requested:\r\n- Expected salary: NPR 40,000\r\n- Notice period: 10 days\r\n\r\nBest regards,\r\nJeet Deula",
+    ) ===
+      "I am applying for the Full Stack Developer position (Mid-Baneshwor, Kathmandu) advertised on SathiJob.\n\nDetails as requested:\n- Expected salary: NPR 40,000\n- Notice period: 10 days\n\nBest regards,\nJeet Deula",
+    JSON.stringify(
+      cleanGmailPlainText(
+        "I am applying for the Full Stack Developer position (Mid-Baneshwor,\r\nKathmandu) advertised on SathiJob.",
+      ),
+    ),
+  );
 
   // ── Provider OAuth + API via the fake ────────────────────────────
   const fake = makeFakeFetch();
