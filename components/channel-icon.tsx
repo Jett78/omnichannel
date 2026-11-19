@@ -2,6 +2,7 @@ import {
   AtSign,
   Camera,
   FlaskConical,
+  Globe,
   Mail,
   MessageCircle,
   Music2,
@@ -92,6 +93,16 @@ export const PROVIDER_META: Record<Provider, ProviderMeta> = {
     color: "#ea4335",
     icon: Mail,
   },
+  WEBSITE: {
+    provider: "WEBSITE",
+    label: "Website live chat",
+    shortLabel: "Website",
+    description:
+      "A chat bubble on your own website — visitors chat without any account, you reply from this inbox.",
+    phase: "Phase 11 — live",
+    color: "#6366f1",
+    icon: Globe,
+  },
   MOCK: {
     provider: "MOCK",
     label: "Mock (dev only)",
@@ -110,6 +121,7 @@ export const PROVIDER_ORDER: Provider[] = [
   "WHATSAPP",
   "X",
   "GMAIL",
+  "WEBSITE",
   "TIKTOK",
 ];
 

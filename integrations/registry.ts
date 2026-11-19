@@ -4,6 +4,7 @@ import type { ProviderId } from "@/types/messaging";
 import { gmailProvider } from "@/integrations/gmail/gmail-provider";
 import { mockProvider } from "@/integrations/mock/mock.provider";
 import { telegramProvider } from "@/integrations/telegram/telegram-provider";
+import { websiteProvider } from "@/integrations/website/website-provider";
 import { facebookProvider } from "@/integrations/meta/facebook-provider";
 import { instagramProvider } from "@/integrations/meta/instagram-provider";
 import { tiktokProvider } from "@/integrations/tiktok/tiktok-provider";
@@ -50,6 +51,7 @@ registerProvider(tiktokProvider);
 registerProvider(xProvider);
 registerProvider(gmailProvider);
 registerProvider(telegramProvider);
+registerProvider(websiteProvider);
 
 if (isMockProviderEnabled()) {
   registerProvider(mockProvider);

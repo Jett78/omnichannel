@@ -28,6 +28,8 @@ enum Provider {
   X
   TIKTOK
   GMAIL
+  /** Website live-chat widget (Phase 11) — our own channel, no external platform. */
+  WEBSITE
   /** Dev/test-only provider (Phase 4). Never a real platform. */
   MOCK
 }

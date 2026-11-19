@@ -151,6 +151,7 @@ function attachmentPreviewSrc(
     url.startsWith("gmail-attachment:") ||
     url.startsWith("telegram-file:") ||
     url.startsWith("telegram-pending:") ||
+    url.startsWith("website-file:") ||
     url.startsWith("mock-media:")
   ) {
     return `/api/workspaces/${workspaceId}/conversations/${message.conversationId}/messages/${message.id}/media/${index}`;

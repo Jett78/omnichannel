@@ -14,6 +14,8 @@ export type ProviderId =
   | "x"
   | "tiktok"
   | "gmail"
+  /** Website live-chat widget (Phase 11) — our own channel, no external platform. */
+  | "website"
   /** Dev/test-only provider (Phase 4). Never a real platform. */
   | "mock";
 
@@ -25,6 +27,7 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
   "x",
   "tiktok",
   "gmail",
+  "website",
   "mock",
 ];
 

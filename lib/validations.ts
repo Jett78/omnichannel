@@ -98,6 +98,31 @@ export const whatsappManualConnectSchema = z.object({
 });
 export type WhatsAppManualConnectInput = z.infer<typeof whatsappManualConnectSchema>;
 
+export const websiteChannelCreateSchema = z.object({
+  name: z.string().trim().min(2, "Give the website a name").max(80),
+  websiteUrl: z.string().trim().max(200).optional(),
+  widgetColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Use a hex color like #4f46e5")
+    .optional(),
+  welcomeTitle: z.string().trim().max(80).optional(),
+  welcomeTagline: z.string().trim().max(140).optional(),
+  preChatForm: z.boolean().optional(),
+});
+export type WebsiteChannelCreateInput = z.infer<typeof websiteChannelCreateSchema>;
+
+export const websiteChannelUpdateSchema = websiteChannelCreateSchema.partial();
+export type WebsiteChannelUpdateInput = z.infer<typeof websiteChannelUpdateSchema>;
+
+export const widgetStartSchema = z.object({
+  name: z.string().trim().max(80).optional(),
+  email: z.string().trim().max(120).optional(),
+});
+
+export const widgetMessageSchema = z.object({
+  content: z.string().trim().min(1, "Message cannot be empty").max(4000),
+});
+
 export const telegramConnectSchema = z.object({
   botToken: z
     .string()

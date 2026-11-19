@@ -130,6 +130,11 @@ function toRealChannelConfig(config: unknown): RealChannelConfig | undefined {
     ...(pick("displayPhoneNumber") ? { displayPhoneNumber: pick("displayPhoneNumber") } : {}),
     ...(pick("verifiedName") ? { verifiedName: pick("verifiedName") } : {}),
     ...(pick("connectionMethod") ? { connectionMethod: pick("connectionMethod") } : {}),
+    ...(pick("websiteUrl") ? { websiteUrl: pick("websiteUrl") } : {}),
+    ...(pick("widgetColor") ? { widgetColor: pick("widgetColor") } : {}),
+    ...(pick("welcomeTitle") ? { welcomeTitle: pick("welcomeTitle") } : {}),
+    ...(pick("welcomeTagline") ? { welcomeTagline: pick("welcomeTagline") } : {}),
+    ...(typeof record.preChatForm === "boolean" ? { preChatForm: record.preChatForm } : {}),
     ...(pick("wabaId") ? { wabaId: pick("wabaId") } : {}),
     ...(pick("qualityRating") ? { qualityRating: pick("qualityRating") } : {}),
     ...(subscription

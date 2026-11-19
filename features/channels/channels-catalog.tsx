@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { MetaConnectionPanel } from "@/features/channels/meta-connection-panel";
 import { TelegramConnectPanel } from "@/features/channels/telegram-connect-panel";
+import { WebsiteConnectPanel } from "@/features/channels/website-connect-panel";
 import {
   WhatsAppConnectPanel,
   type WhatsAppConfigView,
@@ -29,6 +30,11 @@ export interface RealChannelConfig {
   lastError?: string;
   lastErrorAt?: string;
   username?: string;
+  websiteUrl?: string;
+  widgetColor?: string;
+  welcomeTitle?: string;
+  welcomeTagline?: string;
+  preChatForm?: boolean;
   displayPhoneNumber?: string;
   verifiedName?: string;
   connectionMethod?: string;
@@ -158,6 +164,26 @@ export function ChannelsCatalog({
   function openTelegramEdit(channelId: string) {
     setTgEditChannelId(channelId);
     setTgEditSignal((signal) => signal + 1);
+  }
+
+  const [webCreateSignal, setWebCreateSignal] = useState(0);
+  const [webEditSignal, setWebEditSignal] = useState(0);
+  const [webEditChannelId, setWebEditChannelId] = useState<string | null>(null);
+  const [webSnippetSignal, setWebSnippetSignal] = useState(0);
+  const [webSnippetChannelId, setWebSnippetChannelId] = useState<string | null>(null);
+
+  function openWebsiteCreate() {
+    setWebCreateSignal((signal) => signal + 1);
+  }
+
+  function openWebsiteEdit(channelId: string) {
+    setWebEditChannelId(channelId);
+    setWebEditSignal((signal) => signal + 1);
+  }
+
+  function openWebsiteSnippet(channelId: string) {
+    setWebSnippetChannelId(channelId);
+    setWebSnippetSignal((signal) => signal + 1);
   }
   const connectedProviders = new Set(
     realChannels.filter((c) => c.status === "CONNECTED").map((c) => c.provider),
@@ -374,6 +400,18 @@ export function ChannelsCatalog({
         />
       ) : null}
 
+      {workspaceId ? (
+        <WebsiteConnectPanel
+          workspaceId={workspaceId}
+          connectedChannels={realChannels}
+          createSignal={webCreateSignal}
+          editSignal={webEditSignal}
+          editChannelId={webEditChannelId}
+          snippetSignal={webSnippetSignal}
+          snippetChannelId={webSnippetChannelId}
+        />
+      ) : null}
+
       {mockEnabled && workspaceId ? (
         <Card className="border-dashed">
           <CardHeader>
@@ -492,6 +530,7 @@ export function ChannelsCatalog({
                   channel.provider === "WHATSAPP" ||
                   channel.provider === "X" ||
                   channel.provider === "GMAIL" ||
+                  channel.provider === "WEBSITE" ||
                   channel.provider === "TELEGRAM" ? (
                     <span className="flex items-center gap-1">
                       {(() => {
@@ -511,7 +550,24 @@ export function ChannelsCatalog({
                                     workspaceId
                                   ? `/api/workspaces/${workspaceId}/channels/gmail/connect`
                                   : null;
-                        return channel.provider === "WHATSAPP" && workspaceId ? (
+                        return channel.provider === "WEBSITE" && workspaceId ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openWebsiteSnippet(channel.id)}
+                            >
+                              Embed code
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openWebsiteEdit(channel.id)}
+                            >
+                              Settings
+                            </Button>
+                          </>
+                        ) : channel.provider === "WHATSAPP" && workspaceId ? (
                           <Button
                             variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
                             size="sm"
@@ -662,6 +718,14 @@ export function ChannelsCatalog({
                   ) : provider === "TELEGRAM" && workspaceId && isConnected ? (
                     <Button variant="outline" className="w-full" onClick={openTelegramConnect}>
                       Connect another bot
+                    </Button>
+                  ) : provider === "WEBSITE" && workspaceId && !isConnected ? (
+                    <Button className="w-full" onClick={openWebsiteCreate}>
+                      Add to your website
+                    </Button>
+                  ) : provider === "WEBSITE" && workspaceId && isConnected ? (
+                    <Button variant="outline" className="w-full" onClick={openWebsiteCreate}>
+                      Add another website
                     </Button>
                   ) : provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId ? (
                     <Button className="w-full" asChild>
