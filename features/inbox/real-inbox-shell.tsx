@@ -1578,7 +1578,7 @@ export function RealInboxShell({
             </div>
 
             <ScrollArea className="min-h-0 flex-1">
-              <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-5">
+              <div className="flex w-full flex-col gap-4 px-4 py-5">
                 {messages.map((message) =>
                   message.messageType === "SYSTEM" || message.senderType === "SYSTEM" ? (
                     <div key={message.id} className="flex justify-center">
@@ -1672,7 +1672,7 @@ export function RealInboxShell({
             </ScrollArea>
 
             <div className="shrink-0 border-t px-4 py-3">
-              <div className="mx-auto max-w-3xl">
+              <div className="w-full">
                 {isWhatsApp && composerMode === "reply" && whatsappWindowClosed ? (
                   <p className="mb-2 flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     <TriangleAlert className="mt-px size-3.5 shrink-0" />

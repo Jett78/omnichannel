@@ -249,7 +249,7 @@ export function ChannelsCatalog({
   const connectedCount = realChannels.filter((c) => c.status === "CONNECTED").length;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8">
+    <div className="flex w-full flex-col gap-8">
       {/* Hero */}
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-8 text-white shadow-lg sm:px-8">
         <div
