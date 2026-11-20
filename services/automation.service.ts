@@ -2,7 +2,7 @@ import { runInAutomation } from "@/lib/automation-context";
 import { AppError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspacePermission } from "@/lib/workspace-auth";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { conversationService } from "@/services/conversation.service";
 import { messagingService } from "@/services/messaging.service";
 
@@ -171,9 +171,12 @@ export const automationService = {
         ...(input.trigger !== undefined ? { trigger: input.trigger } : {}),
         ...(input.conditions !== undefined
           ? {
-              conditions: (input.conditions ?? undefined) as
-                | Prisma.InputJsonValue
-                | undefined,
+              // Explicit null clears the conditions (DbNull = SQL NULL
+              // for a Json column); an object replaces them.
+              conditions:
+                input.conditions === null
+                  ? Prisma.DbNull
+                  : (input.conditions as Prisma.InputJsonValue),
             }
           : {}),
         ...(input.actions !== undefined
