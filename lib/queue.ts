@@ -5,6 +5,7 @@ import type {
   GmailPollJobData,
   MediaJobData,
   OutboundJobData,
+  OutgoingWebhookJobData,
   TokenRefreshJobData,
   WebhookJobData,
 } from "@/types/queue";
@@ -19,6 +20,7 @@ export const QUEUE_NAMES = {
   media: "media",
   tokenRefresh: "token-refresh",
   gmailPoll: "gmail-poll",
+  outgoingWebhook: "outgoing-webhook",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -29,6 +31,7 @@ let queues: {
   media: Queue<MediaJobData>;
   tokenRefresh: Queue<TokenRefreshJobData>;
   gmailPoll: Queue<GmailPollJobData>;
+  outgoingWebhook: Queue<OutgoingWebhookJobData>;
 } | null = null;
 
 function buildQueues() {
@@ -67,6 +70,15 @@ function buildQueues() {
         backoff: { type: "fixed", delay: 60_000 },
         removeOnComplete: 100,
         removeOnFail: 1000,
+      },
+    }),
+    outgoingWebhook: new Queue<OutgoingWebhookJobData>(QUEUE_NAMES.outgoingWebhook, {
+      connection: createRedisConnection(),
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5000 },
+        removeOnComplete: 1000,
+        removeOnFail: 5000,
       },
     }),
     gmailPoll: new Queue<GmailPollJobData>(QUEUE_NAMES.gmailPoll, {

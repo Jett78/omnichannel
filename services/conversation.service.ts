@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { emitToWorkspace, emitToWorkspaceAndConversation } from "@/lib/realtime";
 import { requireWorkspacePermission } from "@/lib/workspace-auth";
 import { toUnifiedMessage } from "@/services/messaging.service";
+import { outgoingWebhookDispatch } from "@/services/outgoing-webhook.service";
 import type {
   Conversation,
   ConversationPriority,
@@ -454,6 +455,11 @@ export const conversationService = {
 
     const updated = await loadConversationOrThrow(workspaceId, conversationId);
     await emitConversationUpdated(workspaceId, updated);
+    await outgoingWebhookDispatch.conversationEvent(
+      workspaceId,
+      "conversation.assigned",
+      conversationId,
+    );
     return toListItem(updated);
   },
 
@@ -479,6 +485,11 @@ export const conversationService = {
     );
     const updated = await loadConversationOrThrow(workspaceId, conversationId);
     await emitConversationUpdated(workspaceId, updated);
+    await outgoingWebhookDispatch.conversationEvent(
+      workspaceId,
+      "conversation.resolved",
+      conversationId,
+    );
     return toListItem(updated);
   },
 
@@ -504,6 +515,11 @@ export const conversationService = {
     );
     const updated = await loadConversationOrThrow(workspaceId, conversationId);
     await emitConversationUpdated(workspaceId, updated);
+    await outgoingWebhookDispatch.conversationEvent(
+      workspaceId,
+      "conversation.reopened",
+      conversationId,
+    );
     return toListItem(updated);
   },
 

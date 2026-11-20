@@ -8,11 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotificationPreferences } from "@/features/settings/notification-preferences";
+import { OutgoingWebhooks } from "@/features/settings/outgoing-webhooks";
 import { WorkspaceSettings } from "@/features/settings/workspace-settings";
 import { TeamManagement } from "@/features/team/team-management";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/permissions";
+import { outgoingWebhookService } from "@/services/outgoing-webhook.service";
 import { workspaceService } from "@/services/workspace.service";
 
 export default async function SettingsPage() {
@@ -31,6 +33,11 @@ export default async function SettingsPage() {
 
   const invitations = hasPermission(currentMember.role, "members.invite")
     ? await workspaceService.listInvitations(user.id, active.id).catch(() => [])
+    : [];
+
+  const canManageWebhooks = hasPermission(currentMember.role, "workspace.update");
+  const outgoingWebhooks = canManageWebhooks
+    ? await outgoingWebhookService.listWebhooks(user.id, active.id).catch(() => [])
     : [];
 
   return (
@@ -114,6 +121,10 @@ export default async function SettingsPage() {
         currentUserId={user.id}
         currentRole={currentMember.role}
       />
+
+      {canManageWebhooks ? (
+        <OutgoingWebhooks workspaceId={active.id} initialWebhooks={outgoingWebhooks} />
+      ) : null}
 
       <NotificationPreferences />
 

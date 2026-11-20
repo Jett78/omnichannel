@@ -11,6 +11,7 @@ import type { ChannelContext } from "@/integrations/types";
 import { TelegramApiError } from "@/integrations/telegram/telegram-client";
 import { XApiError } from "@/integrations/x/x-api-client";
 import { channelCredentialService } from "@/services/channel-credential.service";
+import { outgoingWebhookDispatch } from "@/services/outgoing-webhook.service";
 import type { Message, MessageAttachment, Prisma } from "@/generated/prisma/client";
 import {
   providerEnumToId,
@@ -288,6 +289,7 @@ export const messagingService = {
       orderBy: { createdAt: "desc" },
     });
     let conversationCreated = false;
+    let conversationReopened = false;
     if (!conversation) {
       conversation = await prisma.conversation.create({
         data: {
@@ -305,6 +307,7 @@ export const messagingService = {
         where: { id: conversation.id },
         data: { status: "OPEN", snoozedUntil: null },
       });
+      conversationReopened = true;
     }
 
     const conversationCtx = { workspaceId, channelId, contactId };
@@ -431,6 +434,23 @@ export const messagingService = {
       message: { ...unified, createdAt: unified.createdAt.toISOString() },
     });
 
+    // Outgoing webhooks (Phase 12) — self-catching, never blocks or
+    // breaks ingestion.
+    if (conversationCreated) {
+      await outgoingWebhookDispatch.conversationEvent(
+        workspaceId,
+        "conversation.created",
+        conversation.id,
+      );
+    } else if (conversationReopened) {
+      await outgoingWebhookDispatch.conversationEvent(
+        workspaceId,
+        "conversation.reopened",
+        conversation.id,
+      );
+    }
+    await outgoingWebhookDispatch.messageCreated(workspaceId, unified);
+
     return { message: unified, conversationId: conversation.id, deduplicated: false };
   },
 
@@ -547,6 +567,7 @@ export const messagingService = {
       conversationId,
       message: { ...unified, createdAt: unified.createdAt.toISOString() },
     });
+    await outgoingWebhookDispatch.messageCreated(workspaceId, unified);
     return unified;
   },
 
@@ -680,6 +701,7 @@ export const messagingService = {
       conversationId,
       message: { ...unified, createdAt: unified.createdAt.toISOString() },
     });
+    await outgoingWebhookDispatch.messageCreated(workspaceId, unified);
     return unified;
   },
 

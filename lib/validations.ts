@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { OUTGOING_WEBHOOK_EVENTS } from "@/lib/webhook-events";
+
 /** Shared Zod schemas — used by server actions, route handlers and services. */
 
 export const loginSchema = z.object({
@@ -189,6 +191,21 @@ export const selectConnectionAccountSchema = z.object({
   externalAccountId: z.string().min(1, "An account must be selected"),
 });
 export type SelectConnectionAccountInput = z.infer<typeof selectConnectionAccountSchema>;
+
+export const outgoingWebhookCreateSchema = z.object({
+  name: z.string().trim().min(2, "Name is too short").max(80),
+  url: z.string().trim().min(1, "URL is required").max(2000),
+  events: z.array(z.enum(OUTGOING_WEBHOOK_EVENTS)).min(1, "Pick at least one event"),
+});
+export type OutgoingWebhookCreateInput = z.infer<typeof outgoingWebhookCreateSchema>;
+
+export const outgoingWebhookUpdateSchema = z.object({
+  name: z.string().trim().min(2, "Name is too short").max(80).optional(),
+  url: z.string().trim().min(1, "URL is required").max(2000).optional(),
+  events: z.array(z.enum(OUTGOING_WEBHOOK_EVENTS)).min(1, "Pick at least one event").optional(),
+  enabled: z.boolean().optional(),
+});
+export type OutgoingWebhookUpdateInput = z.infer<typeof outgoingWebhookUpdateSchema>;
 
 export const forgotPasswordSchema = z.object({
   email: z.email("Enter a valid email address"),

@@ -6,6 +6,7 @@ import type {
   GmailPollJobData,
   MediaJobData,
   OutboundJobData,
+  OutgoingWebhookJobData,
   TokenRefreshJobData,
   WebhookJobData,
 } from "@/types/queue";
@@ -13,6 +14,7 @@ import type {
 import { processGmailPollJob } from "@/workers/processors/gmail-poll.processor";
 import { processMediaJob } from "@/workers/processors/media.processor";
 import { processOutboundJob } from "@/workers/processors/outbound.processor";
+import { processOutgoingWebhookJob } from "@/workers/processors/outgoing-webhook.processor";
 import { processTokenRefreshJob } from "@/workers/processors/token-refresh.processor";
 import { processWebhookJob } from "@/workers/processors/webhook.processor";
 
@@ -43,6 +45,7 @@ const workers = [
   registerWorker<MediaJobData>(QUEUE_NAMES.media, processMediaJob),
   registerWorker<TokenRefreshJobData>(QUEUE_NAMES.tokenRefresh, processTokenRefreshJob),
   registerWorker<GmailPollJobData>(QUEUE_NAMES.gmailPoll, processGmailPollJob),
+  registerWorker<OutgoingWebhookJobData>(QUEUE_NAMES.outgoingWebhook, processOutgoingWebhookJob),
 ];
 
 // Gmail inbound is polling-based (Phase 9): arm the recurring sweep

@@ -200,6 +200,7 @@ model Workspace {
   conversations Conversation[]
   tags          Tag[]
   canned        CannedResponse[]
+  outgoingWebhooks OutgoingWebhook[]
   invitations   Invitation[]
   auditLogs     AuditLog[]
   assignments   ConversationAssignment[]
@@ -497,6 +498,45 @@ model CannedResponse {
 }
 
 // ─── Webhooks & Audit ─────────────────────────────────────────────────────────
+
+/**
+ * Outgoing webhooks (Phase 12): workspace-configured HTTP endpoints
+ * that receive product events (conversation.created, message.created,
+ * …) as signed JSON POSTs. The secret is an HMAC-SHA256 key the
+ * receiver uses to verify deliveries; it is shown to workspace
+ * admins in Settings (it is not a credential for OUR system).
+ */
+model OutgoingWebhook {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  url         String
+  secret      String
+  events      String[]
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace  Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([workspaceId])
+}
+
+/** One row per delivery ATTEMPT of an outgoing webhook. */
+model WebhookDelivery {
+  id         String   @id @default(cuid())
+  webhookId  String
+  event      String
+  success    Boolean
+  statusCode Int?
+  error      String?
+  createdAt  DateTime @default(now())
+
+  webhook OutgoingWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+}
 
 model WebhookEvent {
   id              String             @id @default(cuid())

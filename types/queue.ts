@@ -26,6 +26,18 @@ export interface TokenRefreshJobData {
   workspaceId: string;
 }
 
+/** Outgoing webhook delivery (Phase 12) — one job per webhook per event. */
+export interface OutgoingWebhookJobData {
+  webhookId: string;
+  workspaceId: string;
+  /** An OutgoingWebhookEvent, or "webhook.test" for the Settings test ping. */
+  event: string;
+  /** Unique id of this delivery, echoed in the payload envelope. */
+  deliveryId: string;
+  /** Event data snapshot, built at dispatch time. */
+  payload: Record<string, unknown>;
+}
+
 export interface GmailPollJobData {
   /** Absent = sweep every CONNECTED Gmail channel (the scheduled job). */
   channelId?: string;
