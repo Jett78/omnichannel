@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, FlaskConical, PlugZap, TriangleAlert } from "lucide-react";
+import { CheckCircle2, FlaskConical, PlugZap, Trash2, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -139,10 +139,8 @@ export function ChannelsCatalog({
   const [waConnectSignal, setWaConnectSignal] = useState(0);
   const [waEditSignal, setWaEditSignal] = useState(0);
   const [waEditChannelId, setWaEditChannelId] = useState<string | null>(null);
-  const [importingId, setImportingId] = useState<string | null>(null);
-  const [importResults, setImportResults] = useState<
-    Record<string, { text: string; ok: boolean }>
-  >({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   function openWhatsAppConnect() {
     setWaConnectSignal((signal) => signal + 1);
@@ -219,48 +217,33 @@ export function ChannelsCatalog({
     }
   }
 
-  async function importHistory(channel: RealChannel) {
+  async function deleteChannel(channel: RealChannel) {
     if (!workspaceId) return;
-    setImportingId(channel.id);
-    setImportResults((prev) => {
-      const next = { ...prev };
-      delete next[channel.id];
-      return next;
-    });
+    if (
+      !window.confirm(
+        `Delete ${channel.displayName} permanently? This removes the channel AND all of its conversations and messages from this workspace. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeletingId(channel.id);
+    setDeleteError(null);
     try {
       const res = await fetch(
-        `/api/workspaces/${workspaceId}/channels/${channel.id}/import-history`,
-        { method: "POST" },
+        `/api/workspaces/${workspaceId}/channels/${channel.id}?permanent=true`,
+        { method: "DELETE" },
       );
-      const body = (await res.json().catch(() => null)) as {
-        result?: { conversations: number; messagesImported: number; messagesSkipped: number };
-        error?: { message?: string };
-      } | null;
-      if (!res.ok || !body?.result) {
-        throw new Error(body?.error?.message ?? `Import failed (${res.status})`);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(body?.error?.message ?? `Delete failed (${res.status})`);
       }
-      const { conversations, messagesImported, messagesSkipped } = body.result;
-      setImportResults((prev) => ({
-        ...prev,
-        [channel.id]: {
-          ok: true,
-          text:
-            `Imported ${messagesImported} message${messagesImported === 1 ? "" : "s"} from ${conversations} recent conversation${conversations === 1 ? "" : "s"}` +
-            (messagesSkipped > 0 ? ` (${messagesSkipped} already here, skipped)` : "") +
-            ".",
-        },
-      }));
       router.refresh();
     } catch (error) {
-      setImportResults((prev) => ({
-        ...prev,
-        [channel.id]: {
-          ok: false,
-          text: error instanceof Error ? error.message : "Import failed",
-        },
-      }));
+      setDeleteError(error instanceof Error ? error.message : "Could not delete the channel");
     } finally {
-      setImportingId(null);
+      setDeletingId(null);
     }
   }
 
@@ -291,7 +274,7 @@ export function ChannelsCatalog({
   return (
     <div className="flex w-full flex-col gap-8">
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-8 text-white shadow-lg sm:px-8">
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-8 text-white sm:px-8">
         <div
           aria-hidden
           className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-white/10 blur-2xl"
@@ -453,14 +436,17 @@ export function ChannelsCatalog({
               {connectedCount} of {realChannels.length} active
             </p>
           </div>
-          <Card className="overflow-hidden py-0 shadow-sm">
+          <Card className="overflow-hidden py-0">
             <ul className="divide-y">
               {realChannels.map((channel) => (
                 <li
                   key={channel.id}
                   className="flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-muted/40"
                 >
-                  <span className="rounded-2xl bg-muted/60 p-1.5 ring-1 ring-black/5">
+                  <span
+                    className="rounded-2xl p-2"
+                    style={{ backgroundColor: `${PROVIDER_META[channel.provider].color}1a` }}
+                  >
                     <ChannelIcon provider={channel.provider} size="md" />
                   </span>
                   <span className="min-w-0 flex-1 leading-tight">
@@ -484,20 +470,6 @@ export function ChannelsCatalog({
                         {channel.config.lastError} Reconnect to fix it.
                       </span>
                     ) : null}
-                    {(() => {
-                      const importResult = importResults[channel.id];
-                      return importResult ? (
-                        <span
-                          className={
-                            importResult.ok
-                              ? "block pt-0.5 text-xs text-emerald-700"
-                              : "block pt-0.5 text-xs text-red-600"
-                          }
-                        >
-                          {importResult.text}
-                        </span>
-                      ) : null;
-                    })()}
                   </span>
                   <Badge
                     variant={
@@ -593,20 +565,6 @@ export function ChannelsCatalog({
                           </Button>
                         ) : null;
                       })()}
-                      {channel.status === "CONNECTED" &&
-                      (channel.provider === "FACEBOOK" ||
-                        channel.provider === "INSTAGRAM" ||
-                        channel.provider === "GMAIL") ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => void importHistory(channel)}
-                          disabled={importingId !== null}
-                          title="Backfill recent conversations from before this channel was connected"
-                        >
-                          {importingId === channel.id ? "Importing…" : "Import recent chats"}
-                        </Button>
-                      ) : null}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -618,11 +576,24 @@ export function ChannelsCatalog({
                       </Button>
                     </span>
                   ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
+                    onClick={() => void deleteChannel(channel)}
+                    disabled={deletingId !== null}
+                  >
+                    <Trash2 className="size-3.5" />
+                    {deletingId === channel.id ? "Deleting…" : "Delete"}
+                  </Button>
                 </li>
               ))}
             </ul>
             {disconnectError ? (
               <p className="px-5 pb-3 text-sm text-red-600">{disconnectError}</p>
+            ) : null}
+            {deleteError ? (
+              <p className="px-5 pb-3 text-sm text-red-600">{deleteError}</p>
             ) : null}
           </Card>
         </section>
@@ -643,7 +614,7 @@ export function ChannelsCatalog({
               <Card
                 key={provider}
                 className={cn(
-                  "group gap-0 overflow-hidden py-0 shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-lg",
+                  "group gap-0 overflow-hidden py-0 transition duration-300 hover:border-indigo-300 dark:hover:border-indigo-500/40",
                   isConnected && "ring-2 ring-emerald-400/50",
                 )}
               >
@@ -653,18 +624,18 @@ export function ChannelsCatalog({
                     background: `linear-gradient(135deg, ${meta.color}30 0%, ${meta.color}0f 70%)`,
                   }}
                 >
-                  <span className="rounded-full shadow-lg ring-4 ring-white/70 transition duration-300 group-hover:scale-110">
+                  <span className="rounded-full ring-4 ring-white/70 transition duration-300 group-hover:scale-110">
                     <ChannelIcon provider={provider} size="lg" />
                   </span>
                   <span className="absolute top-3 right-3">
                     {provider === "TIKTOK" && !isConnected ? (
-                      <Badge variant="warning" className="bg-white/85 shadow-sm backdrop-blur">
+                      <Badge variant="warning" className="bg-white/85 backdrop-blur">
                         Access restricted by TikTok
                       </Badge>
                     ) : (
                       <Badge
                         variant={isConnected ? "success" : "muted"}
-                        className="gap-1.5 bg-white/85 shadow-sm backdrop-blur"
+                        className="gap-1.5 bg-white/85 backdrop-blur"
                       >
                         <span
                           className={cn(

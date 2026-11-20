@@ -111,6 +111,25 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
+/*
+ * No shadows anywhere in the app (Jeet's call, 2026-11-20): every
+ * shadow-scale variable is zeroed, so all shadow-* utilities render
+ * nothing. Surfaces separate with borders instead. Focus rings are
+ * a different mechanism (--tw-ring-shadow) and keep working.
+ */
+@theme {
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --shadow-xl: 0 0 #0000;
+  --shadow-2xl: 0 0 #0000;
+  --shadow-inner: 0 0 #0000;
+  --inset-shadow-2xs: 0 0 #0000;
+  --inset-shadow-xs: 0 0 #0000;
+  --inset-shadow-sm: 0 0 #0000;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

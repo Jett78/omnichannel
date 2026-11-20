@@ -12,11 +12,20 @@ interface RouteContext {
  * Disconnects a channel: best-effort provider unsubscribe, stored
  * credential deleted, channel marked DISCONNECTED. Conversation
  * history is preserved.
+ *
+ * With ?permanent=true the channel is instead DELETED outright:
+ * disconnected first if needed, then the row (and, by cascade, its
+ * credential, contact identities, conversations and messages) is
+ * removed. Irreversible.
  */
 export async function DELETE(request: Request, context: RouteContext) {
   try {
     const user = await requireApiUser(request);
     const { workspaceId, channelId } = await context.params;
+    if (new URL(request.url).searchParams.get("permanent") === "true") {
+      await metaConnectionService.deleteChannelPermanently(user.id, workspaceId, channelId);
+      return NextResponse.json({ ok: true, deleted: true });
+    }
     const channel = await metaConnectionService.disconnectChannel(user.id, workspaceId, channelId);
     return NextResponse.json({
       channel: {

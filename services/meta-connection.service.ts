@@ -827,4 +827,45 @@ export const metaConnectionService = {
     });
     return updated;
   },
+
+  /**
+   * Permanently delete a channel (Channels page "Delete", added
+   * 2026-11-20 at Jeet's request — Disconnect alone left the row
+   * behind forever). If the channel is still connected, it is
+   * disconnected first (provider unsubscribe + credential removal,
+   * the exact disconnectChannel path); then the channel row is
+   * deleted, which cascades to its credential, contact identities,
+   * conversations and messages. Contacts themselves survive (they
+   * may have identities on other channels). This is irreversible —
+   * the UI confirms with the consequence spelled out.
+   */
+  async deleteChannelPermanently(
+    actorUserId: string,
+    workspaceId: string,
+    channelId: string,
+    deps: MetaConnectionDeps = {},
+  ): Promise<void> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "channels.manage");
+    const channel = await prisma.channel.findFirst({ where: { id: channelId, workspaceId } });
+    if (!channel) throw AppError.notFound("Channel not found");
+
+    if (channel.status !== "DISCONNECTED") {
+      await metaConnectionService.disconnectChannel(actorUserId, workspaceId, channelId, deps);
+    }
+    await prisma.channel.delete({ where: { id: channelId } });
+    await prisma.auditLog.create({
+      data: {
+        workspaceId,
+        actorId: actorUserId,
+        action: "channel.deleted",
+        entity: "Channel",
+        entityId: channelId,
+        meta: {
+          provider: channel.provider,
+          externalAccountId: channel.externalAccountId,
+          displayName: channel.displayName,
+        } as Prisma.InputJsonValue,
+      },
+    });
+  },
 };
