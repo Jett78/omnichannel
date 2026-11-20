@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { fireAutomationEvent } from "@/lib/automation-hook";
+import { notificationService } from "@/services/notification.service";
 import { AppError } from "@/lib/errors";
 import { getQueues } from "@/lib/queue";
 import { emitToWorkspace, emitToWorkspaceAndConversation } from "@/lib/realtime";
@@ -461,6 +462,17 @@ export const messagingService = {
     await fireAutomationEvent(workspaceId, "message.created", {
       conversationId: conversation.id,
     });
+
+    // Notifications (Phase 13E) — self-catching producers.
+    if (conversationCreated) {
+      await notificationService.notifyNewConversation(workspaceId, conversation.id);
+    } else {
+      await notificationService.notifyNewInboundMessage(
+        workspaceId,
+        conversation.id,
+        unified.content,
+      );
+    }
 
     return { message: unified, conversationId: conversation.id, deduplicated: false };
   },

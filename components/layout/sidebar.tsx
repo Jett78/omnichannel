@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  Bell,
   Bot,
   Cable,
   CircleHelp,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: "/automation", label: "Automation", icon: Bot },
   { href: "/team", label: "Team", icon: Users },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

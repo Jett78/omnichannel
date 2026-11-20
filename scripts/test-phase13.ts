@@ -8,6 +8,7 @@ import { cannedResponseService } from "@/services/canned-response.service";
 import { contactProfileService } from "@/services/contact-profile.service";
 import { channelService } from "@/services/channel.service";
 import { conversationService } from "@/services/conversation.service";
+import { notificationService } from "@/services/notification.service";
 import { workspaceService } from "@/services/workspace.service";
 
 /**
@@ -389,6 +390,57 @@ async function main(): Promise<void> {
     contactProfileService.getProfile(outsider.id, wa.id, conv8Row.contactId),
   );
   await prisma.user.delete({ where: { id: outsider.id } }).catch(() => null);
+
+  // ── 11. Notifications (13E) ────────────────────────────────────────
+  const conv9 = await ingestFrom(channel.id, wa.id, "cust-9");
+  const ownerNotifications = await notificationService.listForUser(userA.id, wa.id);
+  assert(
+    "notifications: owner notified of a new conversation",
+    ownerNotifications.some(
+      (n) => n.title === "New conversation" && n.entityId === conv9.id && !n.isRead,
+    ),
+  );
+  await conversationService.assignConversation(userA.id, wa.id, conv9.id, userC.id);
+  const followUpEvent = await enqueueMockWebhook(channel.id, "cust-9-b", [
+    {
+      externalMessageId: `ext13-${runId}-cust-9-b`,
+      senderExternalId: "cust-9",
+      senderName: "Customer cust-9",
+      text: "One more thing please",
+      type: "TEXT",
+      sentAt: new Date().toISOString(),
+    },
+  ]);
+  await waitEventProcessed(followUpEvent);
+  const agentNotifications = await notificationService.listForUser(userC.id, wa.id);
+  assert(
+    "notifications: assignee got the assignment notification",
+    agentNotifications.some(
+      (n) => n.type === "ASSIGNMENT" && n.entityId === conv9.id,
+    ),
+  );
+  assert(
+    "notifications: assignee got the new-message notification",
+    agentNotifications.some(
+      (n) => n.title.startsWith("New message from") && n.entityId === conv9.id,
+    ),
+  );
+  const readResult = await notificationService.markAllRead(userC.id, wa.id);
+  const agentAfterRead = await notificationService.listForUser(userC.id, wa.id);
+  assert(
+    "notifications: mark-all-read flips every unread row",
+    readResult.updated >= 2 && agentAfterRead.every((n) => n.isRead),
+    `updated=${readResult.updated}`,
+  );
+  const otherWorkspace = await workspaceService.createWorkspace(userA.id, {
+    name: `W13-other ${runId}`,
+  });
+  const crossWorkspace = await notificationService.listForUser(userA.id, otherWorkspace.id);
+  assert(
+    "notifications: lists are workspace-scoped",
+    !crossWorkspace.some((n) => n.entityId === conv9.id),
+  );
+  await prisma.workspace.delete({ where: { id: otherWorkspace.id } }).catch(() => null);
 
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);
