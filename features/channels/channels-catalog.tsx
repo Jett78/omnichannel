@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ChannelIcon, PROVIDER_META, PROVIDER_ORDER } from "@/components/channel-icon";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,6 +151,8 @@ export function ChannelsCatalog({
   const [waEditChannelId, setWaEditChannelId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [disconnectTarget, setDisconnectTarget] = useState<RealChannel | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RealChannel | null>(null);
 
   function openWhatsAppConnect() {
     setWaConnectSignal((signal) => signal + 1);
@@ -188,15 +200,9 @@ export function ChannelsCatalog({
   );
   const mockConnected = connectedProviders.has("MOCK");
 
-  async function disconnectChannel(channel: RealChannel) {
-    if (!workspaceId) return;
-    if (
-      !window.confirm(
-        `Disconnect ${channel.displayName}? The stored access token will be deleted and messages will stop arriving. Conversation history is kept.`,
-      )
-    ) {
-      return;
-    }
+  async function confirmDisconnect() {
+    const channel = disconnectTarget;
+    if (!workspaceId || !channel) return;
     setDisconnectingId(channel.id);
     setDisconnectError(null);
     try {
@@ -214,18 +220,13 @@ export function ChannelsCatalog({
       setDisconnectError(error instanceof Error ? error.message : "Could not disconnect");
     } finally {
       setDisconnectingId(null);
+      setDisconnectTarget(null);
     }
   }
 
-  async function deleteChannel(channel: RealChannel) {
-    if (!workspaceId) return;
-    if (
-      !window.confirm(
-        `Delete ${channel.displayName} permanently? This removes the channel AND all of its conversations and messages from this workspace. This cannot be undone.`,
-      )
-    ) {
-      return;
-    }
+  async function confirmDelete() {
+    const channel = deleteTarget;
+    if (!workspaceId || !channel) return;
     setDeletingId(channel.id);
     setDeleteError(null);
     try {
@@ -244,6 +245,7 @@ export function ChannelsCatalog({
       setDeleteError(error instanceof Error ? error.message : "Could not delete the channel");
     } finally {
       setDeletingId(null);
+      setDeleteTarget(null);
     }
   }
 
@@ -394,6 +396,65 @@ export function ChannelsCatalog({
           snippetChannelId={webSnippetChannelId}
         />
       ) : null}
+
+      <AlertDialog
+        open={disconnectTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && disconnectingId === null) setDisconnectTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect {disconnectTarget?.displayName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The stored access token will be deleted and messages will stop arriving.
+              Conversation history is kept.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={disconnectingId !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={disconnectingId !== null}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDisconnect();
+              }}
+            >
+              {disconnectingId !== null ? "Disconnecting…" : "Disconnect"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && deletingId === null) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTarget?.displayName} permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the channel AND all of its conversations and messages from this
+              workspace. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingId !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              disabled={deletingId !== null}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              {deletingId !== null ? "Deleting…" : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {mockEnabled && workspaceId ? (
         <Card className="border-dashed">
@@ -569,7 +630,7 @@ export function ChannelsCatalog({
                         variant="ghost"
                         size="sm"
                         className="text-muted-foreground hover:text-red-600"
-                        onClick={() => void disconnectChannel(channel)}
+                        onClick={() => setDisconnectTarget(channel)}
                         disabled={disconnectingId !== null}
                       >
                         {disconnectingId === channel.id ? "Disconnecting…" : "Disconnect"}
@@ -580,7 +641,7 @@ export function ChannelsCatalog({
                     variant="ghost"
                     size="sm"
                     className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
-                    onClick={() => void deleteChannel(channel)}
+                    onClick={() => setDeleteTarget(channel)}
                     disabled={deletingId !== null}
                   >
                     <Trash2 className="size-3.5" />
