@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import { AppError } from "@/lib/errors";
 import { getQueues } from "@/lib/queue";
 import { emitToWorkspace, emitToWorkspaceAndConversation } from "@/lib/realtime";
@@ -457,16 +459,22 @@ export const messagingService = {
       where: { id: conversationId, workspaceId },
     });
     if (!conversation) throw AppError.notFound("Conversation not found");
+    const channel = await prisma.channel.findUnique({
+      where: { id: conversation.channelId },
+      select: { provider: true },
+    });
+    // Website live chat has no external transport: delivery IS the
+    // persisted row, which the visitor's widget polls — so a website
+    // message is SENT the moment it is created. Queueing it behind
+    // the worker would show "queued" in the inbox while the visitor
+    // is already reading it (seen live 2026-11-20).
+    const isWebsiteChannel = channel?.provider === "WEBSITE";
 
     const isTemplateSend = Boolean(input.templateName) || input.type === "TEMPLATE";
     let messageType: MessageType = input.type ?? "TEXT";
     let body: string;
     let metadata: Prisma.InputJsonValue | undefined;
     if (isTemplateSend) {
-      const channel = await prisma.channel.findUnique({
-        where: { id: conversation.channelId },
-        select: { provider: true },
-      });
       if (channel?.provider !== "WHATSAPP") {
         throw AppError.badRequest("Template messages are only supported on WhatsApp channels.");
       }
@@ -507,7 +515,8 @@ export const messagingService = {
         body,
         senderType: "AGENT",
         senderUserId: actorUserId,
-        status: "QUEUED",
+        status: isWebsiteChannel ? "SENT" : "QUEUED",
+        ...(isWebsiteChannel ? { externalMessageId: `website-${randomUUID()}` } : {}),
         ...(metadata !== undefined ? { metadata } : {}),
       },
       include: { attachments: true },
@@ -517,11 +526,13 @@ export const messagingService = {
       data: { lastMessageAt: new Date() },
     });
 
-    await getQueues().outbound.add(
-      "outbound",
-      { messageId: created.id, workspaceId, channelId: conversation.channelId },
-      { attempts: 3, backoff: { type: "exponential", delay: 1000 } },
-    );
+    if (!isWebsiteChannel) {
+      await getQueues().outbound.add(
+        "outbound",
+        { messageId: created.id, workspaceId, channelId: conversation.channelId },
+        { attempts: 3, backoff: { type: "exponential", delay: 1000 } },
+      );
+    }
 
     const unified = toUnifiedMessage({
       ...created,
@@ -607,6 +618,9 @@ export const messagingService = {
     const messageType: MessageType =
       kind === "image" ? "IMAGE" : kind === "video" ? "VIDEO" : kind === "audio" ? "AUDIO" : "FILE";
     const caption = input.caption?.trim();
+    // Same website rule as text sends: no external transport, the
+    // persisted row is the delivery — persist as SENT, never queue.
+    const isWebsiteChannel = channel.provider === "WEBSITE";
     const created = await prisma.message.create({
       data: {
         conversationId,
@@ -615,7 +629,8 @@ export const messagingService = {
         body: caption ? caption : null,
         senderType: "AGENT",
         senderUserId: actorUserId,
-        status: "QUEUED",
+        status: isWebsiteChannel ? "SENT" : "QUEUED",
+        ...(isWebsiteChannel ? { externalMessageId: `website-${randomUUID()}` } : {}),
         attachments: {
           create: {
             originalUrl: ref,
@@ -645,11 +660,13 @@ export const messagingService = {
       where: { id: conversationId },
       data: { lastMessageAt: new Date() },
     });
-    await getQueues().outbound.add(
-      "outbound",
-      { messageId: created.id, workspaceId, channelId: conversation.channelId },
-      { attempts: 3, backoff: { type: "exponential", delay: 1000 } },
-    );
+    if (!isWebsiteChannel) {
+      await getQueues().outbound.add(
+        "outbound",
+        { messageId: created.id, workspaceId, channelId: conversation.channelId },
+        { attempts: 3, backoff: { type: "exponential", delay: 1000 } },
+      );
+    }
     const unified = toUnifiedMessage({
       ...created,
       conversation: {

@@ -235,6 +235,9 @@ async function main(): Promise<void> {
         conversationId,
         { content: "Yes, we deliver to Pokhara in 2 days." },
       );
+      // Website delivery is the persisted row itself: the message
+      // must be SENT immediately, never QUEUED behind the worker.
+      assert.equal(outbound.status, "SENT");
       const delivered = await messagingService.deliverOutboundMessage(outbound.id, {
         isFinalAttempt: true,
       });
@@ -269,6 +272,20 @@ async function main(): Promise<void> {
       const mediaMessage = list.messages.find((m) => m.id === sent.messageId);
       assert.equal(mediaMessage?.attachments.length, 1);
       assert.ok(mediaMessage?.attachments[0]?.url.includes("/media/"));
+    });
+    await check("an agent-sent photo is SENT immediately too", async () => {
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 9, 9, 9]);
+      const outbound = await messagingService.sendOutboundMedia(
+        owner.id,
+        workspace.id,
+        conversationId,
+        { bytes: png, fileName: "agent.png", mimeType: "image/png", caption: "Agent photo" },
+      );
+      assert.equal(outbound.status, "SENT");
+      const list = await widgetService.listMessages(websiteToken, visitorToken);
+      const seen = list.messages.find((m) => m.id === outbound.id);
+      assert.equal(seen?.fromVisitor, false);
+      assert.equal(seen?.attachments.length, 1);
     });
     await check("an unsupported file type is rejected honestly", async () => {
       await assert.rejects(() =>
