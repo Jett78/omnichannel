@@ -13,6 +13,7 @@ import {
   Lock,
   MoreHorizontal,
   Paperclip,
+  Pencil,
   RotateCcw,
   Search,
   Smile,
@@ -484,6 +485,10 @@ export function RealInboxShell({
   const [cannedTitle, setCannedTitle] = useState("");
   const [cannedShortcut, setCannedShortcut] = useState("");
   const [cannedBody, setCannedBody] = useState("");
+  const [cannedCategory, setCannedCategory] = useState("");
+  const [cannedEditingId, setCannedEditingId] = useState<string | null>(null);
+  const [cannedSearch, setCannedSearch] = useState("");
+  const [cannedCategoryFilter, setCannedCategoryFilter] = useState<string | null>(null);
   // Previous conversations with the selected contact.
   const [previousConversations, setPreviousConversations] = useState<RealConversationItem[]>([]);
   // Destructive-action confirmations.
@@ -1198,6 +1203,22 @@ export function RealInboxShell({
           )
           .slice(0, 6);
 
+  // Manager dialog (Phase 13A): distinct categories + search/category filter.
+  const cannedCategories = Array.from(
+    new Set(cannedItems.map((item) => item.category).filter((c): c is string => Boolean(c))),
+  ).sort((a, b) => a.localeCompare(b));
+  const cannedVisible = cannedItems.filter((item) => {
+    if (cannedCategoryFilter && item.category !== cannedCategoryFilter) return false;
+    const query = cannedSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      item.title.toLowerCase().includes(query) ||
+      item.body.toLowerCase().includes(query) ||
+      (item.shortcut ?? "").toLowerCase().includes(query) ||
+      (item.category ?? "").toLowerCase().includes(query)
+    );
+  });
+
   function insertCanned(item: CannedResponseView) {
     if (!selected) return;
     const body = item.body.replace(/\{\{\s*contact\.name\s*\}\}/g, selected.contact.displayName);
@@ -1205,23 +1226,50 @@ export function RealInboxShell({
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
 
-  async function createCanned() {
+  function resetCannedForm() {
+    setCannedTitle("");
+    setCannedShortcut("");
+    setCannedBody("");
+    setCannedCategory("");
+    setCannedEditingId(null);
+  }
+
+  function startEditCanned(item: CannedResponseView) {
+    setCannedEditingId(item.id);
+    setCannedTitle(item.title);
+    setCannedShortcut(item.shortcut ?? "");
+    setCannedBody(item.body);
+    setCannedCategory(item.category ?? "");
+  }
+
+  async function saveCanned() {
     const title = cannedTitle.trim();
     const body = cannedBody.trim();
     if (!title || !body) return;
-    const res = await fetch(`${apiBase}/canned-responses`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        body,
-        ...(cannedShortcut.trim() ? { shortcut: cannedShortcut.trim() } : {}),
-      }),
-    }).catch(() => null);
+    const res = cannedEditingId
+      ? await fetch(`${apiBase}/canned-responses/${cannedEditingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          // PATCH accepts nulls — they clear the field.
+          body: JSON.stringify({
+            title,
+            body,
+            shortcut: cannedShortcut.trim() ? cannedShortcut.trim() : null,
+            category: cannedCategory.trim() ? cannedCategory.trim() : null,
+          }),
+        }).catch(() => null)
+      : await fetch(`${apiBase}/canned-responses`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            body,
+            ...(cannedShortcut.trim() ? { shortcut: cannedShortcut.trim() } : {}),
+            ...(cannedCategory.trim() ? { category: cannedCategory.trim() } : {}),
+          }),
+        }).catch(() => null);
     if (res?.ok) {
-      setCannedTitle("");
-      setCannedShortcut("");
-      setCannedBody("");
+      resetCannedForm();
       void fetchCanned();
     } else {
       setNotice("Could not save that canned response.");
@@ -1723,6 +1771,11 @@ export function RealInboxShell({
                             {item.shortcut ? (
                               <span className="text-muted-foreground ml-1.5 text-xs">
                                 /{item.shortcut}
+                              </span>
+                            ) : null}
+                            {item.category ? (
+                              <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200">
+                                {item.category}
                               </span>
                             ) : null}
                           </span>
@@ -2296,7 +2349,17 @@ export function RealInboxShell({
       </Dialog>
 
       {/* Saved replies manager */}
-      <Dialog open={cannedManageOpen} onOpenChange={setCannedManageOpen}>
+      <Dialog
+        open={cannedManageOpen}
+        onOpenChange={(open) => {
+          setCannedManageOpen(open);
+          if (!open) {
+            resetCannedForm();
+            setCannedSearch("");
+            setCannedCategoryFilter(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Saved replies</DialogTitle>
@@ -2305,8 +2368,51 @@ export function RealInboxShell({
               {"{{contact.name}}"} for the customer&apos;s name.
             </DialogDescription>
           </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <div className="relative">
+              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+              <Input
+                value={cannedSearch}
+                onChange={(event) => setCannedSearch(event.target.value)}
+                placeholder="Search saved replies…"
+                aria-label="Search saved replies"
+                className="pl-8"
+              />
+            </div>
+            {cannedCategories.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCannedCategoryFilter(null)}
+                  className={
+                    cannedCategoryFilter === null
+                      ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white"
+                      : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
+                  }
+                >
+                  All
+                </button>
+                {cannedCategories.map((category) => (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() =>
+                      setCannedCategoryFilter(cannedCategoryFilter === category ? null : category)
+                    }
+                    className={
+                      cannedCategoryFilter === category
+                        ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white"
+                        : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
+                    }
+                  >
+                    {category}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <div className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
-            {cannedItems.map((item) => (
+            {cannedVisible.map((item) => (
               <div key={item.id} className="flex items-start gap-2 rounded-lg border px-3 py-2">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">
@@ -2314,9 +2420,23 @@ export function RealInboxShell({
                     {item.shortcut ? (
                       <span className="text-muted-foreground ml-1.5 text-xs">/{item.shortcut}</span>
                     ) : null}
+                    {item.category ? (
+                      <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200">
+                        {item.category}
+                      </span>
+                    ) : null}
                   </p>
                   <p className="text-muted-foreground line-clamp-2 text-xs">{item.body}</p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground size-7 shrink-0"
+                  aria-label={`Edit saved reply ${item.title}`}
+                  onClick={() => startEditCanned(item)}
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -2328,9 +2448,11 @@ export function RealInboxShell({
                 </Button>
               </div>
             ))}
-            {cannedItems.length === 0 ? (
+            {cannedVisible.length === 0 ? (
               <p className="text-muted-foreground py-3 text-center text-sm">
-                No saved replies yet. Add your first one below.
+                {cannedItems.length === 0
+                  ? "No saved replies yet. Add your first one below."
+                  : "No saved replies match your search."}
               </p>
             ) : null}
           </div>
@@ -2350,6 +2472,18 @@ export function RealInboxShell({
                 className="w-32"
               />
             </div>
+            <Input
+              value={cannedCategory}
+              onChange={(event) => setCannedCategory(event.target.value)}
+              placeholder="Category (optional), e.g. Billing"
+              aria-label="Saved reply category"
+              list="canned-category-options"
+            />
+            <datalist id="canned-category-options">
+              {cannedCategories.map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
             <Textarea
               value={cannedBody}
               onChange={(event) => setCannedBody(event.target.value)}
@@ -2357,13 +2491,19 @@ export function RealInboxShell({
               aria-label="Saved reply text"
               rows={3}
             />
-            <Button
-              onClick={() => void createCanned()}
-              disabled={!cannedTitle.trim() || !cannedBody.trim()}
-              className="self-end"
-            >
-              Add saved reply
-            </Button>
+            <div className="flex items-center justify-end gap-2">
+              {cannedEditingId ? (
+                <Button variant="ghost" onClick={() => resetCannedForm()}>
+                  Cancel edit
+                </Button>
+              ) : null}
+              <Button
+                onClick={() => void saveCanned()}
+                disabled={!cannedTitle.trim() || !cannedBody.trim()}
+              >
+                {cannedEditingId ? "Save changes" : "Add saved reply"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

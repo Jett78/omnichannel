@@ -57,6 +57,7 @@ export interface CannedResponseView {
   title: string;
   body: string;
   shortcut: string | null;
+  category: string | null;
 }
 
 /** APPROVED WhatsApp template as returned by the templates API. */

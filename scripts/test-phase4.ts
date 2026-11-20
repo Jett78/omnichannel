@@ -452,11 +452,36 @@ async function main(): Promise<void> {
     title: "Greeting",
     body: "Hi {{contact.name}}!",
     shortcut: "greet",
+    category: "General",
   });
   const cannedList = await cannedResponseService.list(userA.id, wa.id);
   assert(
-    "canned response create + list",
-    cannedList.some((c) => c.id === canned.id && c.shortcut === "greet"),
+    "canned response create + list (with category)",
+    cannedList.some(
+      (c) => c.id === canned.id && c.shortcut === "greet" && c.category === "General",
+    ),
+  );
+  const cannedUpdated = await cannedResponseService.update(userA.id, wa.id, canned.id, {
+    title: "Greeting v2",
+    category: "Support",
+  });
+  assert(
+    "canned response update edits title + category, keeps body/shortcut",
+    cannedUpdated.title === "Greeting v2" &&
+      cannedUpdated.category === "Support" &&
+      cannedUpdated.body === "Hi {{contact.name}}!" &&
+      cannedUpdated.shortcut === "greet",
+  );
+  const cannedCleared = await cannedResponseService.update(userA.id, wa.id, canned.id, {
+    category: null,
+    shortcut: "",
+  });
+  assert(
+    "canned response update can clear category + shortcut",
+    cannedCleared.category === null && cannedCleared.shortcut === null,
+  );
+  await expectThrows("canned: update of a missing response fails", () =>
+    cannedResponseService.update(userA.id, wa.id, "missing-id", { title: "Nope" }),
   );
   await cannedResponseService.remove(userA.id, wa.id, canned.id);
   const cannedAfterRemove = await cannedResponseService.list(userA.id, wa.id);

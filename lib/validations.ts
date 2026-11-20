@@ -184,8 +184,17 @@ export const cannedResponseCreateSchema = z.object({
   title: z.string().min(1, "Title is required").max(120),
   body: z.string().min(1, "Body is required").max(4000),
   shortcut: z.string().max(40).optional(),
+  category: z.string().max(40).optional(),
 });
 export type CannedResponseCreateInput = z.infer<typeof cannedResponseCreateSchema>;
+
+export const cannedResponseUpdateSchema = z.object({
+  title: z.string().min(1, "Title is required").max(120).optional(),
+  body: z.string().min(1, "Body is required").max(4000).optional(),
+  shortcut: z.string().max(40).nullable().optional(),
+  category: z.string().max(40).nullable().optional(),
+});
+export type CannedResponseUpdateInput = z.infer<typeof cannedResponseUpdateSchema>;
 
 export const selectConnectionAccountSchema = z.object({
   externalAccountId: z.string().min(1, "An account must be selected"),
