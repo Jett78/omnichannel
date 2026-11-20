@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { InboxShell } from "@/features/inbox/inbox-shell";
 import type { RealInboxData } from "@/features/inbox/real-data";
+import { isAiConfigured } from "@/lib/ai";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { conversationService } from "@/services/conversation.service";
@@ -48,6 +49,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         realData = {
           workspaceId: active.id,
           currentUserId: user.id,
+          aiConfigured: isAiConfigured(),
           conversations: orderedItems.map((item) => ({
             id: item.id,
             status: item.status,

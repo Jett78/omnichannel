@@ -17,6 +17,8 @@ import {
   RotateCcw,
   Search,
   Smile,
+  Sparkles,
+  Loader2,
   Send,
   StickyNote,
   Tag as TagIcon,
@@ -482,6 +484,29 @@ export function RealInboxShell({
   // Canned responses (saved replies).
   const [cannedItems, setCannedItems] = useState<CannedResponseView[]>([]);
   const [cannedManageOpen, setCannedManageOpen] = useState(false);
+  // Phase 13G — AI assistant panel state.
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiBusy, setAiBusy] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiResult, setAiResult] = useState<{
+    kind: string;
+    text?: string;
+    sentiment?: string;
+    reason?: string;
+    knowledgeUsed?: string[];
+  } | null>(null);
+  const [aiTone, setAiTone] = useState("professional");
+  const [aiTarget, setAiTarget] = useState("English");
+
+  // Render-adjustment (not an effect): reset the AI panel when the
+  // agent switches conversations so a draft can't leak across threads.
+  const [prevAiSelectedId, setPrevAiSelectedId] = useState(selectedId);
+  if (prevAiSelectedId !== selectedId) {
+    setPrevAiSelectedId(selectedId);
+    setAiOpen(false);
+    setAiResult(null);
+    setAiError(null);
+  }
   const [cannedTitle, setCannedTitle] = useState("");
   const [cannedShortcut, setCannedShortcut] = useState("");
   const [cannedBody, setCannedBody] = useState("");
@@ -1219,6 +1244,51 @@ export function RealInboxShell({
     );
   });
 
+  async function runAi(action: string) {
+    if (!selected || aiBusy) return;
+    setAiBusy(action);
+    setAiError(null);
+    const payload: Record<string, unknown> = { action };
+    if (action === "rewrite") {
+      payload.text = draft;
+      payload.tone = aiTone;
+    }
+    if (action === "translate") {
+      const lastInbound = [...messages]
+        .reverse()
+        .find((m) => m.direction === "INBOUND" && m.content);
+      payload.text = draft.trim() ? draft : (lastInbound?.content ?? "");
+      payload.target = aiTarget;
+    }
+    const res = await fetch(`${apiBase}/conversations/${selected.id}/ai`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => null);
+    setAiBusy(null);
+    if (!res) {
+      setAiError("Could not reach the AI service.");
+      return;
+    }
+    const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!res.ok) {
+      setAiError(
+        (body?.error as { message?: string } | undefined)?.message ??
+          "The AI request failed — try again.",
+      );
+      return;
+    }
+    setAiResult({ kind: action, ...(body ?? {}) });
+  }
+
+  function insertAiResult() {
+    if (!aiResult?.text) return;
+    setDraft(aiResult.text);
+    setAiOpen(false);
+    setAiResult(null);
+    textareaRef.current?.focus();
+  }
+
   function insertCanned(item: CannedResponseView) {
     if (!selected) return;
     const body = item.body.replace(/\{\{\s*contact\.name\s*\}\}/g, selected.contact.displayName);
@@ -1737,6 +1807,155 @@ export function RealInboxShell({
                     composerMode === "note" && "border-amber-300 bg-amber-50/50",
                   )}
                 >
+                  {aiOpen && composerMode === "reply" ? (
+                    <div className="bg-background absolute bottom-full left-2 z-10 mb-2 w-96 max-w-[calc(100vw-2rem)] rounded-xl border p-3 shadow-lg">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="size-4 text-fuchsia-600" />
+                        <p className="text-sm font-medium">AI assistant</p>
+                        <span className="text-muted-foreground text-[11px]">
+                          Drafts only — nothing sends without you
+                        </span>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground ml-auto"
+                          aria-label="Close AI assistant"
+                          onClick={() => setAiOpen(false)}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                      {!data.aiConfigured ? (
+                        <p className="text-muted-foreground mt-2 text-[13px] leading-relaxed">
+                          AI is not configured yet. Add a free Groq API key as{" "}
+                          <span className="font-mono">AI_API_KEY</span> in the Vercel project env
+                          and redeploy — steps are in Settings → AI assistant &amp; knowledge
+                          base.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={aiBusy !== null}
+                              onClick={() => void runAi("suggest")}
+                            >
+                              Suggest reply
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={aiBusy !== null || !draft.trim()}
+                              title={draft.trim() ? "Rewrite your draft" : "Write a draft first"}
+                              onClick={() => void runAi("rewrite")}
+                            >
+                              Rewrite
+                            </Button>
+                            <select
+                              value={aiTone}
+                              onChange={(event) => setAiTone(event.target.value)}
+                              aria-label="Rewrite tone"
+                              className="border-input bg-background h-8 rounded-md border px-1.5 text-xs"
+                            >
+                              <option value="professional">Professional</option>
+                              <option value="friendly">Friendly</option>
+                              <option value="shorter">Shorter</option>
+                              <option value="empathetic">Empathetic</option>
+                            </select>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={aiBusy !== null}
+                              onClick={() => void runAi("summarize")}
+                            >
+                              Summarize
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={aiBusy !== null}
+                              onClick={() => void runAi("sentiment")}
+                            >
+                              Sentiment
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={aiBusy !== null}
+                              onClick={() => void runAi("translate")}
+                            >
+                              Translate
+                            </Button>
+                            <select
+                              value={aiTarget}
+                              onChange={(event) => setAiTarget(event.target.value)}
+                              aria-label="Translate into"
+                              className="border-input bg-background h-8 rounded-md border px-1.5 text-xs"
+                            >
+                              <option>English</option>
+                              <option>Nepali</option>
+                              <option>Hindi</option>
+                              <option>Spanish</option>
+                              <option>French</option>
+                              <option>German</option>
+                              <option>Arabic</option>
+                              <option>Chinese</option>
+                            </select>
+                          </div>
+                          <p className="text-muted-foreground mt-1.5 text-[11px]">
+                            Translate uses your draft, or the customer&apos;s last message when
+                            the box is empty.
+                          </p>
+                          {aiBusy ? (
+                            <p className="text-muted-foreground mt-2 flex items-center gap-2 text-[13px]">
+                              <Loader2 className="size-3.5 animate-spin" /> Thinking…
+                            </p>
+                          ) : null}
+                          {aiError ? (
+                            <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[13px] text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                              {aiError}
+                            </p>
+                          ) : null}
+                          {aiResult?.kind === "sentiment" ? (
+                            <div className="mt-2 flex items-center gap-2 text-[13px]">
+                              <span
+                                className={cn(
+                                  "rounded-full px-2 py-0.5 text-xs font-medium capitalize",
+                                  aiResult.sentiment === "positive" &&
+                                    "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+                                  aiResult.sentiment === "negative" &&
+                                    "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300",
+                                  aiResult.sentiment === "neutral" &&
+                                    "bg-slate-100 text-slate-600 dark:bg-slate-500/15 dark:text-slate-300",
+                                )}
+                              >
+                                {aiResult.sentiment}
+                              </span>
+                              <span className="text-muted-foreground">{aiResult.reason}</span>
+                            </div>
+                          ) : aiResult?.text ? (
+                            <div className="mt-2">
+                              <div className="bg-muted/50 max-h-44 overflow-y-auto rounded-lg px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap">
+                                {aiResult.text}
+                              </div>
+                              {aiResult.knowledgeUsed?.length ? (
+                                <p className="text-muted-foreground mt-1 text-[11px]">
+                                  Used knowledge: {aiResult.knowledgeUsed.join(", ")}
+                                </p>
+                              ) : null}
+                              {aiResult.kind !== "summarize" ? (
+                                <div className="mt-2 flex justify-end">
+                                  <Button size="sm" onClick={insertAiResult}>
+                                    Insert into composer
+                                  </Button>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  ) : null}
                   {emojiOpen && composerMode !== "template" ? (
                     <div className="bg-background absolute bottom-full left-2 z-10 mb-2 w-72 rounded-xl border p-2 shadow-lg">
                       <div className="grid grid-cols-8 gap-0.5">
@@ -1999,6 +2218,18 @@ export function RealInboxShell({
                         onClick={() => setCannedManageOpen(true)}
                       >
                         <Bookmark className="size-4" />
+                      </Button>
+                    ) : null}
+                    {composerMode === "reply" ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0 hover:bg-fuchsia-50 hover:text-fuchsia-600 dark:hover:bg-fuchsia-500/15 dark:hover:text-fuchsia-300"
+                        aria-label="AI assistant"
+                        title="AI assistant — suggest, rewrite, summarize, translate"
+                        onClick={() => setAiOpen((open) => !open)}
+                      >
+                        <Sparkles className="size-4" />
                       </Button>
                     ) : null}
                     <span className="text-muted-foreground text-xs">

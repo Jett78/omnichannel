@@ -21,8 +21,11 @@ export interface RealAnalyticsData {
     unassignedNow: number;
     conversationsInRange: number;
     messagesInRange: number;
+    incomingMessages: number;
+    outgoingMessages: number;
     resolvedInRange: number;
     avgResponseMinutes: number | null;
+    avgResolutionMinutes: number | null;
   };
   trend: RealTrendPoint[];
   channelShare: Array<{ provider: Provider; conversations: number }>;

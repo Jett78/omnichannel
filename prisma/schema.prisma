@@ -203,6 +203,8 @@ model Workspace {
   outgoingWebhooks OutgoingWebhook[]
   automationRules  AutomationRule[]
   automationRuns   AutomationRun[]
+  knowledgeEntries KnowledgeEntry[]
+  aiUsageLogs      AiUsageLog[]
   invitations   Invitation[]
   auditLogs     AuditLog[]
   assignments   ConversationAssignment[]
@@ -660,4 +662,37 @@ model AutomationRun {
 
   @@index([workspaceId, createdAt])
   @@index([ruleId, createdAt])
+}
+
+// ─── AI assistant (Phase 13G) ───────────────────────────────────────
+
+/**
+ * Workspace knowledge the AI assistant may use when drafting replies
+ * (policies, FAQs, product facts). Admin-managed; plain text.
+ */
+model KnowledgeEntry {
+  id          String   @id @default(cuid())
+  workspaceId String
+  title       String
+  content     String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+/** One row per AI action (suggest/rewrite/summarize/sentiment/translate) — honest usage counting. */
+model AiUsageLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String
+  action      String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
 }

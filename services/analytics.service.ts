@@ -13,6 +13,12 @@ import type { Provider } from "@/generated/prisma/client";
  * - "First response" = minutes from a conversation's first inbound
  *   message to the first agent reply after it, averaged per day over
  *   the conversations whose first inbound arrived that day.
+ * - "Resolution time" (Phase 13F) = minutes from a conversation's
+ *   creation to a conversation.resolve audit event, averaged over the
+ *   resolve events in range (a reopened-then-resolved conversation
+ *   contributes one sample per resolve event).
+ * - Incoming/outgoing (Phase 13F) split messagesInRange by direction
+ *   (system and private-note messages are already excluded).
  */
 export interface AnalyticsTrendPoint {
   day: string;
@@ -28,8 +34,11 @@ export interface AnalyticsData {
     unassignedNow: number;
     conversationsInRange: number;
     messagesInRange: number;
+    incomingMessages: number;
+    outgoingMessages: number;
     resolvedInRange: number;
     avgResponseMinutes: number | null;
+    avgResolutionMinutes: number | null;
   };
   trend: AnalyticsTrendPoint[];
   channelShare: Array<{ provider: Provider; conversations: number }>;
@@ -90,7 +99,7 @@ export const analyticsService = {
       }),
       prisma.auditLog.findMany({
         where: { workspaceId, action: "conversation.resolve", createdAt: { gte: start } },
-        select: { createdAt: true, actorId: true },
+        select: { createdAt: true, actorId: true, entityId: true },
       }),
       prisma.message.findMany({
         where: {
@@ -218,6 +227,28 @@ export const analyticsService = {
       }))
       .sort((a, b) => b.resolved - a.resolved || b.assigned - a.assigned);
 
+    // ── Resolution times (Phase 13F) ─────────────────────────────────
+    const resolvedConversationIds = [
+      ...new Set(resolveEvents.map((event) => event.entityId).filter(Boolean)),
+    ] as string[];
+    const resolvedConversations = resolvedConversationIds.length
+      ? await prisma.conversation.findMany({
+          where: { workspaceId, id: { in: resolvedConversationIds } },
+          select: { id: true, createdAt: true },
+        })
+      : [];
+    const resolvedCreatedAt = new Map(
+      resolvedConversations.map((c) => [c.id, c.createdAt]),
+    );
+    const resolutionMinutes: number[] = [];
+    for (const event of resolveEvents) {
+      const createdAt = event.entityId ? resolvedCreatedAt.get(event.entityId) : undefined;
+      if (createdAt) {
+        resolutionMinutes.push((event.createdAt.getTime() - createdAt.getTime()) / 60_000);
+      }
+    }
+    const incomingMessages = messages.filter((m) => m.direction === "INBOUND").length;
+
     return {
       rangeDays,
       totals: {
@@ -225,8 +256,11 @@ export const analyticsService = {
         unassignedNow,
         conversationsInRange: conversationsInRange.length,
         messagesInRange: messages.length,
+        incomingMessages,
+        outgoingMessages: messages.length - incomingMessages,
         resolvedInRange: resolveEvents.length,
         avgResponseMinutes: average(samples.map((s) => s.minutes)),
+        avgResolutionMinutes: average(resolutionMinutes),
       },
       trend,
       channelShare: [...channelCounts.entries()]

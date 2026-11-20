@@ -8,12 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotificationPreferences } from "@/features/settings/notification-preferences";
+import { AiKnowledge } from "@/features/settings/ai-knowledge";
 import { OutgoingWebhooks } from "@/features/settings/outgoing-webhooks";
 import { WorkspaceSettings } from "@/features/settings/workspace-settings";
 import { TeamManagement } from "@/features/team/team-management";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/permissions";
+import { aiProviderLabel, isAiConfigured } from "@/lib/ai";
+import { countAiUsageThisMonth, knowledgeService } from "@/services/ai.service";
 import { outgoingWebhookService } from "@/services/outgoing-webhook.service";
 import { workspaceService } from "@/services/workspace.service";
 
@@ -39,6 +42,12 @@ export default async function SettingsPage() {
   const outgoingWebhooks = canManageWebhooks
     ? await outgoingWebhookService.listWebhooks(user.id, active.id).catch(() => [])
     : [];
+
+  const canManageKnowledge = hasPermission(currentMember.role, "workspace.update");
+  const [knowledgeEntries, aiUsageThisMonth] = await Promise.all([
+    knowledgeService.list(user.id, active.id).catch(() => []),
+    countAiUsageThisMonth(active.id).catch(() => 0),
+  ]);
 
   return (
     <div className="flex max-w-4xl flex-col gap-6">
@@ -125,6 +134,15 @@ export default async function SettingsPage() {
       {canManageWebhooks ? (
         <OutgoingWebhooks workspaceId={active.id} initialWebhooks={outgoingWebhooks} />
       ) : null}
+
+      <AiKnowledge
+        workspaceId={active.id}
+        initialEntries={knowledgeEntries}
+        aiConfigured={isAiConfigured()}
+        aiLabel={aiProviderLabel()}
+        usageThisMonth={aiUsageThisMonth}
+        canManage={canManageKnowledge}
+      />
 
       <NotificationPreferences />
 

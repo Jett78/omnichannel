@@ -1,0 +1,334 @@
+import { aiChat } from "@/lib/ai";
+import { AppError } from "@/lib/errors";
+import { prisma } from "@/lib/prisma";
+import { requireWorkspacePermission } from "@/lib/workspace-auth";
+
+/**
+ * Phase 13G — AI reply assistant + workspace knowledge.
+ *
+ * Ground rules (from the spec):
+ * - Suggestions are DRAFTS for the agent. Nothing here sends a
+ *   message; the composer inserts text only when the agent clicks.
+ * - Without AI_API_KEY the actions throw AiNotConfiguredError — the
+ *   UI shows a setup state, never a fake answer.
+ * - Knowledge-grounded suggestions use only this workspace's own
+ *   KnowledgeEntry rows, selected by simple keyword overlap.
+ */
+
+export interface KnowledgeEntryView {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const knowledgeService = {
+  async list(actorUserId: string, workspaceId: string): Promise<KnowledgeEntryView[]> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.view");
+    const rows = await prisma.knowledgeEntry.findMany({
+      where: { workspaceId },
+      orderBy: { title: "asc" },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }));
+  },
+
+  async create(
+    actorUserId: string,
+    workspaceId: string,
+    input: { title: string; content: string },
+  ): Promise<KnowledgeEntryView> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "workspace.update");
+    const row = await prisma.knowledgeEntry.create({
+      data: {
+        workspaceId,
+        title: input.title.trim(),
+        content: input.content,
+        createdById: actorUserId,
+      },
+    });
+    return {
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  },
+
+  async update(
+    actorUserId: string,
+    workspaceId: string,
+    entryId: string,
+    input: { title?: string; content?: string },
+  ): Promise<KnowledgeEntryView> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "workspace.update");
+    const existing = await prisma.knowledgeEntry.findFirst({
+      where: { id: entryId, workspaceId },
+      select: { id: true },
+    });
+    if (!existing) throw AppError.notFound("Knowledge entry not found");
+    const row = await prisma.knowledgeEntry.update({
+      where: { id: entryId },
+      data: {
+        ...(input.title !== undefined ? { title: input.title.trim() } : {}),
+        ...(input.content !== undefined ? { content: input.content } : {}),
+      },
+    });
+    return {
+      id: row.id,
+      title: row.title,
+      content: row.content,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  },
+
+  async remove(actorUserId: string, workspaceId: string, entryId: string): Promise<void> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "workspace.update");
+    const existing = await prisma.knowledgeEntry.findFirst({
+      where: { id: entryId, workspaceId },
+      select: { id: true },
+    });
+    if (!existing) throw AppError.notFound("Knowledge entry not found");
+    await prisma.knowledgeEntry.delete({ where: { id: entryId } });
+  },
+};
+
+async function logUsage(workspaceId: string, userId: string, action: string): Promise<void> {
+  try {
+    await prisma.aiUsageLog.create({ data: { workspaceId, userId, action } });
+  } catch (error) {
+    console.error("[ai] usage log failed", error);
+  }
+}
+
+export async function countAiUsageThisMonth(workspaceId: string): Promise<number> {
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  return prisma.aiUsageLog.count({
+    where: { workspaceId, createdAt: { gte: monthStart } },
+  });
+}
+
+interface ThreadContext {
+  contactName: string;
+  provider: string;
+  transcript: string;
+  lastCustomerMessage: string | null;
+}
+
+async function loadThread(
+  workspaceId: string,
+  conversationId: string,
+): Promise<ThreadContext> {
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId, workspaceId },
+    include: {
+      contact: { select: { displayName: true } },
+      channel: { select: { provider: true } },
+      messages: {
+        where: { type: { notIn: ["SYSTEM", "PRIVATE_NOTE"] } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: { direction: true, body: true, type: true },
+      },
+    },
+  });
+  if (!conversation) throw AppError.notFound("Conversation not found");
+  const chronological = [...conversation.messages].reverse();
+  const lines = chronological
+    .map((message) => {
+      const who = message.direction === "INBOUND" ? "Customer" : "Agent";
+      const text = message.body ?? `[${message.type.toLowerCase()}]`;
+      return `${who}: ${text}`;
+    })
+    .join("\n");
+  const lastCustomer = [...chronological]
+    .reverse()
+    .find((message) => message.direction === "INBOUND" && message.body);
+  return {
+    contactName: conversation.contact.displayName,
+    provider: conversation.channel.provider.toLowerCase(),
+    transcript: lines,
+    lastCustomerMessage: lastCustomer?.body ?? null,
+  };
+}
+
+/** Pick the knowledge entries most relevant to the customer's words. */
+async function relevantKnowledge(
+  workspaceId: string,
+  queryText: string | null,
+): Promise<Array<{ title: string; content: string }>> {
+  const entries = await prisma.knowledgeEntry.findMany({
+    where: { workspaceId },
+    select: { title: true, content: true },
+    take: 50,
+  });
+  if (entries.length === 0) return [];
+  const words = new Set(
+    (queryText ?? "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 4),
+  );
+  const scored = entries
+    .map((entry) => {
+      const haystack = `${entry.title} ${entry.content}`.toLowerCase();
+      let score = 0;
+      for (const word of words) {
+        if (haystack.includes(word)) score += 1;
+      }
+      return { entry, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+  return scored.map((item) => item.entry);
+}
+
+const SUPPORT_SYSTEM_PROMPT =
+  "You are an AI assistant helping a human support agent in a customer-service inbox. " +
+  "You draft text for the agent to review — you never speak to the customer directly. " +
+  "Be accurate, concise and polite. If the workspace knowledge does not cover something, " +
+  "do not invent policies, prices or promises.";
+
+export const aiAssistantService = {
+  async suggestReply(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+  ): Promise<{ text: string; knowledgeUsed: string[] }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    const thread = await loadThread(workspaceId, conversationId);
+    const knowledge = await relevantKnowledge(
+      workspaceId,
+      `${thread.lastCustomerMessage ?? ""}\n${thread.transcript}`,
+    );
+    const knowledgeBlock = knowledge.length
+      ? `\n\nWorkspace knowledge you may rely on:\n${knowledge
+          .map((entry) => `## ${entry.title}\n${entry.content}`)
+          .join("\n\n")}`
+      : "";
+    const text = await aiChat([
+      { role: "system", content: SUPPORT_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `Conversation with ${thread.contactName} (channel: ${thread.provider}):\n\n${thread.transcript}` +
+          `${knowledgeBlock}\n\nWrite the agent's next reply to the customer. ` +
+          `Reply in the language the customer is using. Output ONLY the reply text.`,
+      },
+    ]);
+    await logUsage(workspaceId, actorUserId, "suggest");
+    return { text, knowledgeUsed: knowledge.map((entry) => entry.title) };
+  },
+
+  async rewrite(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+    input: { text: string; tone: "professional" | "friendly" | "shorter" | "empathetic" },
+  ): Promise<{ text: string }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    await loadThread(workspaceId, conversationId); // workspace/conversation check
+    const toneInstruction = {
+      professional: "more professional and polished",
+      friendly: "warmer and friendlier",
+      shorter: "shorter and more direct, keeping the meaning",
+      empathetic: "more empathetic and understanding",
+    }[input.tone];
+    const text = await aiChat([
+      { role: "system", content: SUPPORT_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `Rewrite the agent's draft to be ${toneInstruction}. Keep every fact unchanged. ` +
+          `Output ONLY the rewritten text.\n\nDraft:\n${input.text}`,
+      },
+    ]);
+    await logUsage(workspaceId, actorUserId, "rewrite");
+    return { text };
+  },
+
+  async summarize(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+  ): Promise<{ text: string }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    const thread = await loadThread(workspaceId, conversationId);
+    const text = await aiChat([
+      { role: "system", content: SUPPORT_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `Summarize this support conversation for a teammate taking over. Cover: what the ` +
+          `customer wants, what has already been said or done, and what is still pending. ` +
+          `Use short bullet points.\n\nConversation with ${thread.contactName}:\n\n${thread.transcript}`,
+      },
+    ]);
+    await logUsage(workspaceId, actorUserId, "summarize");
+    return { text };
+  },
+
+  async sentiment(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+  ): Promise<{ sentiment: "positive" | "neutral" | "negative"; reason: string }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    const thread = await loadThread(workspaceId, conversationId);
+    const raw = await aiChat(
+      [
+        { role: "system", content: SUPPORT_SYSTEM_PROMPT },
+        {
+          role: "user",
+          content:
+            `Judge the CUSTOMER's overall sentiment in this conversation. Respond with ONLY a ` +
+            `JSON object like {"sentiment":"positive|neutral|negative","reason":"one short sentence"}.\n\n${thread.transcript}`,
+        },
+      ],
+      { maxTokens: 200, temperature: 0 },
+    );
+    await logUsage(workspaceId, actorUserId, "sentiment");
+    try {
+      const match = raw.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(match?.[0] ?? "") as { sentiment?: string; reason?: string };
+      const sentiment =
+        parsed.sentiment === "positive" || parsed.sentiment === "negative"
+          ? parsed.sentiment
+          : "neutral";
+      return { sentiment, reason: parsed.reason?.trim() || "No reason given" };
+    } catch {
+      throw new Error("The AI returned an unreadable sentiment result — try again");
+    }
+  },
+
+  async translate(
+    actorUserId: string,
+    workspaceId: string,
+    conversationId: string,
+    input: { text: string; target: string },
+  ): Promise<{ text: string }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    await loadThread(workspaceId, conversationId); // workspace/conversation check
+    const text = await aiChat([
+      { role: "system", content: SUPPORT_SYSTEM_PROMPT },
+      {
+        role: "user",
+        content:
+          `Translate the following text into ${input.target}. Keep the tone and meaning. ` +
+          `Output ONLY the translation.\n\n${input.text}`,
+      },
+    ]);
+    await logUsage(workspaceId, actorUserId, "translate");
+    return { text };
+  },
+};

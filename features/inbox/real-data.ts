@@ -72,6 +72,8 @@ export interface WhatsAppTemplateView {
 export interface RealInboxData {
   workspaceId: string;
   currentUserId: string;
+  /** Phase 13G — whether an AI provider key is configured server-side. */
+  aiConfigured: boolean;
   conversations: RealConversationItem[];
   initialMessages: { conversationId: string; messages: RealMessageItem[] };
   members: Array<{ id: string; name: string }>;

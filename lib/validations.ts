@@ -288,3 +288,23 @@ export const contactProfileUpdateSchema = z.object({
   customAttrs: z.record(z.string().max(60), z.string().max(500)).optional(),
 });
 export type ContactProfileUpdateInput = z.infer<typeof contactProfileUpdateSchema>;
+
+export const knowledgeEntryCreateSchema = z.object({
+  title: z.string().min(1, "Title is required").max(120),
+  content: z.string().min(1, "Content is required").max(8000),
+});
+export type KnowledgeEntryCreateInput = z.infer<typeof knowledgeEntryCreateSchema>;
+
+export const knowledgeEntryUpdateSchema = z.object({
+  title: z.string().min(1).max(120).optional(),
+  content: z.string().min(1).max(8000).optional(),
+});
+export type KnowledgeEntryUpdateInput = z.infer<typeof knowledgeEntryUpdateSchema>;
+
+export const aiActionSchema = z.object({
+  action: z.enum(["suggest", "rewrite", "summarize", "sentiment", "translate"]),
+  text: z.string().max(4000).optional(),
+  tone: z.enum(["professional", "friendly", "shorter", "empathetic"]).optional(),
+  target: z.string().max(40).optional(),
+});
+export type AiActionInput = z.infer<typeof aiActionSchema>;

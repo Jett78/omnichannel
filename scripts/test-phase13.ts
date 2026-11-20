@@ -8,6 +8,9 @@ import { cannedResponseService } from "@/services/canned-response.service";
 import { contactProfileService } from "@/services/contact-profile.service";
 import { channelService } from "@/services/channel.service";
 import { conversationService } from "@/services/conversation.service";
+import { analyticsService } from "@/services/analytics.service";
+import { AiNotConfiguredError } from "@/lib/ai";
+import { aiAssistantService, knowledgeService } from "@/services/ai.service";
 import { notificationService } from "@/services/notification.service";
 import { workspaceService } from "@/services/workspace.service";
 
@@ -441,6 +444,110 @@ async function main(): Promise<void> {
     !crossWorkspace.some((n) => n.entityId === conv9.id),
   );
   await prisma.workspace.delete({ where: { id: otherWorkspace.id } }).catch(() => null);
+
+  // ── 12. Analytics additions (13F) ──────────────────────────────────
+  await conversationService.resolveConversation(userA.id, wa.id, conv9.id);
+  const analytics = await analyticsService.getAnalytics(userA.id, wa.id, 7);
+  assert(
+    "analytics: incoming/outgoing split adds up to the message total",
+    analytics.totals.incomingMessages + analytics.totals.outgoingMessages ===
+      analytics.totals.messagesInRange &&
+      analytics.totals.incomingMessages >= 10 &&
+      analytics.totals.outgoingMessages >= 1,
+    `in=${analytics.totals.incomingMessages} out=${analytics.totals.outgoingMessages}`,
+  );
+  assert(
+    "analytics: resolution time computed from real resolve events",
+    analytics.totals.resolvedInRange >= 1 && analytics.totals.avgResolutionMinutes !== null,
+    `resolved=${analytics.totals.resolvedInRange} avg=${analytics.totals.avgResolutionMinutes}`,
+  );
+
+  // ── 13. AI assistant + knowledge (13G) ─────────────────────────────
+  let agentKnowledgeBlocked = false;
+  try {
+    await knowledgeService.create(userC.id, wa.id, { title: "X", content: "Y" });
+  } catch {
+    agentKnowledgeBlocked = true;
+  }
+  assert("ai: agents cannot manage knowledge entries", agentKnowledgeBlocked);
+  const entry = await knowledgeService.create(userA.id, wa.id, {
+    title: "Greeting and delivery policy",
+    content: "Always say hello first. Delivery inside the valley takes 2 days.",
+  });
+  const updatedEntry = await knowledgeService.update(userA.id, wa.id, entry.id, {
+    content: "Always say hello first. Delivery inside the valley takes 3 days.",
+  });
+  assert(
+    "ai: knowledge entry created + updated",
+    updatedEntry.content.includes("3 days") &&
+      (await knowledgeService.list(userA.id, wa.id)).some((e) => e.id === entry.id),
+  );
+
+  delete process.env.AI_API_KEY;
+  let notConfigured = false;
+  try {
+    await aiAssistantService.suggestReply(userA.id, wa.id, conv9.id);
+  } catch (error) {
+    notConfigured = error instanceof AiNotConfiguredError;
+  }
+  assert("ai: without a key, suggest fails as not-configured (never faked)", notConfigured);
+
+  process.env.AI_API_KEY = "test-key-not-real";
+  const originalFetch = globalThis.fetch;
+  let capturedUrl = "";
+  let capturedBody = "";
+  let stubContent = "Hello! Delivery inside the valley takes 3 days.";
+  globalThis.fetch = (async (url: unknown, init?: { body?: string }) => {
+    capturedUrl = String(url);
+    capturedBody = init?.body ?? "";
+    return new Response(
+      JSON.stringify({ choices: [{ message: { content: stubContent } }] }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }) as typeof fetch;
+  try {
+    const suggestion = await aiAssistantService.suggestReply(userA.id, wa.id, conv9.id);
+    assert(
+      "ai: suggest returns the provider draft and the matched knowledge",
+      suggestion.text === stubContent &&
+        suggestion.knowledgeUsed.includes("Greeting and delivery policy"),
+      suggestion.text.slice(0, 40),
+    );
+    assert(
+      "ai: request hits the Groq-compatible endpoint carrying thread + knowledge",
+      capturedUrl.includes("api.groq.com") &&
+        capturedBody.includes("Customer:") &&
+        capturedBody.includes("Greeting and delivery policy"),
+      capturedUrl,
+    );
+    const suggestUsage = await prisma.aiUsageLog.count({
+      where: { workspaceId: wa.id, action: "suggest" },
+    });
+    assert("ai: usage is logged per action", suggestUsage >= 1, `count=${suggestUsage}`);
+    stubContent = '{"sentiment":"negative","reason":"Customer sounds frustrated"}';
+    const sentiment = await aiAssistantService.sentiment(userA.id, wa.id, conv9.id);
+    assert(
+      "ai: sentiment JSON is parsed strictly",
+      sentiment.sentiment === "negative" && sentiment.reason.includes("frustrated"),
+    );
+    globalThis.fetch = (async () =>
+      new Response("rate limited", { status: 429 })) as typeof fetch;
+    let providerError = false;
+    try {
+      await aiAssistantService.summarize(userA.id, wa.id, conv9.id);
+    } catch (error) {
+      providerError = error instanceof Error && error.name === "AiProviderError";
+    }
+    assert("ai: provider failures surface as errors, never fake text", providerError);
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.AI_API_KEY;
+  }
+  await knowledgeService.remove(userA.id, wa.id, entry.id);
+  assert(
+    "ai: knowledge entry deleted",
+    !(await knowledgeService.list(userA.id, wa.id)).some((e) => e.id === entry.id),
+  );
 
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);
