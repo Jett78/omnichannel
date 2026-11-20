@@ -1,3 +1,4 @@
+import { fireAutomationEvent } from "@/lib/automation-hook";
 import { AppError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { emitToWorkspace, emitToWorkspaceAndConversation } from "@/lib/realtime";
@@ -460,6 +461,7 @@ export const conversationService = {
       "conversation.assigned",
       conversationId,
     );
+    await fireAutomationEvent(workspaceId, "conversation.assigned", { conversationId });
     return toListItem(updated);
   },
 
@@ -490,6 +492,7 @@ export const conversationService = {
       "conversation.resolved",
       conversationId,
     );
+    await fireAutomationEvent(workspaceId, "conversation.resolved", { conversationId });
     return toListItem(updated);
   },
 
@@ -651,6 +654,7 @@ export const conversationService = {
     });
     const updated = await loadConversationOrThrow(workspaceId, conversationId);
     await emitConversationUpdated(workspaceId, updated);
+    await fireAutomationEvent(workspaceId, "tag.added", { conversationId });
     return updated.tags.map((t) => ({ id: t.tag.id, name: t.tag.name, color: t.tag.color }));
   },
 

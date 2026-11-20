@@ -201,6 +201,8 @@ model Workspace {
   tags          Tag[]
   canned        CannedResponse[]
   outgoingWebhooks OutgoingWebhook[]
+  automationRules  AutomationRule[]
+  automationRuns   AutomationRun[]
   invitations   Invitation[]
   auditLogs     AuditLog[]
   assignments   ConversationAssignment[]
@@ -229,6 +231,8 @@ model WorkspaceMember {
   userId      String
   teamId      String?
   role        Role     @default(AGENT)
+  /** Phase 13B — smart-assignment availability (agents can toggle). */
+  isAvailable Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -609,4 +613,51 @@ model AuditLog {
   actor     User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId, createdAt])
+}
+
+// ─── Automation (Phase 13B) ─────────────────────────────────────────
+
+/**
+ * A workspace automation rule: when `trigger` fires and `conditions`
+ * match, run `actions` in order. conditions/actions are JSON validated
+ * by the API schemas (see lib/validations.ts) and typed in
+ * services/automation.service.ts. Smart assignment is the `assign`
+ * action with a round_robin / least_busy strategy over available
+ * members. `roundRobinCursor` = the userId picked last by this rule.
+ */
+model AutomationRule {
+  id               String   @id @default(cuid())
+  workspaceId      String
+  name             String
+  enabled          Boolean  @default(true)
+  trigger          String
+  conditions       Json?
+  actions          Json
+  roundRobinCursor String?
+  createdById      String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      AutomationRun[]
+
+  @@index([workspaceId, trigger, enabled])
+}
+
+/** One execution of a rule against one conversation (audit trail). */
+model AutomationRun {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  ruleId         String
+  conversationId String
+  trigger        String
+  /** Per-action outcomes: [{ type, ok, detail }]. */
+  results        Json
+  createdAt      DateTime @default(now())
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  rule      AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([ruleId, createdAt])
 }

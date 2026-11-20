@@ -75,7 +75,8 @@
     "test:phase9": "tsx scripts/test-phase9.ts",
     "test:phase10": "tsx scripts/test-phase10.ts",
     "test:phase11": "tsx scripts/test-phase11.ts",
-    "test:phase12": "tsx scripts/test-phase12.ts"
+    "test:phase12": "tsx scripts/test-phase12.ts",
+    "test:phase13": "tsx scripts/test-phase13.ts"
   },
   "version": "0.1.0"
 }

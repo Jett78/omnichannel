@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { fireAutomationEvent } from "@/lib/automation-hook";
 import { AppError } from "@/lib/errors";
 import { getQueues } from "@/lib/queue";
 import { emitToWorkspace, emitToWorkspaceAndConversation } from "@/lib/realtime";
@@ -450,6 +451,16 @@ export const messagingService = {
       );
     }
     await outgoingWebhookDispatch.messageCreated(workspaceId, unified);
+
+    // Automations (Phase 13B) — self-catching hook, runs after ingest.
+    if (conversationCreated) {
+      await fireAutomationEvent(workspaceId, "conversation.created", {
+        conversationId: conversation.id,
+      });
+    }
+    await fireAutomationEvent(workspaceId, "message.created", {
+      conversationId: conversation.id,
+    });
 
     return { message: unified, conversationId: conversation.id, deduplicated: false };
   },

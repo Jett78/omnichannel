@@ -232,3 +232,51 @@ export const resetPasswordSchema = z
     path: ["confirmPassword"],
   });
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+export const automationConditionsSchema = z.object({
+  providers: z.array(z.string().max(24)).max(12).optional(),
+  tagIds: z.array(z.string()).max(20).optional(),
+  unassignedOnly: z.boolean().optional(),
+  firstMessageOnly: z.boolean().optional(),
+});
+
+export const automationActionSchema = z.object({
+  type: z.enum(["assign", "add_tag", "send_canned", "notify", "set_status", "set_priority"]),
+  strategy: z.enum(["specific", "round_robin", "least_busy"]).optional(),
+  userId: z.string().optional(),
+  teamId: z.string().optional(),
+  name: z.string().min(1).max(60).optional(),
+  cannedResponseId: z.string().optional(),
+  userIds: z.array(z.string()).max(50).optional(),
+  message: z.string().max(500).optional(),
+  status: z.enum(["OPEN", "RESOLVED"]).optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+});
+
+export const automationRuleCreateSchema = z.object({
+  name: z.string().min(1, "Name is required").max(120),
+  trigger: z.enum([
+    "conversation.created",
+    "message.created",
+    "conversation.assigned",
+    "conversation.resolved",
+    "tag.added",
+  ]),
+  conditions: automationConditionsSchema.optional(),
+  actions: z.array(automationActionSchema).min(1, "At least one action is required").max(10),
+  enabled: z.boolean().optional(),
+});
+export type AutomationRuleCreateInput = z.infer<typeof automationRuleCreateSchema>;
+
+export const automationRuleUpdateSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  trigger: automationRuleCreateSchema.shape.trigger.optional(),
+  conditions: automationConditionsSchema.nullable().optional(),
+  actions: z.array(automationActionSchema).min(1).max(10).optional(),
+  enabled: z.boolean().optional(),
+});
+export type AutomationRuleUpdateInput = z.infer<typeof automationRuleUpdateSchema>;
+
+export const availabilityUpdateSchema = z.object({
+  isAvailable: z.boolean(),
+});
