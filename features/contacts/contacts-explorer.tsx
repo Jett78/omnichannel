@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowUpDown, Search, UserPlus } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
@@ -238,6 +239,11 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
                   </dd>
                 </div>
               </dl>
+              <div className="flex justify-end pt-1">
+                <Button asChild size="sm">
+                  <Link href={`/contacts/${selected.id}`}>Open full profile</Link>
+                </Button>
+              </div>
             </>
           ) : null}
         </DialogContent>

@@ -280,3 +280,11 @@ export type AutomationRuleUpdateInput = z.infer<typeof automationRuleUpdateSchem
 export const availabilityUpdateSchema = z.object({
   isAvailable: z.boolean(),
 });
+
+export const contactProfileUpdateSchema = z.object({
+  displayName: z.string().min(1).max(120).optional(),
+  phone: z.string().max(40).nullable().optional(),
+  email: z.string().max(160).nullable().optional(),
+  customAttrs: z.record(z.string().max(60), z.string().max(500)).optional(),
+});
+export type ContactProfileUpdateInput = z.infer<typeof contactProfileUpdateSchema>;

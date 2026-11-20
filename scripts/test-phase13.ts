@@ -5,6 +5,7 @@ import { getQueues } from "@/lib/queue";
 import { prisma } from "@/lib/prisma";
 import { automationService } from "@/services/automation.service";
 import { cannedResponseService } from "@/services/canned-response.service";
+import { contactProfileService } from "@/services/contact-profile.service";
 import { channelService } from "@/services/channel.service";
 import { conversationService } from "@/services/conversation.service";
 import { workspaceService } from "@/services/workspace.service";
@@ -341,6 +342,53 @@ async function main(): Promise<void> {
     "rules: delete removes the rule",
     !rulesAfterDelete.some((r) => r.id === ra.id),
   );
+
+  // ── 10. Unified customer profile (13D) ─────────────────────────────
+  const conv8Row = await prisma.conversation.findUnique({ where: { id: conv8.id } });
+  if (!conv8Row) throw new Error("setup: conv8 missing");
+  await conversationService.addInternalNote(
+    userA.id,
+    wa.id,
+    conv8.id,
+    "VIP customer — prefers email follow-ups.",
+  );
+  const profile = await contactProfileService.getProfile(userA.id, wa.id, conv8Row.contactId);
+  assert(
+    "profile: identities grouped under the contact (mock channel)",
+    profile.identities.length >= 1 && profile.identities[0]?.provider === "MOCK",
+  );
+  assert(
+    "profile: tag union spans the contact's conversations",
+    profile.tags.includes("auto-greeted") && profile.tags.includes("vip"),
+    `tags=${profile.tags.join(",")}`,
+  );
+  assert(
+    "profile: internal notes aggregated with author name",
+    profile.notes.some(
+      (n) => n.body?.includes("prefers email") && n.senderName === "Phase13 a",
+    ),
+  );
+  assert(
+    "profile: conversation history includes the combo conversation",
+    profile.conversations.some((c) => c.id === conv8.id) && profile.stats.conversations >= 1,
+  );
+  const updatedProfile = await contactProfileService.updateContact(
+    userA.id,
+    wa.id,
+    conv8Row.contactId,
+    { phone: "+977 9800000000", customAttrs: { City: "Kathmandu", Tier: "Gold" } },
+  );
+  assert(
+    "profile: update sets phone + attributes",
+    updatedProfile.phone === "+977 9800000000" &&
+      updatedProfile.customAttrs.City === "Kathmandu" &&
+      updatedProfile.customAttrs.Tier === "Gold",
+  );
+  const outsider = await signUp("outsider");
+  await expectThrows("profile: outsider cannot read a profile", () =>
+    contactProfileService.getProfile(outsider.id, wa.id, conv8Row.contactId),
+  );
+  await prisma.user.delete({ where: { id: outsider.id } }).catch(() => null);
 
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);

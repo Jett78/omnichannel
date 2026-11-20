@@ -13,7 +13,12 @@ import { workspaceService } from "@/services/workspace.service";
  * rendered. Workspaces without conversations keep the Phase 3 sample
  * preview (clearly badged, never written to the DB).
  */
-export default async function InboxPage() {
+interface InboxPageProps {
+  searchParams: Promise<{ c?: string }>;
+}
+
+export default async function InboxPage({ searchParams }: InboxPageProps) {
+  const params = await searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/api/session-expired");
 
@@ -24,8 +29,18 @@ export default async function InboxPage() {
       const { items } = await conversationService.listConversations(user.id, active.id, {
         limit: 30,
       });
-      const first = items[0];
+      // Deep link (?c=<conversationId>, e.g. from a contact profile):
+      // focus that conversation first when it exists in this workspace.
+      let first = items[0];
+      if (params.c && params.c !== first?.id) {
+        try {
+          first = await conversationService.getConversation(user.id, active.id, params.c);
+        } catch {
+          // Not found / not visible — fall back to the newest conversation.
+        }
+      }
       if (first) {
+        const orderedItems = [first, ...items.filter((item) => item.id !== first.id)];
         const [messages, members] = await Promise.all([
           conversationService.listMessages(user.id, active.id, first.id, { limit: 100 }),
           workspaceService.listMembers(user.id, active.id),
@@ -33,7 +48,7 @@ export default async function InboxPage() {
         realData = {
           workspaceId: active.id,
           currentUserId: user.id,
-          conversations: items.map((item) => ({
+          conversations: orderedItems.map((item) => ({
             id: item.id,
             status: item.status,
             priority: item.priority,

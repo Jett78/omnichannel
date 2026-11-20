@@ -38,3 +38,40 @@ export function formatLastActive(iso: string | null): string {
     year: "numeric",
   });
 }
+
+/** Unified customer profile as returned by the Phase-13D profile service. */
+export interface ContactProfileView {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  phone: string | null;
+  email: string | null;
+  createdAt: string;
+  customAttrs: Record<string, string>;
+  identities: Array<{
+    id: string;
+    provider: string;
+    channelDisplayName: string;
+    externalUserId: string;
+    username: string | null;
+  }>;
+  tags: string[];
+  stats: { conversations: number; open: number; messages: number };
+  conversations: Array<{
+    id: string;
+    status: string;
+    priority: string | null;
+    provider: string;
+    channelDisplayName: string;
+    lastMessageAt: string | null;
+    preview: string | null;
+    unreadCount: number;
+  }>;
+  notes: Array<{
+    id: string;
+    body: string | null;
+    senderName: string | null;
+    conversationId: string;
+    createdAt: string;
+  }>;
+}
