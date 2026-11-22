@@ -549,6 +549,108 @@ async function main(): Promise<void> {
     !(await knowledgeService.list(userA.id, wa.id)).some((e) => e.id === entry.id),
   );
 
+  // ── 14. Keyword auto-reply (message contains) ──────────────────────
+  async function ingestText(sender: string, suffix: string, text: string) {
+    const eventId = await enqueueMockWebhook(channel.id, `${sender}-${suffix}`, [
+      {
+        externalMessageId: `ext13-${runId}-${sender}-${suffix}`,
+        senderExternalId: sender,
+        senderName: `Customer ${sender}`,
+        text,
+        type: "TEXT",
+        sentAt: new Date().toISOString(),
+      },
+    ]);
+    await waitEventProcessed(eventId);
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        workspaceId: wa.id,
+        channelId: channel.id,
+        contact: { identities: { some: { externalUserId: sender } } },
+      },
+      select: { id: true },
+    });
+    if (!conversation) throw new Error(`setup: no conversation for ${sender}`);
+    return conversation;
+  }
+  const priceCanned = await cannedResponseService.create(userA.id, wa.id, {
+    title: "Price list",
+    body: "Price list: Jacket Rs 4,999, Shoes Rs 2,999.",
+  });
+  const keywordRule = await automationService.createRule(userA.id, wa.id, {
+    name: "Price auto-reply",
+    trigger: "message.created",
+    conditions: { keywords: ["price", "kati"] },
+    actions: [{ type: "send_canned", cannedResponseId: priceCanned.id }],
+  });
+  const convPrice = await ingestText("cust-20", "a", "What is the price of the jacket?");
+  const priceReply = await waitFor("keyword auto-reply SENT", async () => {
+    const message = await prisma.message.findFirst({
+      where: {
+        conversationId: convPrice.id,
+        direction: "OUTBOUND",
+        body: { contains: "Price list" },
+      },
+    });
+    return message?.status === "SENT" ? message : null;
+  });
+  assert(
+    "keywords: a matching first message gets the canned auto-reply",
+    priceReply.body?.includes("Rs 4,999") ?? false,
+    `body: ${priceReply.body}`,
+  );
+  const keywordRun = await prisma.automationRun.findFirst({
+    where: { ruleId: keywordRule.id, conversationId: convPrice.id },
+  });
+  assert(
+    "keywords: the firing is recorded in the rule's runs",
+    JSON.stringify(keywordRun?.results ?? []).includes('"ok":true'),
+  );
+  const convSunday = await ingestText("cust-21", "a", "Hello, do you open on Sunday?");
+  // Wait until ingest automations have clearly run for this conversation
+  // (the welcome combo's reply lands), then prove no price reply exists.
+  await waitFor("combo reply for the non-matching conversation", async () => {
+    const message = await prisma.message.findFirst({
+      where: { conversationId: convSunday.id, direction: "OUTBOUND" },
+    });
+    return message ?? null;
+  });
+  const strayPriceReply = await prisma.message.findFirst({
+    where: {
+      conversationId: convSunday.id,
+      direction: "OUTBOUND",
+      body: { contains: "Price list" },
+    },
+  });
+  assert("keywords: a non-matching message gets no auto-reply", strayPriceReply === null);
+  const convUpper = await ingestText("cust-22", "a", "PRICE please");
+  const upperReply = await waitFor("uppercase keyword auto-reply SENT", async () => {
+    const message = await prisma.message.findFirst({
+      where: {
+        conversationId: convUpper.id,
+        direction: "OUTBOUND",
+        body: { contains: "Price list" },
+      },
+    });
+    return message?.status === "SENT" ? message : null;
+  });
+  assert("keywords: matching is case-insensitive", upperReply !== null);
+  const resolvedKeywordRule = await automationService.createRule(userA.id, wa.id, {
+    name: "Resolved keyword (must never fire)",
+    trigger: "conversation.resolved",
+    conditions: { keywords: ["price"] },
+    actions: [{ type: "set_priority", priority: "URGENT" }],
+  });
+  await conversationService.resolveConversation(userA.id, wa.id, convPrice.id);
+  const resolvedRuns = await prisma.automationRun.count({
+    where: { ruleId: resolvedKeywordRule.id },
+  });
+  assert(
+    "keywords: events without a message body can never match",
+    resolvedRuns === 0,
+    `runs=${resolvedRuns}`,
+  );
+
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);
   for (const user of [userA, userC, userD, userE]) {

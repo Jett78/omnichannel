@@ -43,6 +43,13 @@ export interface AutomationConditions {
   unassignedOnly?: boolean;
   /** message.created only: fire solely for a conversation's first inbound message. */
   firstMessageOnly?: boolean;
+  /**
+   * Message-text filter (keyword auto-reply): the triggering message's
+   * body must contain at least one of these words/phrases
+   * (case-insensitive substring). Only events that carry a message
+   * body can match — message.created and conversation.created.
+   */
+  keywords?: string[];
 }
 
 export type AutomationAction =
@@ -263,6 +270,7 @@ async function conditionsMatch(
   conditions: AutomationConditions | null,
   workspaceId: string,
   conversation: NonNullable<Awaited<ReturnType<typeof loadConversationContext>>>,
+  messageBody?: string | null,
 ): Promise<boolean> {
   if (!conditions) return true;
   if (conditions.providers?.length) {
@@ -274,6 +282,17 @@ async function conditionsMatch(
     if (!conditions.tagIds.some((id) => owned.has(id))) return false;
   }
   if (conditions.unassignedOnly && conversation.assigneeId) return false;
+  if (conditions.keywords?.length) {
+    // Keyword auto-reply: needs the triggering message's text. Events
+    // without a body (assign/resolve/tag) can never match.
+    const body = (messageBody ?? "").toLowerCase();
+    if (!body) return false;
+    const hit = conditions.keywords.some((keyword) => {
+      const needle = keyword.trim().toLowerCase();
+      return needle !== "" && body.includes(needle);
+    });
+    if (!hit) return false;
+  }
   if (conditions.firstMessageOnly) {
     const inboundCount = await prisma.message.count({
       where: { conversationId: conversation.id, direction: "INBOUND" },
@@ -453,7 +472,7 @@ export const automationEngine = {
   async handleEvent(
     workspaceId: string,
     trigger: AutomationTrigger,
-    context: { conversationId: string },
+    context: { conversationId: string; messageBody?: string | null },
   ): Promise<void> {
     try {
       const rules = await prisma.automationRule.findMany({
@@ -466,7 +485,10 @@ export const automationEngine = {
 
       for (const rule of rules) {
         const conditions = (rule.conditions as AutomationConditions | null) ?? null;
-        if (!(await conditionsMatch(conditions, workspaceId, conversation))) continue;
+        if (
+          !(await conditionsMatch(conditions, workspaceId, conversation, context.messageBody))
+        )
+          continue;
         const actions = (rule.actions as AutomationAction[]) ?? [];
         const results: ActionResult[] = [];
         await runInAutomation(async () => {

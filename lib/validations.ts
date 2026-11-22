@@ -238,6 +238,7 @@ export const automationConditionsSchema = z.object({
   tagIds: z.array(z.string()).max(20).optional(),
   unassignedOnly: z.boolean().optional(),
   firstMessageOnly: z.boolean().optional(),
+  keywords: z.array(z.string().min(1).max(80)).max(20).optional(),
 });
 
 export const automationActionSchema = z.object({

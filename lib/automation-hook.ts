@@ -11,7 +11,7 @@ import type { AutomationTrigger } from "@/services/automation.service";
 export async function fireAutomationEvent(
   workspaceId: string,
   trigger: AutomationTrigger,
-  context: { conversationId: string },
+  context: { conversationId: string; messageBody?: string | null },
 ): Promise<void> {
   if (inAutomation()) return;
   try {

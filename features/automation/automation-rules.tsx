@@ -60,6 +60,7 @@ export interface AutomationRuleView {
     tagIds?: string[];
     unassignedOnly?: boolean;
     firstMessageOnly?: boolean;
+    keywords?: string[];
   } | null;
   actions: Array<Record<string, unknown>>;
   createdById: string;
@@ -249,6 +250,7 @@ export function AutomationRules({
   const [condTagIds, setCondTagIds] = useState<string[]>([]);
   const [condUnassignedOnly, setCondUnassignedOnly] = useState(false);
   const [condFirstMessageOnly, setCondFirstMessageOnly] = useState(false);
+  const [condKeywords, setCondKeywords] = useState("");
   const [drafts, setDrafts] = useState<ActionDraft[]>([emptyDraft()]);
   const [saving, setSaving] = useState(false);
 
@@ -309,6 +311,7 @@ export function AutomationRules({
       setCondTagIds(rule.conditions?.tagIds ?? []);
       setCondUnassignedOnly(rule.conditions?.unassignedOnly ?? false);
       setCondFirstMessageOnly(rule.conditions?.firstMessageOnly ?? false);
+      setCondKeywords((rule.conditions?.keywords ?? []).join(", "));
       setDrafts(rule.actions.length ? rule.actions.map(draftFromAction) : [emptyDraft()]);
     } else {
       setEditingId(null);
@@ -318,6 +321,7 @@ export function AutomationRules({
       setCondTagIds([]);
       setCondUnassignedOnly(false);
       setCondFirstMessageOnly(false);
+      setCondKeywords("");
       setDrafts([emptyDraft()]);
     }
     setBuilderOpen(true);
@@ -334,6 +338,17 @@ export function AutomationRules({
     if (condTagIds.length) conditions.tagIds = condTagIds;
     if (condUnassignedOnly) conditions.unassignedOnly = true;
     if (condFirstMessageOnly && trigger === "message.created") conditions.firstMessageOnly = true;
+    if (trigger === "message.created" || trigger === "conversation.created") {
+      const keywords = [
+        ...new Set(
+          condKeywords
+            .split(",")
+            .map((word) => word.trim())
+            .filter((word) => word !== ""),
+        ),
+      ].slice(0, 20);
+      if (keywords.length) conditions.keywords = keywords;
+    }
     const hasConditions = Object.keys(conditions).length > 0;
     const payload = {
       name: ruleName.trim(),
@@ -424,6 +439,9 @@ export function AutomationRules({
           .map((id) => tags.find((t) => t.id === id)?.name ?? "…")
           .join(", ")}`,
       );
+    }
+    if (conditions.keywords?.length) {
+      parts.push(`message contains: ${conditions.keywords.join(", ")}`);
     }
     if (conditions.unassignedOnly) parts.push("only when unassigned");
     if (conditions.firstMessageOnly) parts.push("first message only");
@@ -708,6 +726,23 @@ export function AutomationRules({
                       );
                     })}
                   </div>
+                </div>
+              ) : null}
+              {trigger === "message.created" || trigger === "conversation.created" ? (
+                <div>
+                  <p className="text-muted-foreground mb-1.5 text-xs font-medium">
+                    Message contains any of these words or phrases
+                  </p>
+                  <Input
+                    value={condKeywords}
+                    onChange={(event) => setCondKeywords(event.target.value)}
+                    placeholder="price, kati, delivery charge, opening hours"
+                    aria-label="Message keywords"
+                  />
+                  <p className="text-muted-foreground mt-1 text-[11px]">
+                    Comma-separated, case-insensitive. Pair with a “Send a saved reply” action
+                    below for keyword auto-replies.
+                  </p>
                 </div>
               ) : null}
               <div className="flex flex-wrap gap-x-6 gap-y-2">

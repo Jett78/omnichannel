@@ -457,10 +457,12 @@ export const messagingService = {
     if (conversationCreated) {
       await fireAutomationEvent(workspaceId, "conversation.created", {
         conversationId: conversation.id,
+        messageBody: unified.content,
       });
     }
     await fireAutomationEvent(workspaceId, "message.created", {
       conversationId: conversation.id,
+      messageBody: unified.content,
     });
 
     // Notifications (Phase 13E) — self-catching producers.
