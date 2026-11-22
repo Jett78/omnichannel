@@ -63,3 +63,19 @@ node-canvas flow builder.
    entries admin + AI performance counters on Analytics).
 
 Each sub-phase: tests + lint/typecheck/build gates, then one push.
+
+## Follow-up: `ai_reply` action — AI auto-reply (2026-11-22)
+
+A rule action that generates a reply with the 13G assistant (thread
+context + keyword-matched knowledge) and sends it through the normal
+outbound path. Guardrails: automation sends are marked
+`metadata.viaAutomation` (canned sends too, from this change on), and
+the action SKIPS — recorded on the run — once any outbound agent
+message exists that was NOT sent by an automation, so a human agent
+replying in a conversation permanently silences the AI there, while
+the AI can still continue conversations it handles alone. Without
+`AI_API_KEY` the run records the not-configured failure and nothing is
+sent. DEPLOYMENT NOTE: inbound processing runs in the WORKER process,
+so the worker needs `AI_API_KEY` in its own environment for
+auto-replies (the composer panel runs web-side). Suite: test:phase13 =
+51 (section 15: 6 asserts); test:phase4 regression 62/62.

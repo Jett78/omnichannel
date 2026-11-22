@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { auth } from "@/lib/auth";
 import { getQueues } from "@/lib/queue";
 import { prisma } from "@/lib/prisma";
-import { automationService } from "@/services/automation.service";
+import { automationEngine, automationService } from "@/services/automation.service";
 import { cannedResponseService } from "@/services/canned-response.service";
 import { contactProfileService } from "@/services/contact-profile.service";
 import { channelService } from "@/services/channel.service";
@@ -11,6 +11,7 @@ import { conversationService } from "@/services/conversation.service";
 import { analyticsService } from "@/services/analytics.service";
 import { AiNotConfiguredError } from "@/lib/ai";
 import { aiAssistantService, knowledgeService } from "@/services/ai.service";
+import { messagingService } from "@/services/messaging.service";
 import { notificationService } from "@/services/notification.service";
 import { workspaceService } from "@/services/workspace.service";
 
@@ -650,6 +651,137 @@ async function main(): Promise<void> {
     resolvedRuns === 0,
     `runs=${resolvedRuns}`,
   );
+
+  // ── 15. AI auto-reply action ───────────────────────────────────────
+  const aiRule = await automationService.createRule(userA.id, wa.id, {
+    name: "AI shop assistant",
+    trigger: "message.created",
+    actions: [{ type: "ai_reply" }],
+  });
+
+  // (a) No key configured: the run records the failure, nothing is sent.
+  delete process.env.AI_API_KEY;
+  const convAiOff = await ingestText("cust-30", "a", "Do you have running shoes?");
+  const offRun = await waitFor("ai-reply unconfigured run", async () => {
+    const run = await prisma.automationRun.findFirst({
+      where: { ruleId: aiRule.id, conversationId: convAiOff.id },
+    });
+    return run ?? null;
+  });
+  assert(
+    "ai-reply: without a key the run fails honestly as not-configured",
+    JSON.stringify(offRun.results ?? []).includes("not configured"),
+    JSON.stringify(offRun.results),
+  );
+  const offOutbound = await prisma.message.findMany({
+    where: { conversationId: convAiOff.id, direction: "OUTBOUND" },
+    select: { metadata: true },
+  });
+  assert(
+    "ai-reply: nothing AI-generated is sent while unconfigured",
+    !offOutbound.some(
+      (m) => (m.metadata as { aiGenerated?: boolean } | null)?.aiGenerated,
+    ),
+  );
+
+  // (b) Configured (stubbed provider): the AI reply is generated + sent.
+  process.env.AI_API_KEY = "test-key-not-real";
+  const originalFetchAi = globalThis.fetch;
+  const aiText =
+    "Yes, we have running shoes in size 42 — Rs 3,499 to Rs 5,999. Want me to reserve a pair?";
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({ choices: [{ message: { content: aiText } }] }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof fetch;
+  try {
+    // The spawned worker child reads env only at boot, so its own
+    // ai_reply attempt for these ingests records "not configured"
+    // (ignored below). The configured path is exercised by driving the
+    // engine in this process, where the key + stub live — the same
+    // code production runs in the worker once AI_API_KEY is in its env.
+    const convAi = await ingestText("cust-31", "a", "Do you have running shoes in size 42?");
+    await automationEngine.handleEvent(wa.id, "message.created", {
+      conversationId: convAi.id,
+      messageBody: "Do you have running shoes in size 42?",
+    });
+    const aiSent = await waitFor("AI auto-reply SENT", async () => {
+      const message = await prisma.message.findFirst({
+        where: {
+          conversationId: convAi.id,
+          direction: "OUTBOUND",
+          body: { contains: "reserve a pair" },
+        },
+      });
+      return message?.status === "SENT" ? message : null;
+    });
+    const aiMeta = aiSent.metadata as {
+      aiGenerated?: boolean;
+      viaAutomation?: string;
+    } | null;
+    assert(
+      "ai-reply: generated reply sent and marked as automation + AI",
+      aiMeta?.aiGenerated === true && aiMeta?.viaAutomation === aiRule.id,
+      JSON.stringify(aiSent.metadata),
+    );
+
+    // (c) The AI continues the conversation (its own sends, and the
+    // welcome combo's marked send, do not trip the takeover guard).
+    await ingestText("cust-31", "b", "And what colours do they come in?");
+    await automationEngine.handleEvent(wa.id, "message.created", {
+      conversationId: convAi.id,
+      messageBody: "And what colours do they come in?",
+    });
+    await waitFor("second AI auto-reply", async () => {
+      const count = await prisma.message.count({
+        where: { conversationId: convAi.id, direction: "OUTBOUND" },
+      });
+      const aiMessages = await prisma.message.findMany({
+        where: { conversationId: convAi.id, direction: "OUTBOUND" },
+        select: { metadata: true },
+      });
+      const aiCount = aiMessages.filter(
+        (m) => (m.metadata as { aiGenerated?: boolean } | null)?.aiGenerated,
+      ).length;
+      return count >= 3 && aiCount >= 2 ? aiCount : null;
+    });
+    assert("ai-reply: AI keeps replying while no human has joined", true);
+
+    // (d) Human takeover: an agent's own reply silences the AI here.
+    await messagingService.sendOutboundMessage(userA.id, wa.id, convAi.id, {
+      content: "Hi, a human agent is taking over this one.",
+      type: "TEXT",
+    });
+    await ingestText("cust-31", "c", "Oh nice, are you a real person?");
+    await automationEngine.handleEvent(wa.id, "message.created", {
+      conversationId: convAi.id,
+      messageBody: "Oh nice, are you a real person?",
+    });
+    const takeoverRun = await waitFor("takeover skip run", async () => {
+      const runs = await prisma.automationRun.findMany({
+        where: { ruleId: aiRule.id, conversationId: convAi.id },
+      });
+      const skip = runs.find((run) => JSON.stringify(run.results).includes("human agent"));
+      return skip ?? null;
+    });
+    assert(
+      "ai-reply: after a human replies, the AI steps aside (run says skipped)",
+      takeoverRun !== null,
+    );
+    const aiAfterTakeover = await prisma.message.findMany({
+      where: { conversationId: convAi.id, direction: "OUTBOUND" },
+      select: { metadata: true },
+    });
+    assert(
+      "ai-reply: no further AI message after takeover",
+      aiAfterTakeover.filter(
+        (m) => (m.metadata as { aiGenerated?: boolean } | null)?.aiGenerated,
+      ).length === 2,
+    );
+  } finally {
+    globalThis.fetch = originalFetchAi;
+    delete process.env.AI_API_KEY;
+  }
 
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);

@@ -497,6 +497,12 @@ export const messagingService = {
       templateParams?: string[];
       previewText?: string;
       optInConfirmed?: boolean;
+      /**
+       * Extra message metadata (e.g. { viaAutomation } for automation
+       * sends, so the AI auto-reply takeover guard can tell automation
+       * output from a human agent's own typing).
+       */
+      metadata?: Record<string, unknown>;
     },
   ): Promise<UnifiedMessage> {
     await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
@@ -550,6 +556,7 @@ export const messagingService = {
     } else {
       if (!input.content) throw AppError.badRequest("Message content is required.");
       body = input.content;
+      if (input.metadata) metadata = input.metadata as Prisma.InputJsonValue;
     }
 
     const created = await prisma.message.create({

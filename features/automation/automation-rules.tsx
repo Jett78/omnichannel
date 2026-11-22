@@ -112,6 +112,7 @@ const ACTION_TYPES = [
   { value: "assign", label: "Assign conversation" },
   { value: "add_tag", label: "Add tag" },
   { value: "send_canned", label: "Send saved reply" },
+  { value: "ai_reply", label: "Reply with AI" },
   { value: "notify", label: "Notify team" },
   { value: "set_status", label: "Set status" },
   { value: "set_priority", label: "Set priority" },
@@ -411,6 +412,8 @@ export function AutomationRules({
         const item = canned.find((c) => c.id === action.cannedResponseId);
         return `Send saved reply “${item?.title ?? "…"}”`;
       }
+      case "ai_reply":
+        return "Reply with AI";
       case "notify":
         return "Notify team";
       case "set_status":
@@ -894,6 +897,15 @@ export function AutomationRules({
                         </Select>
                       ) : null}
                     </div>
+                  ) : null}
+
+                  {draft.type === "ai_reply" ? (
+                    <p className="text-muted-foreground text-xs leading-relaxed">
+                      The AI writes and sends a reply from the conversation and your knowledge
+                      base (Settings → AI assistant). It stops replying in a conversation once
+                      a human agent has replied there. Needs the AI key configured — without
+                      it, the run records “not configured” and nothing is sent.
+                    </p>
                   ) : null}
 
                   {draft.type === "add_tag" ? (

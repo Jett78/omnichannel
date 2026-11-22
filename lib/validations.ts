@@ -242,7 +242,15 @@ export const automationConditionsSchema = z.object({
 });
 
 export const automationActionSchema = z.object({
-  type: z.enum(["assign", "add_tag", "send_canned", "notify", "set_status", "set_priority"]),
+  type: z.enum([
+    "assign",
+    "add_tag",
+    "send_canned",
+    "ai_reply",
+    "notify",
+    "set_status",
+    "set_priority",
+  ]),
   strategy: z.enum(["specific", "round_robin", "least_busy"]).optional(),
   userId: z.string().optional(),
   teamId: z.string().optional(),

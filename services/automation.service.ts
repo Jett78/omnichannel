@@ -3,6 +3,7 @@ import { AppError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspacePermission } from "@/lib/workspace-auth";
 import { Prisma } from "@/generated/prisma/client";
+import { aiAssistantService } from "@/services/ai.service";
 import { conversationService } from "@/services/conversation.service";
 import { messagingService } from "@/services/messaging.service";
 
@@ -61,6 +62,7 @@ export type AutomationAction =
     }
   | { type: "add_tag"; name: string }
   | { type: "send_canned"; cannedResponseId: string }
+  | { type: "ai_reply" }
   | { type: "notify"; userIds?: string[]; message: string }
   | { type: "set_status"; status: "OPEN" | "RESOLVED" }
   | { type: "set_priority"; priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT" };
@@ -406,8 +408,51 @@ async function runAction(
       await messagingService.sendOutboundMessage(actor, workspaceId, conversationId, {
         content,
         type: "TEXT",
+        metadata: { viaAutomation: rule.id },
       });
       return { type: "send_canned", ok: true, detail: `Sent saved reply "${canned.title}"` };
+    }
+    case "ai_reply": {
+      // Human takeover: if any outbound agent message exists that was
+      // NOT sent by an automation, a human is handling this thread and
+      // the AI must not talk over them. Automation sends (canned + AI)
+      // carry metadata.viaAutomation, so the AI can still continue a
+      // conversation it has been handling alone.
+      const priorOutbound = await prisma.message.findMany({
+        where: { conversationId, direction: "OUTBOUND", senderType: "AGENT" },
+        select: { metadata: true },
+      });
+      const humanReplied = priorOutbound.some((message) => {
+        const meta = message.metadata as { viaAutomation?: string } | null;
+        return !meta?.viaAutomation;
+      });
+      if (humanReplied) {
+        return {
+          type: "ai_reply",
+          ok: true,
+          detail: "Skipped — a human agent has replied in this conversation",
+        };
+      }
+      // Generation reuses the Phase 13G assistant (thread context +
+      // keyword-matched knowledge). Without AI_API_KEY this throws
+      // AiNotConfiguredError and the run records the failure honestly.
+      const suggestion = await aiAssistantService.suggestReply(
+        actor,
+        workspaceId,
+        conversationId,
+      );
+      await messagingService.sendOutboundMessage(actor, workspaceId, conversationId, {
+        content: suggestion.text,
+        type: "TEXT",
+        metadata: { viaAutomation: rule.id, aiGenerated: true },
+      });
+      return {
+        type: "ai_reply",
+        ok: true,
+        detail: suggestion.knowledgeUsed.length
+          ? `AI reply sent (used knowledge: ${suggestion.knowledgeUsed.join(", ")})`
+          : "AI reply sent",
+      };
     }
     case "notify": {
       let targets: string[];
