@@ -7,8 +7,11 @@
  *   AI_BASE_URL  — default https://api.groq.com/openai/v1 (Groq free
  *                  tier). Gemini's OpenAI-compatible endpoint works
  *                  too: https://generativelanguage.googleapis.com/v1beta/openai
- *   AI_MODEL     — default llama-3.3-70b-versatile (Groq). For Gemini
+ *   AI_MODEL     — default openai/gpt-oss-120b (Groq). For Gemini
  *                  use e.g. gemini-2.0-flash.
+ *                  Do NOT use llama-3.3-70b-versatile or
+ *                  llama-3.1-8b-instant: Groq retired both from its
+ *                  free/developer tiers on 2026-08-16 (404 model_not_found).
  *
  * The key is a server secret: it is only ever sent as the Bearer token
  * to the configured provider, never logged and never sent to clients.
@@ -45,7 +48,7 @@ export function getAiConfig(): AiConfig | null {
       /\/+$/,
       "",
     ),
-    model: process.env.AI_MODEL?.trim() || "llama-3.3-70b-versatile",
+    model: process.env.AI_MODEL?.trim() || "openai/gpt-oss-120b",
   };
 }
 
