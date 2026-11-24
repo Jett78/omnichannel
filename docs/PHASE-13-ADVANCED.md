@@ -197,3 +197,26 @@ regression 62/62.
 Not yet supported (deliberate): APIs that need an auth header/API
 key, and nested field paths (field names are single keys). Both are
 additive when a real custom store needs them.
+
+---
+
+## Channel-scoped rules + Settings cleanup (2026-11-24, follow-up)
+
+- **Per-channel rule condition:** `AutomationConditions.channelIds` — when
+  non-empty, a rule only runs for conversations on those channels (any
+  trigger/action; the main use is scoping "Reply with AI" so auto-reply
+  can be allowed on chosen channels and kept off others). Empty/absent =
+  every channel, so existing rules are unchanged. The builder's "Only
+  if…" step gained an "Only on these channels" chip picker (channel
+  display name + provider), fed by a new `channels` prop from the
+  automation page; rule cards summarize the scope as `channels: <names>`.
+  Covered by test-phase13 §21 (a rule scoped to a second channel does
+  not fire on the main channel and does fire on its own).
+- **Settings no longer embeds team management:** the full TeamManagement
+  section (members, teams, invitations) was removed from
+  `/settings` — it lives only on `/team`, which renders the identical
+  component. Settings keeps Profile, Workspace, Outgoing webhooks, AI
+  model, Knowledge (entries + documents), Store connection,
+  Notifications and the danger zone; its header now points readers to
+  the Team page. Settings still resolves the viewer's membership
+  server-side for its permission flags.
