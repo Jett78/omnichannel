@@ -45,7 +45,15 @@ export function conversationRoom(conversationId: string): string {
 
 export async function publishRealtime(envelope: RealtimeEnvelope): Promise<void> {
   try {
-    await getPublisher().publish(REALTIME_CHANNEL, JSON.stringify(envelope));
+    // Bounded wait: when Redis is unreachable (not just erroring),
+    // ioredis retries can stall a publish for tens of seconds — a
+    // live hint is never worth stalling the request path for.
+    await Promise.race([
+      getPublisher().publish(REALTIME_CHANNEL, JSON.stringify(envelope)),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(() => reject(new Error("realtime publish timed out")), 1500),
+      ),
+    ]);
   } catch (error) {
     console.error("[realtime] publish failed (ignored):", error);
   }

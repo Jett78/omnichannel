@@ -60,12 +60,35 @@ export function verifyVisitorToken(token: string): { channelId: string; external
   }
 }
 
-/** Redis fixed-window rate limit. Returns false when over the limit. */
+/**
+ * Redis fixed-window rate limit. Returns false when over the limit.
+ *
+ * Fails OPEN on Redis errors: a broken Redis (e.g. the 2026-11-24
+ * Upstash command cap, which made every widget send return "Something
+ * went wrong") must not take the public widget down with it. The
+ * visitor's message matters more than the anti-spam count; the
+ * failure is logged, and limiting resumes by itself once Redis
+ * answers again.
+ */
 export async function hitRateLimit(key: string, limit: number, windowSeconds: number): Promise<boolean> {
-  const redis = getRedis();
-  const count = await redis.incr(key);
-  if (count === 1) await redis.expire(key, windowSeconds);
-  return count <= limit;
+  try {
+    const redis = getRedis();
+    // Bounded wait: a Redis that never answers (connection dead, not
+    // just erroring) must not hang the visitor's request either.
+    const count = await Promise.race([
+      redis.incr(key),
+      new Promise<never>((_resolve, reject) =>
+        setTimeout(() => reject(new Error("rate-limit check timed out")), 2000),
+      ),
+    ]);
+    if (count === 1) await redis.expire(key, windowSeconds);
+    return count <= limit;
+  } catch (error) {
+    console.warn(
+      `[widget] rate-limit check failed, allowing the request: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+    return true;
+  }
 }
 
 // ─── Channel + visitor resolution ─────────────────────────────────
