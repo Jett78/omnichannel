@@ -150,20 +150,6 @@ export function TeamManagement({
     })();
   }
 
-  function onCreateTeam(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    void run(async () => {
-      const result = await callApi(`/api/workspaces/${workspaceId}/teams`, "POST", {
-        name: String(formData.get("name") ?? ""),
-        description: String(formData.get("description") ?? "") || undefined,
-      });
-      if (result.ok) form.reset();
-      return result;
-    });
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -403,21 +389,6 @@ export function TeamManagement({
               ))}
             </ul>
           )}
-          {can(currentRole, "teams.manage") ? (
-            <form onSubmit={onCreateTeam} className="flex flex-wrap items-end gap-2 border-t pt-4">
-              <div className="flex min-w-48 flex-1 flex-col gap-2">
-                <Label htmlFor="team-name">New team</Label>
-                <Input id="team-name" name="name" placeholder="Support" required minLength={2} />
-              </div>
-              <div className="flex min-w-48 flex-1 flex-col gap-2">
-                <Label htmlFor="team-desc">Description</Label>
-                <Input id="team-desc" name="description" placeholder="Optional" />
-              </div>
-              <Button type="submit" disabled={busy}>
-                Create team
-              </Button>
-            </form>
-          ) : null}
         </CardContent>
       </Card>
 

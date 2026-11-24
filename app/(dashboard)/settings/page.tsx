@@ -47,7 +47,7 @@ export default async function SettingsPage() {
     .catch(() => null);
 
   return (
-    <div className="flex max-w-4xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Settings"
         description={`Profile, workspace and preferences for ${active.name}. Team members and roles live on the Team page.`}

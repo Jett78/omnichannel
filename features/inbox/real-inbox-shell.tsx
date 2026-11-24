@@ -330,15 +330,10 @@ type AssigneeTab = "all" | "mine" | "unassigned" | "mentions";
 type StatusFilter = "ALL" | "OPEN" | "PENDING" | "RESOLVED" | "SNOOZED";
 type SortMode = "latest" | "waiting" | "priority";
 
-/** Filter-bar design: assignee views as a segmented control, statuses
- *  as one-tap tinted chips, sort + channel as two compact selects —
- *  replaces the old stack of four full-width dropdowns. */
-const ASSIGNEE_VIEWS: Array<{ value: AssigneeTab; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "mine", label: "Mine" },
-  { value: "unassigned", label: "Unassigned" },
-  { value: "mentions", label: "Mentions" },
-];
+/** Filter-bar design: statuses as one-tap tinted chips, sort +
+ *  channel as two compact selects. The assignee views (All / Mine /
+ *  Unassigned / Mentions) live in the sidebar's Inbox dropdown and
+ *  arrive here as the ?view= initial tab — no in-inbox switcher. */
 
 const STATUS_CHIPS: Array<{ value: StatusFilter; label: string; activeClass: string }> = [
   {
@@ -1438,29 +1433,6 @@ export function RealInboxShell({
           </div>
         </div>
         <div className="space-y-2.5 px-4 pb-3">
-          <div
-            className="bg-muted/70 flex rounded-lg p-0.5"
-            role="tablist"
-            aria-label="Filter by assignee"
-          >
-            {ASSIGNEE_VIEWS.map((view) => (
-              <button
-                key={view.value}
-                type="button"
-                role="tab"
-                aria-selected={assigneeTab === view.value}
-                onClick={() => setAssigneeTab(view.value)}
-                className={cn(
-                  "flex-1 rounded-md px-1 py-1.5 text-[11px] font-medium whitespace-nowrap transition-all",
-                  assigneeTab === view.value
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {view.label}
-              </button>
-            ))}
-          </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
             {STATUS_CHIPS.map((chip) => (
               <button
