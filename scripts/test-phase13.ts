@@ -12,6 +12,7 @@ import { analyticsService } from "@/services/analytics.service";
 import { AiNotConfiguredError } from "@/lib/ai";
 import { aiAssistantService, knowledgeService } from "@/services/ai.service";
 import { messagingService } from "@/services/messaging.service";
+import { storeConnectionService, storeProductService } from "@/services/store.service";
 import { notificationService } from "@/services/notification.service";
 import { workspaceService } from "@/services/workspace.service";
 
@@ -782,6 +783,142 @@ async function main(): Promise<void> {
     globalThis.fetch = originalFetchAi;
     delete process.env.AI_API_KEY;
   }
+
+  // ── 16. Store connection + live product lookup ─────────────────────
+  let agentStoreBlocked = false;
+  try {
+    await storeConnectionService.upsert(userC.id, wa.id, {
+      baseUrl: "https://ecommerce-api.jeetdeula.com.np",
+    });
+  } catch {
+    agentStoreBlocked = true;
+  }
+  assert("store: an AGENT cannot connect a store (workspace.update)", agentStoreBlocked);
+
+  const connection = await storeConnectionService.upsert(userA.id, wa.id, {
+    baseUrl: "https://ecommerce-api.jeetdeula.com.np/",
+    name: "Test Store",
+  });
+  assert(
+    "store: connection saved, base URL normalized",
+    connection.baseUrl === "https://ecommerce-api.jeetdeula.com.np" &&
+      connection.name === "Test Store",
+  );
+
+  process.env.AI_API_KEY = "test-key-not-real";
+  const originalFetchStore = globalThis.fetch;
+  const storePayload = {
+    success: true,
+    data: [
+      {
+        id: "p1",
+        name: "Adidas Grand Court 2.0 Shoes",
+        images: [
+          { url: "https://images.example.test/shoe.jpg", isPrimary: true, sortOrder: 0 },
+        ],
+        variants: [
+          { price: 11999, stockQuantity: 16, isActive: true, allowBackorder: false, attributes: [] },
+          {
+            price: 12499,
+            stockQuantity: 0,
+            isActive: true,
+            allowBackorder: false,
+            attributes: [{ name: "Size", value: "UK 10" }],
+          },
+        ],
+      },
+    ],
+  };
+  globalThis.fetch = (async (input: unknown) => {
+    const url = String(input);
+    if (url.includes("ecommerce-api.jeetdeula.com.np")) {
+      return new Response(JSON.stringify(storePayload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("images.example.test")) {
+      return new Response(new Uint8Array([137, 80, 78, 71]), {
+        status: 200,
+        headers: { "Content-Type": "image/jpeg" },
+      });
+    }
+    if (url.includes("api.groq.com")) {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  "Yes! The Adidas Grand Court 2.0 Shoes are in stock at Rs 11,999. Want me to reserve a pair?",
+              },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    throw new Error(`unexpected fetch in store test: ${url}`);
+  }) as typeof fetch;
+  try {
+    const found = await storeProductService.searchForMessage(wa.id, "Do you have adidas shoes?");
+    assert(
+      "store: live search returns the product, normalized",
+      found.length === 1 &&
+        found[0]?.priceMin === 11999 &&
+        found[0]?.priceMax === 12499 &&
+        found[0]?.totalStock === 16 &&
+        found[0]?.inStock === true,
+      JSON.stringify(found),
+    );
+    assert(
+      "store: primary image + variant label picked",
+      found[0]?.imageUrl === "https://images.example.test/shoe.jpg" &&
+        (found[0]?.variantLabels ?? []).includes("UK 10"),
+      JSON.stringify(found[0]),
+    );
+
+    const convStore = await ingestText("cust-32", "a", "Do you have adidas shoes?");
+    const suggestion = await aiAssistantService.suggestReply(userA.id, wa.id, convStore.id);
+    assert(
+      "store: AI suggestion carries the live product",
+      suggestion.products.length === 1 &&
+        (suggestion.products[0]?.name ?? "").includes("Adidas"),
+    );
+
+    // AI auto-reply: text + the product photo (engine driven in this
+    // process, like section 15 — the worker child has no key/stub).
+    await automationEngine.handleEvent(wa.id, "message.created", {
+      conversationId: convStore.id,
+      messageBody: "Do you have adidas shoes?",
+    });
+    const photoMessage = await waitFor("AI product photo SENT", async () => {
+      const message = await prisma.message.findFirst({
+        where: { conversationId: convStore.id, direction: "OUTBOUND", type: "IMAGE" },
+      });
+      return message?.status === "SENT" ? message : null;
+    });
+    assert("store: AI auto-reply sent the product photo", photoMessage !== null);
+    const storedPhoto = await prisma.storedMedia.findFirst({
+      where: { attachment: { messageId: photoMessage.id } },
+    });
+    assert("store: photo bytes stored for the inbox preview", storedPhoto !== null);
+    const storeRuns = await prisma.automationRun.findMany({
+      where: { ruleId: aiRule.id, conversationId: convStore.id },
+    });
+    assert(
+      "store: the run records the photo",
+      storeRuns.some((run) => JSON.stringify(run.results).includes("photo")),
+      JSON.stringify(storeRuns.map((run) => run.results)),
+    );
+  } finally {
+    globalThis.fetch = originalFetchStore;
+    delete process.env.AI_API_KEY;
+  }
+
+  await storeConnectionService.remove(userA.id, wa.id);
+  const afterRemove = await storeProductService.searchProducts(wa.id, "adidas");
+  assert("store: after disconnect, no live products", afterRemove.length === 0);
 
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);

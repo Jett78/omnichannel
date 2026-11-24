@@ -494,6 +494,7 @@ export function RealInboxShell({
     sentiment?: string;
     reason?: string;
     knowledgeUsed?: string[];
+    products?: { name: string }[];
   } | null>(null);
   const [aiTone, setAiTone] = useState("professional");
   const [aiTarget, setAiTarget] = useState("English");
@@ -1941,6 +1942,12 @@ export function RealInboxShell({
                               {aiResult.knowledgeUsed?.length ? (
                                 <p className="text-muted-foreground mt-1 text-[11px]">
                                   Used knowledge: {aiResult.knowledgeUsed.join(", ")}
+                                </p>
+                              ) : null}
+                              {aiResult.products?.length ? (
+                                <p className="text-muted-foreground mt-1 text-[11px]">
+                                  Live from your store:{" "}
+                                  {aiResult.products.map((product) => product.name).join(", ")}
                                 </p>
                               ) : null}
                               {aiResult.kind !== "summarize" ? (

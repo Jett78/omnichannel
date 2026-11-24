@@ -617,7 +617,14 @@ export const messagingService = {
     actorUserId: string,
     workspaceId: string,
     conversationId: string,
-    input: { bytes: Buffer; fileName: string; mimeType: string; caption?: string },
+    input: {
+      bytes: Buffer;
+      fileName: string;
+      mimeType: string;
+      caption?: string;
+      /** Extra message metadata (e.g. { viaAutomation } for automation sends). */
+      metadata?: Record<string, unknown>;
+    },
   ): Promise<UnifiedMessage> {
     await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
     const conversation = await prisma.conversation.findFirst({
@@ -684,6 +691,7 @@ export const messagingService = {
         senderUserId: actorUserId,
         status: isWebsiteChannel ? "SENT" : "QUEUED",
         ...(isWebsiteChannel ? { externalMessageId: `website-${randomUUID()}` } : {}),
+        ...(input.metadata ? { metadata: input.metadata as Prisma.InputJsonValue } : {}),
         attachments: {
           create: {
             originalUrl: ref,

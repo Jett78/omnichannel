@@ -79,3 +79,29 @@ sent. DEPLOYMENT NOTE: inbound processing runs in the WORKER process,
 so the worker needs `AI_API_KEY` in its own environment for
 auto-replies (the composer panel runs web-side). Suite: test:phase13 =
 51 (section 15: 6 asserts); test:phase4 regression 62/62.
+
+## Follow-up: store connection + live product lookup (2026-11-24)
+
+Jeet's pick: connect his ecommerce store so the AI answers product
+questions from the LIVE store API instead of static knowledge, and
+sends product PHOTOS, not just text. Schema: `StoreConnection`
+(workspaceId unique, baseUrl, name?, enabled) — one store per
+workspace, managed in Settings → "Store connection — live products"
+(OWNER/ADMIN; test button hits the store). `services/store.service.ts`:
+GET {baseUrl}/products?take=N&search=Q (the verified Multi-Ecommerce
+shape; a bare array also parses), normalized to name / price range /
+total stock / variant labels / primary image URL. URL validation is
+string-level (https in production, no localhost/.local/.internal or
+literal private IPs; no DNS resolution — resolvers differ per host).
+`suggestReply` now also runs `searchForMessage` (significant words →
+phrase search, longest-word fallback) and injects a LIVE PRODUCTS
+block into the prompt as ground truth; the result carries `products`
+(the composer panel shows "Live from your store: …"). The `ai_reply`
+automation action sends up to 2 product photos via sendOutboundMedia
+after its text (marked viaAutomation/aiGenerated; a failed photo never
+fails the reply; the run detail names the products + photos sent).
+sendOutboundMedia gained the same optional metadata passthrough as
+sendOutboundMessage. Order taking (POST /orders/checkout — guest COD
+checkout verified to exist in the store's OpenAPI spec) is the agreed
+next step, NOT built here. Suite: test:phase13 = 60 (section 16: 9
+asserts); phase-4 regression 62/62.

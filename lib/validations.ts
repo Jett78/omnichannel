@@ -298,6 +298,15 @@ export const contactProfileUpdateSchema = z.object({
 });
 export type ContactProfileUpdateInput = z.infer<typeof contactProfileUpdateSchema>;
 
+export const storeConnectionUpsertSchema = z.object({
+  baseUrl: z.string().trim().min(1).max(500),
+  name: z.string().trim().max(120).optional(),
+});
+
+export const storeConnectionTestSchema = z.object({
+  baseUrl: z.string().trim().min(1).max(500),
+});
+
 export const knowledgeEntryCreateSchema = z.object({
   title: z.string().min(1, "Title is required").max(120),
   content: z.string().min(1, "Content is required").max(8000),

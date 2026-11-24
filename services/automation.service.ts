@@ -446,12 +446,49 @@ async function runAction(
         type: "TEXT",
         metadata: { viaAutomation: rule.id, aiGenerated: true },
       });
+      // Product photos: when the reply drew on live store products,
+      // send up to 2 of their photos right after the text (Jeet's
+      // requirement, 2026-11-24). A failed photo never fails the reply.
+      let photosSent = 0;
+      const photoProducts = suggestion.products
+        .filter((product) => product.imageUrl)
+        .slice(0, 2);
+      for (const product of photoProducts) {
+        try {
+          const imageResponse = await fetch(product.imageUrl as string, {
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!imageResponse.ok) continue;
+          const mimeType =
+            imageResponse.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+          if (!mimeType.startsWith("image/")) continue;
+          const bytes = Buffer.from(await imageResponse.arrayBuffer());
+          if (bytes.length === 0 || bytes.length > 16 * 1024 * 1024) continue;
+          await messagingService.sendOutboundMedia(actor, workspaceId, conversationId, {
+            bytes,
+            fileName: `${product.name.replace(/[^a-z0-9]+/gi, "-").slice(0, 40) || "product"}.jpg`,
+            mimeType,
+            metadata: { viaAutomation: rule.id, aiGenerated: true },
+          });
+          photosSent += 1;
+        } catch {
+          // Skip this photo silently — the text reply already landed.
+        }
+      }
+      const usedParts: string[] = [];
+      if (suggestion.knowledgeUsed.length) {
+        usedParts.push(`used knowledge: ${suggestion.knowledgeUsed.join(", ")}`);
+      }
+      if (suggestion.products.length) {
+        usedParts.push(
+          `store products: ${suggestion.products.map((product) => product.name).join(", ")}`,
+        );
+      }
+      if (photosSent > 0) usedParts.push(`${photosSent} product photo(s) sent`);
       return {
         type: "ai_reply",
         ok: true,
-        detail: suggestion.knowledgeUsed.length
-          ? `AI reply sent (used knowledge: ${suggestion.knowledgeUsed.join(", ")})`
-          : "AI reply sent",
+        detail: usedParts.length ? `AI reply sent (${usedParts.join("; ")})` : "AI reply sent",
       };
     }
     case "notify": {

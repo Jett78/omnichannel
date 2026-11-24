@@ -204,6 +204,7 @@ model Workspace {
   automationRules  AutomationRule[]
   automationRuns   AutomationRun[]
   knowledgeEntries KnowledgeEntry[]
+  storeConnection  StoreConnection?
   aiUsageLogs      AiUsageLog[]
   invitations   Invitation[]
   auditLogs     AuditLog[]
@@ -670,6 +671,18 @@ model AutomationRun {
  * Workspace knowledge the AI assistant may use when drafting replies
  * (policies, FAQs, product facts). Admin-managed; plain text.
  */
+model StoreConnection {
+  id          String    @id @default(cuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  baseUrl     String
+  name        String?
+  enabled     Boolean   @default(true)
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
 model KnowledgeEntry {
   id          String   @id @default(cuid())
   workspaceId String

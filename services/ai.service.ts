@@ -2,6 +2,7 @@ import { aiChat } from "@/lib/ai";
 import { AppError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import { requireWorkspacePermission } from "@/lib/workspace-auth";
+import { storeProductService, type StoreProduct } from "@/services/store.service";
 
 /**
  * Phase 13G — AI reply assistant + workspace knowledge.
@@ -204,13 +205,41 @@ export const aiAssistantService = {
     actorUserId: string,
     workspaceId: string,
     conversationId: string,
-  ): Promise<{ text: string; knowledgeUsed: string[] }> {
+  ): Promise<{ text: string; knowledgeUsed: string[]; products: StoreProduct[] }> {
     await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
     const thread = await loadThread(workspaceId, conversationId);
     const knowledge = await relevantKnowledge(
       workspaceId,
       `${thread.lastCustomerMessage ?? ""}\n${thread.transcript}`,
     );
+    // Live store products for the customer's latest message, when a
+    // store is connected. Self-catching — a store outage never breaks
+    // the suggestion; the AI just answers without product facts.
+    const products = await storeProductService.searchForMessage(
+      workspaceId,
+      thread.lastCustomerMessage ?? "",
+    );
+    const formatPrice = (product: StoreProduct): string => {
+      if (product.priceMin === null) return "price not listed";
+      if (product.priceMax === null || product.priceMax === product.priceMin) {
+        return `Rs ${product.priceMin.toLocaleString("en-US")}`;
+      }
+      return `Rs ${product.priceMin.toLocaleString("en-US")}–${product.priceMax.toLocaleString("en-US")}`;
+    };
+    const productBlock = products.length
+      ? `\n\nLIVE PRODUCTS from the connected store (fetched just now — these names, prices and stock levels are FACTS; if what the customer wants is not listed here, say you will check instead of inventing details):\n${products
+          .map(
+            (product) =>
+              `- ${product.name} — ${formatPrice(product)} — ${
+                product.inStock
+                  ? product.totalStock > 0
+                    ? `In stock (${product.totalStock} available)`
+                    : "In stock"
+                  : "Out of stock"
+              }${product.variantLabels.length ? ` — options: ${product.variantLabels.join(", ")}` : ""}`,
+          )
+          .join("\n")}`
+      : "";
     const knowledgeBlock = knowledge.length
       ? `\n\nWorkspace knowledge you may rely on:\n${knowledge
           .map((entry) => `## ${entry.title}\n${entry.content}`)
@@ -222,12 +251,12 @@ export const aiAssistantService = {
         role: "user",
         content:
           `Conversation with ${thread.contactName} (channel: ${thread.provider}):\n\n${thread.transcript}` +
-          `${knowledgeBlock}\n\nWrite the agent's next reply to the customer. ` +
+          `${knowledgeBlock}${productBlock}\n\nWrite the agent's next reply to the customer. ` +
           `Reply in the language the customer is using. Output ONLY the reply text.`,
       },
     ]);
     await logUsage(workspaceId, actorUserId, "suggest");
-    return { text, knowledgeUsed: knowledge.map((entry) => entry.title) };
+    return { text, knowledgeUsed: knowledge.map((entry) => entry.title), products };
   },
 
   async rewrite(
