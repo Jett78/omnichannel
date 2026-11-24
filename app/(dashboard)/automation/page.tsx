@@ -1,18 +1,28 @@
 import { redirect } from "next/navigation";
 
 import { AutomationRules } from "@/features/automation/automation-rules";
+import { AiKnowledge } from "@/features/settings/ai-knowledge";
+import { AiModelConfig } from "@/features/settings/ai-model-config";
+import { KnowledgeDocuments } from "@/features/settings/knowledge-documents";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
+import { getAiStatus, getEnvAiConfig } from "@/lib/ai";
 import { prisma } from "@/lib/prisma";
+import { aiConfigService } from "@/services/ai-config.service";
+import { countAiUsageThisMonth, knowledgeService } from "@/services/ai.service";
 import { automationService } from "@/services/automation.service";
 import { cannedResponseService } from "@/services/canned-response.service";
+import { knowledgeDocumentService } from "@/services/knowledge-document.service";
 import { workspaceService } from "@/services/workspace.service";
 
 /**
  * Automation page (Phase 13C) — real rules from the Phase-13B engine.
  * Server component: resolves the active workspace and hands the client
  * builder everything it needs (rules, recent runs, members, teams,
- * tags, saved replies, and the viewer's own membership).
+ * tags, saved replies, and the viewer's own membership). The AI
+ * sections (model, assistant & knowledge base, knowledge documents)
+ * live below the rules — they power the "Reply with AI" action and
+ * the composer assistant; they moved here from Settings.
  */
 export default async function AutomationPage() {
   const user = await getCurrentUser();
@@ -42,7 +52,24 @@ export default async function AutomationPage() {
     }),
   ]);
 
+  const [knowledgeEntries, aiUsageThisMonth] = await Promise.all([
+    knowledgeService.list(user.id, active.id).catch(() => []),
+    countAiUsageThisMonth(active.id).catch(() => 0),
+  ]);
+  const aiStatus = await getAiStatus(active.id).catch(() => ({
+    configured: false,
+    label: null,
+    source: null,
+  }));
+  const envAi = getEnvAiConfig();
+  const envAiLabel = envAi ? `${envAi.model} via ${new URL(envAi.baseUrl).hostname}` : null;
+  const aiConfig = await aiConfigService.get(user.id, active.id).catch(() => null);
+  const knowledgeDocuments = await knowledgeDocumentService
+    .list(user.id, active.id)
+    .catch(() => []);
+
   return (
+    <div className="flex flex-col gap-6">
     <AutomationRules
       workspaceId={active.id}
       initialRules={rules}
@@ -70,5 +97,31 @@ export default async function AutomationPage() {
       }}
       canManage={canManage}
     />
+
+    <div className="flex max-w-4xl flex-col gap-6">
+      <AiModelConfig
+        workspaceId={active.id}
+        initialConfig={aiConfig}
+        envConfigured={envAi !== null}
+        envLabel={envAiLabel}
+        canManage={canManage}
+      />
+
+      <AiKnowledge
+        workspaceId={active.id}
+        initialEntries={knowledgeEntries}
+        aiConfigured={aiStatus.configured}
+        aiLabel={aiStatus.label}
+        usageThisMonth={aiUsageThisMonth}
+        canManage={canManage}
+      />
+
+      <KnowledgeDocuments
+        workspaceId={active.id}
+        initialDocuments={knowledgeDocuments}
+        canManage={canManage}
+      />
+    </div>
+    </div>
   );
 }
