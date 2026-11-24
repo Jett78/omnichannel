@@ -39,6 +39,12 @@ export type AutomationTrigger =
 export interface AutomationConditions {
   /** Channel provider ids ("facebook", "whatsapp", …) — any match. */
   providers?: string[];
+  /**
+   * Specific channel ids — the rule only runs for conversations on
+   * one of these channels. Empty/absent = every channel. This is how
+   * an owner scopes e.g. AI auto-reply to chosen channels only.
+   */
+  channelIds?: string[];
   /** Conversation must carry at least one of these tag ids. */
   tagIds?: string[];
   unassignedOnly?: boolean;
@@ -278,6 +284,9 @@ async function conditionsMatch(
   if (conditions.providers?.length) {
     const providerId = conversation.channel.provider.toLowerCase();
     if (!conditions.providers.some((p) => p.toLowerCase() === providerId)) return false;
+  }
+  if (conditions.channelIds?.length) {
+    if (!conditions.channelIds.includes(conversation.channelId)) return false;
   }
   if (conditions.tagIds?.length) {
     const owned = new Set(conversation.tags.map((t) => t.tagId));

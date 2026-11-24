@@ -57,6 +57,7 @@ export interface AutomationRuleView {
   trigger: string;
   conditions: {
     providers?: string[];
+    channelIds?: string[];
     tagIds?: string[];
     unassignedOnly?: boolean;
     firstMessageOnly?: boolean;
@@ -220,6 +221,7 @@ interface AutomationRulesProps {
   teams: Array<{ id: string; name: string }>;
   tags: Array<{ id: string; name: string; color: string | null }>;
   canned: Array<{ id: string; title: string; category: string | null }>;
+  channels: Array<{ id: string; provider: string; displayName: string }>;
   me: { userId: string; role: string; isAvailable: boolean };
   canManage: boolean;
 }
@@ -232,6 +234,7 @@ export function AutomationRules({
   teams,
   tags,
   canned,
+  channels,
   me,
   canManage,
 }: AutomationRulesProps) {
@@ -248,6 +251,7 @@ export function AutomationRules({
   const [ruleName, setRuleName] = useState("");
   const [trigger, setTrigger] = useState<string>("conversation.created");
   const [condProviders, setCondProviders] = useState<string[]>([]);
+  const [condChannelIds, setCondChannelIds] = useState<string[]>([]);
   const [condTagIds, setCondTagIds] = useState<string[]>([]);
   const [condUnassignedOnly, setCondUnassignedOnly] = useState(false);
   const [condFirstMessageOnly, setCondFirstMessageOnly] = useState(false);
@@ -309,6 +313,7 @@ export function AutomationRules({
       setRuleName(rule.name);
       setTrigger(rule.trigger);
       setCondProviders(rule.conditions?.providers ?? []);
+      setCondChannelIds(rule.conditions?.channelIds ?? []);
       setCondTagIds(rule.conditions?.tagIds ?? []);
       setCondUnassignedOnly(rule.conditions?.unassignedOnly ?? false);
       setCondFirstMessageOnly(rule.conditions?.firstMessageOnly ?? false);
@@ -319,6 +324,7 @@ export function AutomationRules({
       setRuleName("");
       setTrigger("conversation.created");
       setCondProviders([]);
+      setCondChannelIds([]);
       setCondTagIds([]);
       setCondUnassignedOnly(false);
       setCondFirstMessageOnly(false);
@@ -336,6 +342,7 @@ export function AutomationRules({
     setSaving(true);
     const conditions: Record<string, unknown> = {};
     if (condProviders.length) conditions.providers = condProviders;
+    if (condChannelIds.length) conditions.channelIds = condChannelIds;
     if (condTagIds.length) conditions.tagIds = condTagIds;
     if (condUnassignedOnly) conditions.unassignedOnly = true;
     if (condFirstMessageOnly && trigger === "message.created") conditions.firstMessageOnly = true;
@@ -434,6 +441,13 @@ export function AutomationRules({
         conditions.providers
           .map((p) => PROVIDER_OPTIONS.find((o) => o.value === p)?.label ?? p)
           .join(", "),
+      );
+    }
+    if (conditions.channelIds?.length) {
+      parts.push(
+        `channels: ${conditions.channelIds
+          .map((id) => channels.find((c) => c.id === id)?.displayName ?? "…")
+          .join(", ")}`,
       );
     }
     if (conditions.tagIds?.length) {
@@ -701,6 +715,48 @@ export function AutomationRules({
                   })}
                 </div>
               </div>
+              {channels.length > 0 ? (
+                <div>
+                  <p className="text-muted-foreground mb-1.5 text-xs font-medium">
+                    Only on these channels
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {channels.map((channel) => {
+                      const active = condChannelIds.includes(channel.id);
+                      const providerLabel =
+                        PROVIDER_OPTIONS.find(
+                          (o) => o.value === channel.provider.toLowerCase(),
+                        )?.label ?? channel.provider;
+                      return (
+                        <button
+                          key={channel.id}
+                          type="button"
+                          onClick={() =>
+                            setCondChannelIds((prev) =>
+                              active
+                                ? prev.filter((id) => id !== channel.id)
+                                : [...prev, channel.id],
+                            )
+                          }
+                          className={
+                            active
+                              ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white"
+                              : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
+                          }
+                        >
+                          {channel.displayName}
+                          <span className="opacity-70"> · {providerLabel}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-muted-foreground mt-1 text-[11px]">
+                    Leave empty to run on every channel. Pick channels here to scope a
+                    rule — e.g. let “Reply with AI” answer only on your website and
+                    Messenger, never on WhatsApp.
+                  </p>
+                </div>
+              ) : null}
               {tags.length > 0 ? (
                 <div>
                   <p className="text-muted-foreground mb-1.5 text-xs font-medium">

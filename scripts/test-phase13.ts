@@ -1312,6 +1312,69 @@ async function main(): Promise<void> {
 
   await storeConnectionService.remove(userA.id, wa.id);
 
+  // ── 21. Automation channel scoping (channelIds condition) ────────
+  const channelB = await prisma.channel.create({
+    data: {
+      workspaceId: wa.id,
+      provider: "MOCK",
+      externalAccountId: `mock-b-${runId}`,
+      displayName: "Second mock channel",
+      status: "CONNECTED",
+    },
+  });
+  const contactB = await prisma.contact.create({
+    data: { workspaceId: wa.id, displayName: "Channel B Customer" },
+  });
+  const convB = await prisma.conversation.create({
+    data: {
+      workspaceId: wa.id,
+      channelId: channelB.id,
+      contactId: contactB.id,
+      status: "OPEN",
+    },
+  });
+  const scopedRule = await automationService.createRule(userA.id, wa.id, {
+    name: "Channel B only",
+    trigger: "message.created",
+    conditions: { channelIds: [channelB.id] },
+    actions: [{ type: "add_tag", name: "channel-b" }],
+  });
+  assert(
+    "channels: the rule view carries its channelIds",
+    (scopedRule.conditions?.channelIds ?? []).join() === channelB.id,
+    JSON.stringify(scopedRule.conditions),
+  );
+
+  const convMain = await ingestText("cust-41", "a", "hello from the main channel");
+  await automationEngine.handleEvent(wa.id, "message.created", {
+    conversationId: convMain.id,
+    messageBody: "hello from the main channel",
+  });
+  const runsMain = await prisma.automationRun.findMany({
+    where: { ruleId: scopedRule.id, conversationId: convMain.id },
+  });
+  assert(
+    "channels: a rule scoped to channel B does not fire on the main channel",
+    runsMain.length === 0,
+  );
+
+  await automationEngine.handleEvent(wa.id, "message.created", {
+    conversationId: convB.id,
+    messageBody: "hello from channel B",
+  });
+  const runsB = await prisma.automationRun.findMany({
+    where: { ruleId: scopedRule.id, conversationId: convB.id },
+  });
+  assert(
+    "channels: the rule fires on its own channel",
+    runsB.length === 1 && JSON.stringify(runsB[0]?.results).includes('"ok":true'),
+    JSON.stringify(runsB),
+  );
+
+  await automationService.deleteRule(userA.id, wa.id, scopedRule.id).catch(() => null);
+  await prisma.channel.delete({ where: { id: channelB.id } }).catch(() => null);
+  await prisma.contact.delete({ where: { id: contactB.id } }).catch(() => null);
+
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);
   for (const user of [userA, userC, userD, userE]) {

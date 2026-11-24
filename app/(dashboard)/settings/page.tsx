@@ -14,7 +14,6 @@ import { KnowledgeDocuments } from "@/features/settings/knowledge-documents";
 import { StoreConnectionCard } from "@/features/settings/store-connection";
 import { OutgoingWebhooks } from "@/features/settings/outgoing-webhooks";
 import { WorkspaceSettings } from "@/features/settings/workspace-settings";
-import { TeamManagement } from "@/features/team/team-management";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/permissions";
@@ -33,16 +32,12 @@ export default async function SettingsPage() {
   const active = await getActiveWorkspace(user.id);
   if (!active) redirect("/onboarding");
 
-  const [members, teams] = await Promise.all([
-    workspaceService.listMembers(user.id, active.id),
-    workspaceService.listTeams(user.id, active.id),
-  ]);
+  // Members are fetched only to resolve the viewer's own role (the
+  // permission flags below) — team management itself lives on the
+  // Team page, not in Settings.
+  const members = await workspaceService.listMembers(user.id, active.id);
   const currentMember = members.find((m) => m.user.id === user.id);
   if (!currentMember) redirect("/onboarding");
-
-  const invitations = hasPermission(currentMember.role, "members.invite")
-    ? await workspaceService.listInvitations(user.id, active.id).catch(() => [])
-    : [];
 
   const canManageWebhooks = hasPermission(currentMember.role, "workspace.update");
   const outgoingWebhooks = canManageWebhooks
@@ -73,7 +68,7 @@ export default async function SettingsPage() {
     <div className="flex max-w-4xl flex-col gap-6">
       <PageHeader
         title="Settings"
-        description={`Profile, workspace, team and preferences for ${active.name}.`}
+        description={`Profile, workspace and preferences for ${active.name}. Team members and roles live on the Team page.`}
       />
 
       <Card>
@@ -113,41 +108,6 @@ export default async function SettingsPage() {
           slug: active.slug,
           timezone: active.timezone,
         }}
-        currentRole={currentMember.role}
-      />
-
-      <TeamManagement
-        workspaceId={active.id}
-        workspaceName={active.name}
-        members={members.map((m) => ({
-          id: m.id,
-          role: m.role,
-          user: m.user,
-          team: m.team,
-          joinedLabel: m.createdAt.toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          }),
-        }))}
-        teams={teams.map((t) => ({
-          id: t.id,
-          name: t.name,
-          description: t.description,
-          memberCount: t._count.members,
-        }))}
-        invitations={invitations.map((invitation) => ({
-          id: invitation.id,
-          email: invitation.email,
-          role: invitation.role,
-          invitedByName: invitation.invitedBy?.name ?? "A teammate",
-          expiresLabel: invitation.expiresAt.toLocaleDateString("en-GB", {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          }),
-        }))}
-        currentUserId={user.id}
         currentRole={currentMember.role}
       />
 

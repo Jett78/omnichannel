@@ -235,6 +235,7 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 export const automationConditionsSchema = z.object({
   providers: z.array(z.string().max(24)).max(12).optional(),
+  channelIds: z.array(z.string()).max(50).optional(),
   tagIds: z.array(z.string()).max(20).optional(),
   unassignedOnly: z.boolean().optional(),
   firstMessageOnly: z.boolean().optional(),

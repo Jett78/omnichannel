@@ -25,7 +25,7 @@ export default async function AutomationPage() {
   const me = members.find((member) => member.userId === user.id);
   const canManage = me?.role === "OWNER" || me?.role === "ADMIN";
 
-  const [rules, runs, teams, tags, canned] = await Promise.all([
+  const [rules, runs, teams, tags, canned, channels] = await Promise.all([
     automationService.listRules(user.id, active.id),
     canManage ? automationService.listRuns(user.id, active.id, 20) : Promise.resolve([]),
     workspaceService.listTeams(user.id, active.id),
@@ -35,6 +35,11 @@ export default async function AutomationPage() {
       select: { id: true, name: true, color: true },
     }),
     cannedResponseService.list(user.id, active.id),
+    prisma.channel.findMany({
+      where: { workspaceId: active.id },
+      orderBy: { displayName: "asc" },
+      select: { id: true, provider: true, displayName: true },
+    }),
   ]);
 
   return (
@@ -53,6 +58,11 @@ export default async function AutomationPage() {
       teams={teams.map((team) => ({ id: team.id, name: team.name }))}
       tags={tags}
       canned={canned.map((item) => ({ id: item.id, title: item.title, category: item.category }))}
+      channels={channels.map((channel) => ({
+        id: channel.id,
+        provider: channel.provider,
+        displayName: channel.displayName,
+      }))}
       me={{
         userId: user.id,
         role: me?.role ?? "VIEWER",
