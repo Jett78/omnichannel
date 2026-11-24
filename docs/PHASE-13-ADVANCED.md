@@ -220,3 +220,15 @@ additive when a real custom store needs them.
   Notifications and the danger zone; its header now points readers to
   the Team page. Settings still resolves the viewer's membership
   server-side for its permission flags.
+
+## AI sections moved from Settings to Automation (2026-11-24, follow-up)
+
+- At the owner's request, the three AI sections — **AI model** (per-workspace
+  key), **AI assistant & knowledge base**, and **Knowledge documents** — moved
+  from `/settings` to the bottom of `/automation`, since they power the
+  automation rules ("Reply with AI") and the composer assistant. Same
+  components, same data, same permissions (OWNER/ADMIN manage; the
+  automation page's canManage flag is equivalent to the workspace.update
+  permission Settings used). Settings now holds Profile, Workspace,
+  Outgoing webhooks, Store connection, Notification preferences and the
+  danger zone.
