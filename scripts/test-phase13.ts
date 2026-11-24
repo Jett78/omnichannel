@@ -13,6 +13,7 @@ import { AiNotConfiguredError } from "@/lib/ai";
 import { aiAssistantService, knowledgeService } from "@/services/ai.service";
 import { messagingService } from "@/services/messaging.service";
 import { storeConnectionService, storeProductService } from "@/services/store.service";
+import { aiConfigService } from "@/services/ai-config.service";
 import { notificationService } from "@/services/notification.service";
 import { workspaceService } from "@/services/workspace.service";
 
@@ -919,6 +920,112 @@ async function main(): Promise<void> {
   await storeConnectionService.remove(userA.id, wa.id);
   const afterRemove = await storeProductService.searchProducts(wa.id, "adidas");
   assert("store: after disconnect, no live products", afterRemove.length === 0);
+
+  // ── 17. Per-workspace AI config (Dograh-style BYOK) ────────────────
+  delete process.env.AI_API_KEY;
+  let modelsStatus = 200;
+  let lastChatAuth: string | null = null;
+  const originalFetchAiConfig = globalThis.fetch;
+  globalThis.fetch = (async (input: unknown, init?: { headers?: Record<string, string> }) => {
+    const url = String(input);
+    if (url.endsWith("/models")) {
+      return new Response("{}", {
+        status: modelsStatus,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (url.includes("api.groq.com")) {
+      lastChatAuth = init?.headers?.Authorization ?? null;
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "Workspace-key reply." } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    throw new Error(`unexpected fetch in ai-config test: ${url}`);
+  }) as typeof fetch;
+  try {
+    let agentAiBlocked = false;
+    try {
+      await aiConfigService.upsert(userC.id, wa.id, {
+        provider: "groq",
+        model: "openai/gpt-oss-120b",
+        apiKey: "agent-key",
+      });
+    } catch {
+      agentAiBlocked = true;
+    }
+    assert("ai-config: an AGENT cannot save AI settings (workspace.update)", agentAiBlocked);
+
+    // Dograh rule: a provider-rejected key leaves nothing saved.
+    modelsStatus = 401;
+    let rejectedThrew = false;
+    try {
+      await aiConfigService.upsert(userA.id, wa.id, {
+        provider: "custom",
+        baseUrl: "https://api.groq.com/openai/v1",
+        model: "openai/gpt-oss-120b",
+        apiKey: "bad-key",
+      });
+    } catch {
+      rejectedThrew = true;
+    }
+    const afterReject = await aiConfigService.get(userA.id, wa.id);
+    assert(
+      "ai-config: a rejected key is not saved",
+      rejectedThrew && afterReject === null,
+    );
+
+    // Ingest BEFORE any config exists, so the worker child processes
+    // this conversation with no key anywhere (instant not-configured)
+    // instead of making a real provider call with the fake test key.
+    const convAi = await ingestText("cust-33", "a", "Hello, do you deliver to Pokhara?");
+
+    modelsStatus = 200;
+    const saved = await aiConfigService.upsert(userA.id, wa.id, {
+      provider: "custom",
+      baseUrl: "https://api.groq.com/openai/v1",
+      model: "openai/gpt-oss-120b",
+      apiKey: "workspace-key-123",
+    });
+    assert(
+      "ai-config: saved with hasKey, and the key itself is never exposed",
+      saved.config.hasKey &&
+        saved.config.model === "openai/gpt-oss-120b" &&
+        !JSON.stringify(saved).includes("workspace-key-123"),
+    );
+
+    // No env key anywhere: the workspace key alone powers the AI.
+    const wsSuggestion = await aiAssistantService.suggestReply(userA.id, wa.id, convAi.id);
+    assert(
+      "ai-config: AI runs on the workspace's own key",
+      wsSuggestion.text === "Workspace-key reply." &&
+        lastChatAuth === "Bearer workspace-key-123",
+      `auth=${lastChatAuth}`,
+    );
+
+    // Keep-or-replace: changing the model without a key keeps the key.
+    const replaced = await aiConfigService.upsert(userA.id, wa.id, {
+      provider: "custom",
+      baseUrl: "https://api.groq.com/openai/v1",
+      model: "openai/gpt-oss-20b",
+    });
+    const wsSuggestion2 = await aiAssistantService.suggestReply(userA.id, wa.id, convAi.id);
+    assert(
+      "ai-config: model change without a key keeps the saved key",
+      replaced.config.model === "openai/gpt-oss-20b" &&
+        wsSuggestion2.text === "Workspace-key reply." &&
+        lastChatAuth === "Bearer workspace-key-123",
+    );
+  } finally {
+    globalThis.fetch = originalFetchAiConfig;
+  }
+
+  await aiConfigService.remove(userA.id, wa.id);
+  const afterRemoveAi = await aiConfigService.get(userA.id, wa.id);
+  assert("ai-config: after removal, no workspace config", afterRemoveAi === null);
+  await expectThrows("ai-config: with no key anywhere, AI reports not configured", () =>
+    aiAssistantService.suggestReply(userA.id, wa.id, conv1.id),
+  );
 
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);

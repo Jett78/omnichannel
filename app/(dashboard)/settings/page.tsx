@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotificationPreferences } from "@/features/settings/notification-preferences";
 import { AiKnowledge } from "@/features/settings/ai-knowledge";
+import { AiModelConfig } from "@/features/settings/ai-model-config";
 import { StoreConnectionCard } from "@/features/settings/store-connection";
 import { OutgoingWebhooks } from "@/features/settings/outgoing-webhooks";
 import { WorkspaceSettings } from "@/features/settings/workspace-settings";
@@ -16,10 +17,11 @@ import { TeamManagement } from "@/features/team/team-management";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/permissions";
-import { aiProviderLabel, isAiConfigured } from "@/lib/ai";
+import { getAiStatus, getEnvAiConfig } from "@/lib/ai";
 import { countAiUsageThisMonth, knowledgeService } from "@/services/ai.service";
 import { outgoingWebhookService } from "@/services/outgoing-webhook.service";
 import { storeConnectionService } from "@/services/store.service";
+import { aiConfigService } from "@/services/ai-config.service";
 import { workspaceService } from "@/services/workspace.service";
 
 export default async function SettingsPage() {
@@ -53,6 +55,14 @@ export default async function SettingsPage() {
   const storeConnection = await storeConnectionService
     .get(user.id, active.id)
     .catch(() => null);
+  const aiStatus = await getAiStatus(active.id).catch(() => ({
+    configured: false,
+    label: null,
+    source: null,
+  }));
+  const envAi = getEnvAiConfig();
+  const envAiLabel = envAi ? `${envAi.model} via ${new URL(envAi.baseUrl).hostname}` : null;
+  const aiConfig = await aiConfigService.get(user.id, active.id).catch(() => null);
 
   return (
     <div className="flex max-w-4xl flex-col gap-6">
@@ -140,11 +150,19 @@ export default async function SettingsPage() {
         <OutgoingWebhooks workspaceId={active.id} initialWebhooks={outgoingWebhooks} />
       ) : null}
 
+      <AiModelConfig
+        workspaceId={active.id}
+        initialConfig={aiConfig}
+        envConfigured={envAi !== null}
+        envLabel={envAiLabel}
+        canManage={canManageKnowledge}
+      />
+
       <AiKnowledge
         workspaceId={active.id}
         initialEntries={knowledgeEntries}
-        aiConfigured={isAiConfigured()}
-        aiLabel={aiProviderLabel()}
+        aiConfigured={aiStatus.configured}
+        aiLabel={aiStatus.label}
         usageThisMonth={aiUsageThisMonth}
         canManage={canManageKnowledge}
       />

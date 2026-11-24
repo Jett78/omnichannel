@@ -254,7 +254,7 @@ export const aiAssistantService = {
           `${knowledgeBlock}${productBlock}\n\nWrite the agent's next reply to the customer. ` +
           `Reply in the language the customer is using. Output ONLY the reply text.`,
       },
-    ]);
+    ], workspaceId);
     await logUsage(workspaceId, actorUserId, "suggest");
     return { text, knowledgeUsed: knowledge.map((entry) => entry.title), products };
   },
@@ -281,7 +281,7 @@ export const aiAssistantService = {
           `Rewrite the agent's draft to be ${toneInstruction}. Keep every fact unchanged. ` +
           `Output ONLY the rewritten text.\n\nDraft:\n${input.text}`,
       },
-    ]);
+    ], workspaceId);
     await logUsage(workspaceId, actorUserId, "rewrite");
     return { text };
   },
@@ -302,7 +302,7 @@ export const aiAssistantService = {
           `customer wants, what has already been said or done, and what is still pending. ` +
           `Use short bullet points.\n\nConversation with ${thread.contactName}:\n\n${thread.transcript}`,
       },
-    ]);
+    ], workspaceId);
     await logUsage(workspaceId, actorUserId, "summarize");
     return { text };
   },
@@ -324,6 +324,7 @@ export const aiAssistantService = {
             `JSON object like {"sentiment":"positive|neutral|negative","reason":"one short sentence"}.\n\n${thread.transcript}`,
         },
       ],
+      workspaceId,
       { maxTokens: 200, temperature: 0 },
     );
     await logUsage(workspaceId, actorUserId, "sentiment");
@@ -356,7 +357,7 @@ export const aiAssistantService = {
           `Translate the following text into ${input.target}. Keep the tone and meaning. ` +
           `Output ONLY the translation.\n\n${input.text}`,
       },
-    ]);
+    ], workspaceId);
     await logUsage(workspaceId, actorUserId, "translate");
     return { text };
   },

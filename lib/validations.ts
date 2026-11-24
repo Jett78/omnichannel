@@ -298,6 +298,13 @@ export const contactProfileUpdateSchema = z.object({
 });
 export type ContactProfileUpdateInput = z.infer<typeof contactProfileUpdateSchema>;
 
+export const aiConfigUpsertSchema = z.object({
+  provider: z.enum(["groq", "gemini", "openai", "openrouter", "custom"]),
+  model: z.string().trim().min(1).max(120),
+  baseUrl: z.string().trim().max(500).optional(),
+  apiKey: z.string().trim().max(500).optional(),
+});
+
 export const storeConnectionUpsertSchema = z.object({
   baseUrl: z.string().trim().min(1).max(500),
   name: z.string().trim().max(120).optional(),

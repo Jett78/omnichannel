@@ -105,3 +105,28 @@ sendOutboundMessage. Order taking (POST /orders/checkout — guest COD
 checkout verified to exist in the store's OpenAPI spec) is the agreed
 next step, NOT built here. Suite: test:phase13 = 60 (section 16: 9
 asserts); phase-4 regression 62/62.
+
+## Follow-up: per-workspace AI config — Dograh-style BYOK (2026-11-24)
+
+Jeet's requirement: AI credentials in server env made one key serve
+every workspace — wrong for a multi-tenant SaaS. Modelled on Dograh
+AI's Model Configurations (per-organization provider connections +
+named model configs): schema `AiConfig` (workspaceId unique,
+provider, model, baseUrl, encryptedApiKey — AES-256-GCM via
+lib/encryption, NEVER returned to a browser; views expose only
+hasKey). `lib/ai-providers.ts` catalog: groq / gemini / openai /
+openrouter / custom (any OpenAI-compatible endpoint), each with
+curated models + custom model names allowed. `lib/ai.ts` now resolves
+PER WORKSPACE: `resolveAiConfig(workspaceId)` → the workspace's own
+key first, the platform env key (AI_API_KEY/…) only as a fallback
+default; `aiChat(messages, workspaceId)`; `getAiStatus(workspaceId)`
+feeds Settings + the inbox flag. `aiConfigService.upsert` runs
+Dograh's save-time credential check (GET {baseUrl}/models): a
+provider-REJECTED key (401/403) saves nothing; an inconclusive check
+saves with a warning; saving without a key keeps the stored one
+(keep-or-replace). Settings gained the "AI model — this workspace's
+own key" card (provider/model dropdowns, password key field,
+own-key vs platform-default status, remove). Embeddings for the
+Dograh-style knowledge base will slot into this same per-workspace
+config when chunked search is built. Suite: test:phase13 = 67
+(section 17: 7 asserts); phase-4 regression 62/62.

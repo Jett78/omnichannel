@@ -105,22 +105,12 @@ export function AiKnowledge({
           </p>
         ) : (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-            <p className="font-medium">AI is not configured yet</p>
-            <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-[13px]">
-              <li>
-                Create a free account at <span className="font-mono">console.groq.com</span> and
-                generate an API key (free tier).
-              </li>
-              <li>
-                In Vercel → project <span className="font-mono">omnichannel</span> → Settings →
-                Environment Variables, add <span className="font-mono">AI_API_KEY</span> with that
-                key (Production).
-              </li>
-              <li>Redeploy — the AI panel in the inbox switches on automatically.</li>
-            </ol>
+            <p className="font-medium">AI is not configured for this workspace yet</p>
             <p className="mt-1 text-[13px]">
-              Prefer Gemini? Set <span className="font-mono">AI_BASE_URL</span> and{" "}
-              <span className="font-mono">AI_MODEL</span> too — see docs/PHASE-13-ADVANCED.md.
+              Add this workspace&apos;s own provider key in the{" "}
+              <span className="font-medium">AI model</span> card above — pick a provider (Groq
+              and Gemini have free tiers), pick a model, paste your key. The AI panel in the
+              inbox and the AI auto-reply switch on immediately, no redeploy needed.
             </p>
           </div>
         )}
