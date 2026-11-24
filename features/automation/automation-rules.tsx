@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -123,6 +123,23 @@ const PROVIDER_OPTIONS = (Object.keys(PROVIDER_META) as Provider[]).map((provide
   value: provider.toLowerCase(),
   label: PROVIDER_META[provider].shortLabel,
 }));
+
+/**
+ * Dograh-inspired design tokens for this page: one restrained amber
+ * accent reserved for the primary CTA, uppercase micro-labels for
+ * sections, and a colour per trigger type (their node-badge palette)
+ * while cards themselves stay neutral.
+ */
+const CTA_CLASS =
+  "bg-[#E39A2E] text-[#1A1207] hover:bg-[#C9851F] dark:bg-[#F0B24A] dark:hover:bg-[#E39A2E]";
+const SECTION_LABEL = "text-xs font-semibold tracking-wider text-muted-foreground uppercase";
+const TRIGGER_BADGE: Record<string, string> = {
+  "conversation.created": "bg-emerald-500",
+  "message.created": "bg-blue-500",
+  "conversation.assigned": "bg-amber-500",
+  "conversation.resolved": "bg-rose-500",
+  "tag.added": "bg-purple-500",
+};
 
 function emptyDraft(): ActionDraft {
   return {
@@ -476,7 +493,7 @@ export function AutomationRules({
         description="Rules that greet, route and escalate conversations automatically. Actions run as the rule's creator, so channel messaging windows still apply."
         actions={
           canManage ? (
-            <Button onClick={() => openBuilder()}>
+            <Button className={CTA_CLASS} onClick={() => openBuilder()}>
               <Plus className="size-4" /> New rule
             </Button>
           ) : undefined
@@ -489,103 +506,132 @@ export function AutomationRules({
         </p>
       ) : null}
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center gap-3 py-4">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">My availability for auto-assignment</p>
-            <p className="text-muted-foreground text-xs">
-              When off, round-robin and least-busy rules skip you.
-            </p>
-          </div>
+      <div className="flex flex-col gap-2">
+        <p className={SECTION_LABEL}>My availability</p>
+        <div className="border-border/60 bg-muted/30 flex flex-wrap items-center gap-3 rounded-full border px-4 py-2">
+          <span
+            className={`size-2 shrink-0 rounded-full ${myAvailable ? "bg-emerald-500" : "bg-zinc-400"}`}
+          />
+          <p className="min-w-0 flex-1 text-sm">
+            <span className="font-medium">{myAvailable ? "Available" : "Away"}</span>
+            <span className="text-muted-foreground">
+              {" "}
+              — round-robin and least-busy rules {myAvailable ? "can assign to you" : "skip you"}
+            </span>
+          </p>
           <Switch
             checked={myAvailable}
             onCheckedChange={(value) => void toggleAvailability(value)}
             aria-label="My availability for auto-assignment"
           />
-          <span className="text-sm font-medium">{myAvailable ? "Available" : "Away"}</span>
-        </CardContent>
-      </Card>
-
-      {rules.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-            <Zap className="text-muted-foreground size-8" />
-            <p className="text-sm font-medium">No automation rules yet</p>
-            <p className="text-muted-foreground max-w-sm text-sm">
-              Create your first rule — for example, round-robin assignment for new
-              conversations, or an automatic greeting from your saved replies.
-            </p>
-            {canManage ? (
-              <Button className="mt-2" onClick={() => openBuilder()}>
-                <Plus className="size-4" /> New rule
-              </Button>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {rules.map((rule) => (
-            <Card key={rule.id} className={rule.enabled ? undefined : "opacity-70"}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <CardTitle className="text-base">{rule.name}</CardTitle>
-                    <CardDescription>
-                      When: {triggerLabel(rule.trigger)}
-                      {conditionsSummary(rule) ? ` · ${conditionsSummary(rule)}` : ""}
-                    </CardDescription>
-                  </div>
-                  {canManage ? (
-                    <Switch
-                      checked={rule.enabled}
-                      onCheckedChange={() => void toggleEnabled(rule)}
-                      aria-label={`Enable rule ${rule.name}`}
-                    />
-                  ) : (
-                    <Badge variant={rule.enabled ? "default" : "secondary"}>
-                      {rule.enabled ? "On" : "Off"}
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <div className="flex flex-wrap gap-1.5">
-                  {rule.actions.map((action, index) => (
-                    <Badge key={index} variant="secondary" className="font-normal">
-                      {index + 1}. {actionSummary(action)}
-                    </Badge>
-                  ))}
-                </div>
-                {canManage ? (
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => openBuilder(rule)}>
-                      <Pencil className="size-3.5" /> Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-600"
-                      onClick={() => setDeleteTarget(rule)}
-                    >
-                      <Trash2 className="size-3.5" /> Delete
-                    </Button>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))}
         </div>
-      )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className={SECTION_LABEL}>Rules</p>
+        {rules.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+              <p className="text-muted-foreground max-w-sm text-sm">
+                No automation rules yet. Create your first rule to get started — for
+                example, round-robin assignment for new conversations, or an automatic
+                greeting from your saved replies.
+              </p>
+              {canManage ? (
+                <Button className={`mt-2 ${CTA_CLASS}`} onClick={() => openBuilder()}>
+                  <Plus className="size-4" /> New rule
+                </Button>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="gap-0 overflow-hidden py-0">
+            <div className="flex flex-col divide-y">
+              {rules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className={`flex flex-col gap-2 px-4 py-3.5 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:gap-4 ${
+                    rule.enabled ? "" : "opacity-60"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`size-2 shrink-0 rounded-full ${
+                          rule.enabled ? "bg-emerald-500" : "bg-zinc-400"
+                        }`}
+                      />
+                      <span className="text-sm font-medium">{rule.name}</span>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium text-white ${
+                          TRIGGER_BADGE[rule.trigger] ?? "bg-zinc-500"
+                        }`}
+                      >
+                        {triggerLabel(rule.trigger)}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {rule.enabled ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
+                    {conditionsSummary(rule) ? (
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        Only if: {conditionsSummary(rule)}
+                      </p>
+                    ) : null}
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {rule.actions.map((action, index) => (
+                        <span
+                          key={index}
+                          className="bg-muted inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                        >
+                          {index + 1}. {actionSummary(action)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {canManage ? (
+                      <>
+                        <Switch
+                          checked={rule.enabled}
+                          onCheckedChange={() => void toggleEnabled(rule)}
+                          aria-label={`Enable rule ${rule.name}`}
+                        />
+                        <Button variant="outline" size="sm" onClick={() => openBuilder(rule)}>
+                          <Pencil className="size-3.5" /> Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600"
+                          onClick={() => setDeleteTarget(rule)}
+                        >
+                          <Trash2 className="size-3.5" /> Delete
+                        </Button>
+                      </>
+                    ) : (
+                      <Badge variant={rule.enabled ? "default" : "secondary"}>
+                        {rule.enabled ? "On" : "Off"}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </div>
 
       {canManage ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent activity</CardTitle>
-            <CardDescription>
-              The latest rule executions. A failed action (for example, a reply outside the
-              channel&apos;s messaging window) is recorded here, never hidden.
-            </CardDescription>
-          </CardHeader>
+        <div className="flex flex-col gap-2">
+          <p className={SECTION_LABEL}>Recent activity</p>
+          <Card>
+            <CardHeader>
+              <CardDescription>
+                The latest rule executions. A failed action (for example, a reply outside
+                the channel&apos;s messaging window) is recorded here, never hidden.
+              </CardDescription>
+            </CardHeader>
           <CardContent>
             {runs.length === 0 ? (
               <p className="text-muted-foreground text-sm">
@@ -628,8 +674,9 @@ export function AutomationRules({
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
       {/* ─── Builder dialog ─────────────────────────────────────── */}
@@ -653,11 +700,13 @@ export function AutomationRules({
             />
           </div>
 
-          {/* Step 1 — trigger */}
-          <div className="rounded-xl border p-4">
-            <p className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Zap className="size-4 text-indigo-600" /> When…
-            </p>
+          {/* Step 1 — trigger. Dograh node-card style: the card stays
+              neutral; the step's colour lives in a small badge that
+              overlaps the card's top edge. */}
+          <div className="bg-card relative mt-3 rounded-lg border p-4 pt-5">
+            <span className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-medium text-white">
+              <Zap className="size-3" /> When
+            </span>
             <Select value={trigger} onValueChange={setTrigger}>
               <SelectTrigger aria-label="Trigger">
                 <SelectValue />
@@ -677,12 +726,12 @@ export function AutomationRules({
           </div>
 
           {/* Step 2 — conditions */}
-          <div className="rounded-xl border p-4">
-            <p className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Filter className="size-4 text-indigo-600" /> Only if…
-              <span className="text-muted-foreground text-xs font-normal">
-                (leave empty to run every time)
-              </span>
+          <div className="bg-card relative mt-3 rounded-lg border p-4 pt-5">
+            <span className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
+              <Filter className="size-3" /> Only if
+            </span>
+            <p className="text-muted-foreground mb-3 text-xs">
+              Leave everything empty to run every time.
             </p>
             <div className="flex flex-col gap-4">
               <div>
@@ -705,7 +754,7 @@ export function AutomationRules({
                         }
                         className={
                           active
-                            ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white"
+                            ? "rounded-full bg-foreground px-2.5 py-1 text-xs font-medium text-background"
                             : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
                         }
                       >
@@ -740,7 +789,7 @@ export function AutomationRules({
                           }
                           className={
                             active
-                              ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white"
+                              ? "rounded-full bg-foreground px-2.5 py-1 text-xs font-medium text-background"
                               : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
                           }
                         >
@@ -776,7 +825,7 @@ export function AutomationRules({
                           }
                           className={
                             active
-                              ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white"
+                              ? "rounded-full bg-foreground px-2.5 py-1 text-xs font-medium text-background"
                               : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
                           }
                         >
@@ -827,10 +876,10 @@ export function AutomationRules({
           </div>
 
           {/* Step 3 — actions */}
-          <div className="rounded-xl border p-4">
-            <p className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Play className="size-4 text-indigo-600" /> Then do…
-            </p>
+          <div className="bg-card relative mt-3 rounded-lg border p-4 pt-5">
+            <span className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full bg-blue-500 px-2 py-0.5 text-xs font-medium text-white">
+              <Play className="size-3" /> Then do
+            </span>
             <div className="flex flex-col gap-3">
               {drafts.map((draft, index) => (
                 <div key={index} className="bg-muted/40 flex flex-col gap-2 rounded-lg border p-3">
@@ -1025,7 +1074,7 @@ export function AutomationRules({
                               }
                               className={
                                 active
-                                  ? "rounded-full bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white"
+                                  ? "rounded-full bg-foreground px-2.5 py-1 text-xs font-medium text-background"
                                   : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
                               }
                             >

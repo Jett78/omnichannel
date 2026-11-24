@@ -99,6 +99,16 @@ export default async function AutomationPage() {
     />
 
     <div className="flex max-w-4xl flex-col gap-6">
+      <div>
+        <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          AI configuration
+        </p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          The model, knowledge and documents that power AI replies and the composer
+          assistant.
+        </p>
+      </div>
+
       <AiModelConfig
         workspaceId={active.id}
         initialConfig={aiConfig}
