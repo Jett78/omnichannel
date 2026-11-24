@@ -258,3 +258,27 @@ additive when a real custom store needs them.
     from indigo to monochrome foreground/background.
   - Behaviour is unchanged — same handlers, API and permissions; the
     app's no-shadow rule is respected (borders carry the structure).
+
+## UI polish batch (2026-11-24, Jeet's requests, GitHub 088a9aaf + 6ea2e628)
+
+- Automation: "New rule" CTA is now the app's blue (bg-blue-500) instead
+  of Dograh amber; Recent activity moved to the LAST section (after AI
+  configuration) with pagination — 15 runs per page, run fetch raised to
+  100; the AI knowledge form is Dograh-style (labelled Title/Facts, Facts
+  textarea at 8 rows); all Automation sections are full width.
+- App-wide: default font is Manrope (Google Fonts via next/font, Geist
+  Mono kept for mono); navbar search stretches full width; every modal
+  is bigger — Dialog base sm:max-w-3xl, AlertDialog sm:max-w-2xl, the
+  rule builder and channel connect panels at 3xl, the ⌘K palette at 2xl.
+- Sign out now asks first: a shadcn AlertDialog ("Sign out?") guards
+  both the header account menu and the sidebar logout button.
+- Sidebar Inbox is an expandable group (open by default) with the four
+  assignee views — All / Mine / Unassigned / Mentions — linking to
+  /inbox?view=…; the inbox opens on that tab (initialView plumbed
+  page → shell; the shell's filter effect refetches the view) and the
+  in-inbox assignee segmented control was removed (views live only in
+  the sidebar). Status chips, sort and channel filters stay in-inbox.
+- Contacts pagination: 20 per page. Notifications pagination: 10 per
+  page. Settings sections are full width (max-w-4xl removed). The
+  Team page's create-team form was removed (existing teams still list;
+  the POST /teams API route is unchanged).
