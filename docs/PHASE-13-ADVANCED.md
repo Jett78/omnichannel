@@ -130,3 +130,29 @@ own-key vs platform-default status, remove). Embeddings for the
 Dograh-style knowledge base will slot into this same per-workspace
 config when chunked search is built. Suite: test:phase13 = 67
 (section 17: 7 asserts); phase-4 regression 62/62.
+
+## Follow-up: Dograh-style knowledge base — document uploads, Full Document mode (2026-11-24)
+
+Jeet picked phase 1 of the Dograh KB design: uploads + Full Document
+mode (chunked semantic search is the designed phase 2). Schema
+`KnowledgeDocument`: workspaceId, title, fileName, mimeType,
+sizeBytes, original bytes (kept for future re-processing), extracted
+text, charCount, mode (FULL_DOCUMENT | CHUNKED_SEARCH — enum ready
+for phase 2), status (PROCESSING | READY | FAILED) + error.
+`lib/knowledge-extract.ts` mirrors Dograh's library: PDF (unpdf),
+DOCX (mammoth), TXT, Markdown, JSON — kind by extension, ≤5 MB,
+legacy .doc rejected with an explanation. Upload (workspace.update)
+creates the row as PROCESSING and enqueues the new
+`knowledge-processing` BullMQ queue; the worker extracts and settles
+the row READY or FAILED with the reason (extraction errors are
+recorded, not retried — a corrupt file fails identically). Settings
+gained a "Knowledge documents" card: upload, per-file status badges
+(polls every 3 s while processing), two-step delete; views never
+expose bytes or text. Grounding: `suggestReply` (and therefore the
+`ai_reply` automation action) adds matching READY documents —
+keyword-scored like typed entries, whole text filled into a 12,000
+character budget in relevance order — under an "Uploaded knowledge
+documents" prompt block, and the audit line (`knowledgeUsed`) names
+the files used. Suite: test:phase13 = 76 (section 18: 9 asserts,
+including a byte-built minimal PDF and a corrupt-PDF FAILED case);
+phase-4 regression 62/62.

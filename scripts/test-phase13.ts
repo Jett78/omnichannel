@@ -14,6 +14,8 @@ import { aiAssistantService, knowledgeService } from "@/services/ai.service";
 import { messagingService } from "@/services/messaging.service";
 import { storeConnectionService, storeProductService } from "@/services/store.service";
 import { aiConfigService } from "@/services/ai-config.service";
+import { knowledgeDocumentService } from "@/services/knowledge-document.service";
+import { MAX_KNOWLEDGE_FILE_BYTES } from "@/lib/knowledge-extract";
 import { notificationService } from "@/services/notification.service";
 import { workspaceService } from "@/services/workspace.service";
 
@@ -1025,6 +1027,144 @@ async function main(): Promise<void> {
   assert("ai-config: after removal, no workspace config", afterRemoveAi === null);
   await expectThrows("ai-config: with no key anywhere, AI reports not configured", () =>
     aiAssistantService.suggestReply(userA.id, wa.id, conv1.id),
+  );
+
+  // ── 18. Knowledge documents (Dograh-style KB, Full Document) ─────
+  await expectThrows("kb-docs: an AGENT cannot upload documents", () =>
+    knowledgeDocumentService.upload(userC.id, wa.id, {
+      fileName: "agent.txt",
+      mimeType: "text/plain",
+      bytes: Buffer.from("hello"),
+    }),
+  );
+  await expectThrows("kb-docs: unsupported file type is rejected", () =>
+    knowledgeDocumentService.upload(userA.id, wa.id, {
+      fileName: "photo.png",
+      mimeType: "image/png",
+      bytes: Buffer.from("png-bytes"),
+    }),
+  );
+  await expectThrows("kb-docs: files over 5 MB are rejected", () =>
+    knowledgeDocumentService.upload(userA.id, wa.id, {
+      fileName: "big.txt",
+      mimeType: "text/plain",
+      bytes: Buffer.alloc(MAX_KNOWLEDGE_FILE_BYTES + 1, 97),
+    }),
+  );
+
+  const txtDoc = await knowledgeDocumentService.upload(userA.id, wa.id, {
+    fileName: "delivery-notes.txt",
+    mimeType: "text/plain",
+    bytes: Buffer.from(
+      "Zorawar delivery promise: orders reach Pokhara within two days via the Zorawar courier desk.",
+    ),
+  });
+  assert("kb-docs: an upload starts as PROCESSING", txtDoc.status === "PROCESSING");
+  const readyDoc = await waitFor("knowledge document ready", async () => {
+    const row = await prisma.knowledgeDocument.findUnique({ where: { id: txtDoc.id } });
+    return row?.status === "READY" ? row : null;
+  });
+  assert(
+    "kb-docs: the worker extracts the text and marks it READY",
+    (readyDoc.extractedText ?? "").includes("Zorawar courier desk") &&
+      (readyDoc.charCount ?? 0) > 0,
+  );
+
+  // A minimal valid PDF built byte-by-byte (correct xref offsets).
+  function buildMinimalPdf(text: string): Buffer {
+    const stream = `BT /F1 12 Tf 20 700 Td (${text}) Tj ET`;
+    const objects = [
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ];
+    let pdf = "%PDF-1.4\n";
+    const offsets: number[] = [];
+    objects.forEach((body, index) => {
+      offsets.push(pdf.length);
+      pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+    });
+    const xrefStart = pdf.length;
+    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    for (const offset of offsets) {
+      pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+    }
+    pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+    return Buffer.from(pdf, "latin1");
+  }
+  const pdfDoc = await knowledgeDocumentService.upload(userA.id, wa.id, {
+    fileName: "handbook.pdf",
+    mimeType: "application/pdf",
+    bytes: buildMinimalPdf("Karnali handbook"),
+  });
+  const readyPdf = await waitFor("knowledge pdf ready", async () => {
+    const row = await prisma.knowledgeDocument.findUnique({ where: { id: pdfDoc.id } });
+    return row?.status === "READY" ? row : null;
+  });
+  assert(
+    "kb-docs: PDF text is extracted",
+    (readyPdf.extractedText ?? "").includes("Karnali handbook"),
+    readyPdf.extractedText ?? "(no text)",
+  );
+
+  const badPdf = await knowledgeDocumentService.upload(userA.id, wa.id, {
+    fileName: "broken.pdf",
+    mimeType: "application/pdf",
+    bytes: Buffer.from("this is not really a pdf file at all"),
+  });
+  const failedDoc = await waitFor("knowledge pdf failed", async () => {
+    const row = await prisma.knowledgeDocument.findUnique({ where: { id: badPdf.id } });
+    return row?.status === "FAILED" ? row : null;
+  });
+  assert(
+    "kb-docs: a corrupt PDF settles as FAILED with a reason",
+    typeof failedDoc.error === "string" && failedDoc.error.length > 0,
+  );
+
+  // Grounding: the suggestion prompt carries the document's full text
+  // and the audit line names the file.
+  let lastKbPrompt = "";
+  const originalFetchKb = globalThis.fetch;
+  globalThis.fetch = (async (input: unknown, init?: { body?: string }) => {
+    const url = String(input);
+    if (url.includes("/chat/completions")) {
+      lastKbPrompt = typeof init?.body === "string" ? init.body : "";
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "Doc-grounded reply." } }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    throw new Error(`unexpected fetch in kb-docs test: ${url}`);
+  }) as typeof fetch;
+  try {
+    process.env.AI_API_KEY = "<MASKED_SECRET_001>";
+    const convKb = await ingestText(
+      "cust-40",
+      "a",
+      "Tell me about Zorawar delivery to Pokhara please",
+    );
+    const kbSuggestion = await aiAssistantService.suggestReply(userA.id, wa.id, convKb.id);
+    assert(
+      "kb-docs: suggestions are grounded in the uploaded document",
+      kbSuggestion.text === "Doc-grounded reply." &&
+        lastKbPrompt.includes("Zorawar courier desk") &&
+        kbSuggestion.knowledgeUsed.includes("delivery-notes.txt"),
+      `knowledgeUsed=${JSON.stringify(kbSuggestion.knowledgeUsed)}`,
+    );
+  } finally {
+    globalThis.fetch = originalFetchKb;
+    delete process.env.AI_API_KEY;
+  }
+
+  await knowledgeDocumentService.remove(userA.id, wa.id, txtDoc.id);
+  const docsAfterDelete = await knowledgeDocumentService.list(userA.id, wa.id);
+  assert(
+    "kb-docs: delete removes the document and views never expose its text",
+    !docsAfterDelete.some((doc) => doc.id === txtDoc.id) &&
+      !JSON.stringify(docsAfterDelete).includes("Zorawar") &&
+      !JSON.stringify(docsAfterDelete).includes("extractedText"),
   );
 
   // Cleanup so back-to-back suite runs don't hit residue collisions.

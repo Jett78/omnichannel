@@ -42,3 +42,9 @@ export interface GmailPollJobData {
   /** Absent = sweep every CONNECTED Gmail channel (the scheduled job). */
   channelId?: string;
 }
+
+/** Knowledge document processing — extract text from an uploaded file. */
+export interface KnowledgeJobData {
+  documentId: string;
+  workspaceId: string;
+}

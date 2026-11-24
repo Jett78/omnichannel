@@ -3,6 +3,7 @@ import { Queue } from "bullmq";
 import { createRedisConnection } from "@/lib/redis";
 import type {
   GmailPollJobData,
+  KnowledgeJobData,
   MediaJobData,
   OutboundJobData,
   OutgoingWebhookJobData,
@@ -21,6 +22,7 @@ export const QUEUE_NAMES = {
   tokenRefresh: "token-refresh",
   gmailPoll: "gmail-poll",
   outgoingWebhook: "outgoing-webhook",
+  knowledge: "knowledge-processing",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -32,6 +34,7 @@ let queues: {
   tokenRefresh: Queue<TokenRefreshJobData>;
   gmailPoll: Queue<GmailPollJobData>;
   outgoingWebhook: Queue<OutgoingWebhookJobData>;
+  knowledge: Queue<KnowledgeJobData>;
 } | null = null;
 
 function buildQueues() {
@@ -89,6 +92,18 @@ function buildQueues() {
         attempts: 1,
         removeOnComplete: 50,
         removeOnFail: 200,
+      },
+    }),
+    knowledge: new Queue<KnowledgeJobData>(QUEUE_NAMES.knowledge, {
+      connection: createRedisConnection(),
+      defaultJobOptions: {
+        // Extraction failures are recorded on the document row itself
+        // (status FAILED) by the processor, so retries here are only
+        // for infrastructure errors.
+        attempts: 3,
+        backoff: { type: "exponential", delay: 5000 },
+        removeOnComplete: 100,
+        removeOnFail: 500,
       },
     }),
   };

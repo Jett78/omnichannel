@@ -204,6 +204,7 @@ model Workspace {
   automationRules  AutomationRule[]
   automationRuns   AutomationRun[]
   knowledgeEntries KnowledgeEntry[]
+  knowledgeDocuments KnowledgeDocument[]
   storeConnection  StoreConnection?
   aiConfig         AiConfig?
   aiUsageLogs      AiUsageLog[]
@@ -709,6 +710,49 @@ model KnowledgeEntry {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
+}
+
+enum KnowledgeDocumentStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum KnowledgeRetrievalMode {
+  FULL_DOCUMENT
+  CHUNKED_SEARCH
+}
+
+/**
+ * Dograh-style knowledge base file (2026-11-24): an uploaded document
+ * (PDF/DOCX/TXT/Markdown/JSON, ≤5 MB) whose extracted text grounds AI
+ * replies. The original bytes are kept so the file can be re-processed
+ * (e.g. chunked for semantic search later). FULL_DOCUMENT mode injects
+ * the whole text into the prompt when the document matches the
+ * customer's words; CHUNKED_SEARCH is reserved for the pgvector build.
+ * Extraction runs in the worker — status is honest: PROCESSING until
+ * the text exists, FAILED with the reason when it doesn't.
+ */
+model KnowledgeDocument {
+  id            String                  @id @default(cuid())
+  workspaceId   String
+  title         String
+  fileName      String
+  mimeType      String
+  sizeBytes     Int
+  data          Bytes
+  extractedText String?
+  charCount     Int?
+  mode          KnowledgeRetrievalMode  @default(FULL_DOCUMENT)
+  status        KnowledgeDocumentStatus @default(PROCESSING)
+  error         String?
+  createdById   String
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, status])
 }
 
 /** One row per AI action (suggest/rewrite/summarize/sentiment/translate) — honest usage counting. */

@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { NotificationPreferences } from "@/features/settings/notification-preferences";
 import { AiKnowledge } from "@/features/settings/ai-knowledge";
 import { AiModelConfig } from "@/features/settings/ai-model-config";
+import { KnowledgeDocuments } from "@/features/settings/knowledge-documents";
 import { StoreConnectionCard } from "@/features/settings/store-connection";
 import { OutgoingWebhooks } from "@/features/settings/outgoing-webhooks";
 import { WorkspaceSettings } from "@/features/settings/workspace-settings";
@@ -22,6 +23,7 @@ import { countAiUsageThisMonth, knowledgeService } from "@/services/ai.service";
 import { outgoingWebhookService } from "@/services/outgoing-webhook.service";
 import { storeConnectionService } from "@/services/store.service";
 import { aiConfigService } from "@/services/ai-config.service";
+import { knowledgeDocumentService } from "@/services/knowledge-document.service";
 import { workspaceService } from "@/services/workspace.service";
 
 export default async function SettingsPage() {
@@ -63,6 +65,9 @@ export default async function SettingsPage() {
   const envAi = getEnvAiConfig();
   const envAiLabel = envAi ? `${envAi.model} via ${new URL(envAi.baseUrl).hostname}` : null;
   const aiConfig = await aiConfigService.get(user.id, active.id).catch(() => null);
+  const knowledgeDocuments = await knowledgeDocumentService
+    .list(user.id, active.id)
+    .catch(() => []);
 
   return (
     <div className="flex max-w-4xl flex-col gap-6">
@@ -164,6 +169,12 @@ export default async function SettingsPage() {
         aiConfigured={aiStatus.configured}
         aiLabel={aiStatus.label}
         usageThisMonth={aiUsageThisMonth}
+        canManage={canManageKnowledge}
+      />
+
+      <KnowledgeDocuments
+        workspaceId={active.id}
+        initialDocuments={knowledgeDocuments}
         canManage={canManageKnowledge}
       />
 

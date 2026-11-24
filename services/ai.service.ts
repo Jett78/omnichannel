@@ -13,7 +13,8 @@ import { storeProductService, type StoreProduct } from "@/services/store.service
  * - Without AI_API_KEY the actions throw AiNotConfiguredError — the
  *   UI shows a setup state, never a fake answer.
  * - Knowledge-grounded suggestions use only this workspace's own
- *   KnowledgeEntry rows, selected by simple keyword overlap.
+ *   KnowledgeEntry rows and READY KnowledgeDocument files (Full
+ *   Document mode), selected by simple keyword overlap.
  */
 
 export interface KnowledgeEntryView {
@@ -194,6 +195,61 @@ async function relevantKnowledge(
   return scored.map((item) => item.entry);
 }
 
+/** Total characters of document text one suggestion may carry. */
+const MAX_DOCUMENT_CHARS = 12_000;
+
+/**
+ * Full Document mode (Dograh-style knowledge base): the whole text of
+ * each READY uploaded document that matches the customer's words,
+ * filled into a fixed character budget in relevance order. Documents
+ * that don't match are left out — the audit line names what was used.
+ */
+async function relevantKnowledgeDocuments(
+  workspaceId: string,
+  queryText: string | null,
+): Promise<Array<{ title: string; content: string }>> {
+  const rows = await prisma.knowledgeDocument.findMany({
+    where: { workspaceId, status: "READY", mode: "FULL_DOCUMENT" },
+    select: { fileName: true, extractedText: true },
+    take: 50,
+  });
+  const docs = rows.filter(
+    (row): row is { fileName: string; extractedText: string } => !!row.extractedText,
+  );
+  if (docs.length === 0) return [];
+  const words = new Set(
+    (queryText ?? "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((word) => word.length >= 4),
+  );
+  const scored = docs
+    .map((doc) => {
+      const haystack = `${doc.fileName} ${doc.extractedText}`.toLowerCase();
+      let score = 0;
+      for (const word of words) {
+        if (haystack.includes(word)) score += 1;
+      }
+      return { doc, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const picked: Array<{ title: string; content: string }> = [];
+  let used = 0;
+  for (const item of scored) {
+    const remaining = MAX_DOCUMENT_CHARS - used;
+    if (remaining <= 0) break;
+    const text = item.doc.extractedText;
+    const content =
+      text.length > remaining
+        ? `${text.slice(0, remaining)}\n[…document truncated to fit]`
+        : text;
+    picked.push({ title: item.doc.fileName, content });
+    used += content.length;
+  }
+  return picked;
+}
+
 const SUPPORT_SYSTEM_PROMPT =
   "You are an AI assistant helping a human support agent in a customer-service inbox. " +
   "You draft text for the agent to review — you never speak to the customer directly. " +
@@ -209,6 +265,10 @@ export const aiAssistantService = {
     await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
     const thread = await loadThread(workspaceId, conversationId);
     const knowledge = await relevantKnowledge(
+      workspaceId,
+      `${thread.lastCustomerMessage ?? ""}\n${thread.transcript}`,
+    );
+    const documents = await relevantKnowledgeDocuments(
       workspaceId,
       `${thread.lastCustomerMessage ?? ""}\n${thread.transcript}`,
     );
@@ -245,18 +305,30 @@ export const aiAssistantService = {
           .map((entry) => `## ${entry.title}\n${entry.content}`)
           .join("\n\n")}`
       : "";
+    const documentBlock = documents.length
+      ? `\n\nUploaded knowledge documents (Full Document mode — the full text of each matching document follows; treat it as facts from the business's own files):\n${documents
+          .map((doc) => `## ${doc.title}\n${doc.content}`)
+          .join("\n\n")}`
+      : "";
     const text = await aiChat([
       { role: "system", content: SUPPORT_SYSTEM_PROMPT },
       {
         role: "user",
         content:
           `Conversation with ${thread.contactName} (channel: ${thread.provider}):\n\n${thread.transcript}` +
-          `${knowledgeBlock}${productBlock}\n\nWrite the agent's next reply to the customer. ` +
+          `${knowledgeBlock}${documentBlock}${productBlock}\n\nWrite the agent's next reply to the customer. ` +
           `Reply in the language the customer is using. Output ONLY the reply text.`,
       },
     ], workspaceId);
     await logUsage(workspaceId, actorUserId, "suggest");
-    return { text, knowledgeUsed: knowledge.map((entry) => entry.title), products };
+    return {
+      text,
+      knowledgeUsed: [
+        ...knowledge.map((entry) => entry.title),
+        ...documents.map((doc) => doc.title),
+      ],
+      products,
+    };
   },
 
   async rewrite(

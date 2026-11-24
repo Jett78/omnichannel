@@ -4,6 +4,7 @@ import { getQueues, QUEUE_NAMES } from "@/lib/queue";
 import { createRedisConnection } from "@/lib/redis";
 import type {
   GmailPollJobData,
+  KnowledgeJobData,
   MediaJobData,
   OutboundJobData,
   OutgoingWebhookJobData,
@@ -12,6 +13,7 @@ import type {
 } from "@/types/queue";
 
 import { processGmailPollJob } from "@/workers/processors/gmail-poll.processor";
+import { processKnowledgeJob } from "@/workers/processors/knowledge.processor";
 import { processMediaJob } from "@/workers/processors/media.processor";
 import { processOutboundJob } from "@/workers/processors/outbound.processor";
 import { processOutgoingWebhookJob } from "@/workers/processors/outgoing-webhook.processor";
@@ -46,6 +48,7 @@ const workers = [
   registerWorker<TokenRefreshJobData>(QUEUE_NAMES.tokenRefresh, processTokenRefreshJob),
   registerWorker<GmailPollJobData>(QUEUE_NAMES.gmailPoll, processGmailPollJob),
   registerWorker<OutgoingWebhookJobData>(QUEUE_NAMES.outgoingWebhook, processOutgoingWebhookJob),
+  registerWorker<KnowledgeJobData>(QUEUE_NAMES.knowledge, processKnowledgeJob),
 ];
 
 // Gmail inbound is polling-based (Phase 9): arm the recurring sweep
