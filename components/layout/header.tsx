@@ -6,6 +6,16 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -78,6 +88,7 @@ export function Header({
   const pathname = usePathname();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const [query, setQuery] = useState("");
   const title = TITLES[pathname] ?? "Unified Omnichannel Inbox";
   const unread = notifications.filter((n) => !n.isRead).length;
@@ -139,7 +150,7 @@ export function Header({
       <button
         type="button"
         onClick={() => setSearchOpen(true)}
-        className="text-muted-foreground hover:bg-accent mx-auto flex h-9 w-full max-w-md items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs transition-colors"
+        className="text-muted-foreground hover:bg-accent flex h-9 flex-1 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs transition-colors"
         aria-label="Search (Ctrl+K)"
       >
         <Search className="size-4 shrink-0" />
@@ -243,7 +254,7 @@ export function Header({
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => void onLogout()}>
+              <DropdownMenuItem onSelect={() => setLogoutOpen(true)}>
                 <LogOut className="size-4" /> Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -252,7 +263,7 @@ export function Header({
       </div>
 
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent className="top-[20%] translate-y-0 sm:max-w-lg">
+        <DialogContent className="top-[20%] translate-y-0 sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Search</DialogTitle>
             <DialogDescription>Search pages, conversations and contacts.</DialogDescription>
@@ -333,6 +344,21 @@ export function Header({
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sign out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will need to sign in again to keep working in this workspace.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void onLogout()}>Sign out</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
 }

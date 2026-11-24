@@ -15,13 +15,24 @@ import { workspaceService } from "@/services/workspace.service";
  * preview (clearly badged, never written to the DB).
  */
 interface InboxPageProps {
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; view?: string }>;
 }
+
+const INBOX_VIEWS = ["all", "mine", "unassigned", "mentions"] as const;
+type InboxView = (typeof INBOX_VIEWS)[number];
 
 export default async function InboxPage({ searchParams }: InboxPageProps) {
   const params = await searchParams;
   const user = await getCurrentUser();
   if (!user) redirect("/api/session-expired");
+
+  // Sidebar inbox views (?view=all|mine|unassigned|mentions, default
+  // all): the server still loads the plain list (so an empty filtered
+  // view never drops the page into the sample preview); the shell
+  // opens on the chosen tab and its filter effect refetches that view.
+  const view: InboxView = INBOX_VIEWS.includes(params.view as InboxView)
+    ? (params.view as InboxView)
+    : "all";
 
   let realData: RealInboxData | undefined;
   const active = await getActiveWorkspace(user.id);
@@ -49,6 +60,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         realData = {
           workspaceId: active.id,
           currentUserId: user.id,
+          initialView: view,
           aiConfigured: (await getAiStatus(active.id)).configured,
           conversations: orderedItems.map((item) => ({
             id: item.id,
@@ -97,5 +109,5 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
     }
   }
 
-  return <InboxShell currentUserName={user.name} realData={realData} />;
+  return <InboxShell currentUserName={user.name} realData={realData} initialView={view} />;
 }

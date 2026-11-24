@@ -232,3 +232,29 @@ additive when a real custom store needs them.
   permission Settings used). Settings now holds Profile, Workspace,
   Outgoing webhooks, Store connection, Notification preferences and the
   danger zone.
+
+## Automation page redesign — Dograh-inspired (2026-11-24, follow-up)
+
+- Researched from Dograh's open-source product UI (their in-app
+  Automation page is an unbuilt "Coming Soon" stub, so the models were
+  their Voice Agents list and workflow node cards). Applied, scoped to
+  this page only:
+  - One restrained amber CTA (#E39A2E light / #F0B24A dark) reserved
+    for "New rule"; everything else stays monochrome/outline.
+  - Rules are now a single-card row list (was a two-column card grid):
+    status dot (green/grey) + name + a coloured trigger pill in
+    Dograh's node-badge palette (created emerald, message blue,
+    assigned amber, resolved rose, tag purple) + Enabled/Disabled text,
+    conditions as an "Only if:" line, actions as neutral pills,
+    labelled outline Edit / ghost Delete; disabled rows fade like
+    Dograh's archived rows.
+  - Uppercase tracking-wider micro-labels head each section (My
+    availability / Rules / Recent activity / AI configuration);
+    availability became a pill bar with a status dot, echoing their
+    sidebar footer pill.
+  - The builder's three steps are now Dograh node-style cards: neutral
+    surface, coloured type badge overlapping the top edge (When
+    emerald, Only if amber, Then do blue); condition chips switched
+    from indigo to monochrome foreground/background.
+  - Behaviour is unchanged — same handlers, API and permissions; the
+    app's no-shadow rule is respected (borders carry the structure).

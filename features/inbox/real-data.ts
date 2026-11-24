@@ -72,6 +72,8 @@ export interface WhatsAppTemplateView {
 export interface RealInboxData {
   workspaceId: string;
   currentUserId: string;
+  /** Sidebar inbox views (?view=…): which assignee tab opens first. */
+  initialView?: "all" | "mine" | "unassigned" | "mentions";
   /** Phase 13G — whether an AI provider key is configured server-side. */
   aiConfigured: boolean;
   conversations: RealConversationItem[];

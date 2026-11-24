@@ -65,20 +65,30 @@ const TABS: Array<{ id: FilterTab; label: string }> = [
 export function InboxShell({
   currentUserName,
   realData,
+  initialView = "all",
 }: {
   currentUserName: string;
   realData?: RealInboxData;
+  initialView?: string;
 }) {
   if (realData && realData.conversations.length > 0) {
     return <RealInboxShell currentUserName={currentUserName} data={realData} />;
   }
-  return <SampleInboxShell currentUserName={currentUserName} />;
+  return <SampleInboxShell currentUserName={currentUserName} initialView={initialView} />;
 }
 
-function SampleInboxShell({ currentUserName }: { currentUserName: string }) {
+function SampleInboxShell({
+  currentUserName,
+  initialView = "all",
+}: {
+  currentUserName: string;
+  initialView?: string;
+}) {
   const [conversations, setConversations] = useState<SampleConversation[]>(SAMPLE_CONVERSATIONS);
   const [selectedId, setSelectedId] = useState<string>(SAMPLE_CONVERSATIONS[0]?.id ?? "");
-  const [tab, setTab] = useState<FilterTab>("all");
+  // The sample preview's tab set only has a "mine" view; other sidebar
+  // views open on "all" here (the real inbox has all four).
+  const [tab, setTab] = useState<FilterTab>(initialView === "mine" ? "mine" : "all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [query, setQuery] = useState("");
   const [starred, setStarred] = useState<ReadonlySet<string>>(new Set());

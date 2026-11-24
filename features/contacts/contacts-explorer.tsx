@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpDown, Search, UserPlus } from "lucide-react";
+import { ArrowUpDown, ChevronLeft, ChevronRight, Search, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -36,6 +36,7 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
   const [sort, setSort] = useState<SortMode>("recent");
   const [selected, setSelected] = useState<RealContact | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -60,6 +61,13 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
       return b.lastActiveAt.localeCompare(a.lastActiveAt);
     });
   }, [contacts, query, channelFilter, sort]);
+
+  // Pagination: 20 contacts per page (the page clamps when filters
+  // shrink the list).
+  const PER_PAGE = 20;
+  const pageCount = Math.max(1, Math.ceil(visible.length / PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const pageContacts = visible.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
 
   return (
     <div className="flex flex-col gap-6">
@@ -123,7 +131,7 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {visible.map((contact) => (
+                {pageContacts.map((contact) => (
                   <tr
                     key={contact.id}
                     className="hover:bg-accent/50 cursor-pointer"
@@ -185,6 +193,35 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
               </tbody>
             </table>
           </div>
+
+          {visible.length > PER_PAGE ? (
+            <div className="flex flex-wrap items-center gap-3 pt-4">
+              <p className="text-muted-foreground flex-1 text-xs">
+                Showing {(currentPage - 1) * PER_PAGE + 1}–
+                {Math.min(currentPage * PER_PAGE, visible.length)} of {visible.length}{" "}
+                contacts
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(currentPage - 1)}
+              >
+                <ChevronLeft className="size-3.5" /> Previous
+              </Button>
+              <span className="text-xs font-medium">
+                Page {currentPage} of {pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage >= pageCount}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Next <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

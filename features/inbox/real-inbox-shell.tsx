@@ -468,8 +468,16 @@ export function RealInboxShell({
     const firstId = data.conversations[0]?.id;
     return firstId ? (readDrafts()[firstId]?.mode ?? "reply") : "reply";
   });
-  // Chatwoot-style list controls.
-  const [assigneeTab, setAssigneeTab] = useState<AssigneeTab>("all");
+  // Chatwoot-style list controls. The sidebar's inbox views
+  // (?view=…) choose the opening tab; changing the prop (navigating
+  // between sidebar views) re-syncs the tab.
+  const [assigneeTab, setAssigneeTab] = useState<AssigneeTab>(() => data.initialView ?? "all");
+  useEffect(() => {
+    // Syncing the tab to the sidebar view (?view=…) is an external
+    // navigation change, not derived render state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (data.initialView) setAssigneeTab(data.initialView);
+  }, [data.initialView]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [sortMode, setSortMode] = useState<SortMode>("latest");
   const [channelFilter, setChannelFilter] = useState<string>("ALL");
@@ -2598,7 +2606,7 @@ export function RealInboxShell({
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Saved replies</DialogTitle>
             <DialogDescription>

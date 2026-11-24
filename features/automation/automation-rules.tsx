@@ -4,6 +4,8 @@ import {
   ArrowDown,
   ArrowUp,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Filter,
   Pencil,
   Play,
@@ -12,7 +14,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import {
@@ -125,13 +127,12 @@ const PROVIDER_OPTIONS = (Object.keys(PROVIDER_META) as Provider[]).map((provide
 }));
 
 /**
- * Dograh-inspired design tokens for this page: one restrained amber
- * accent reserved for the primary CTA, uppercase micro-labels for
- * sections, and a colour per trigger type (their node-badge palette)
- * while cards themselves stay neutral.
+ * Dograh-inspired design tokens for this page: uppercase micro-labels
+ * for sections and a colour per trigger type (their node-badge
+ * palette) while cards themselves stay neutral. The primary CTA uses
+ * the app's blue (owner's pick over Dograh's amber).
  */
-const CTA_CLASS =
-  "bg-[#E39A2E] text-[#1A1207] hover:bg-[#C9851F] dark:bg-[#F0B24A] dark:hover:bg-[#E39A2E]";
+const CTA_CLASS = "bg-blue-500 text-white hover:bg-blue-600";
 const SECTION_LABEL = "text-xs font-semibold tracking-wider text-muted-foreground uppercase";
 const TRIGGER_BADGE: Record<string, string> = {
   "conversation.created": "bg-emerald-500",
@@ -241,6 +242,9 @@ interface AutomationRulesProps {
   channels: Array<{ id: string; provider: string; displayName: string }>;
   me: { userId: string; role: string; isAvailable: boolean };
   canManage: boolean;
+  /** Page-level sections rendered between the rules and Recent
+   *  activity (the AI configuration cards) so activity stays last. */
+  aiSections?: ReactNode;
 }
 
 export function AutomationRules({
@@ -254,9 +258,11 @@ export function AutomationRules({
   channels,
   me,
   canManage,
+  aiSections,
 }: AutomationRulesProps) {
   const [rules, setRules] = useState(initialRules);
   const [runs, setRuns] = useState(initialRuns);
+  const [runsPage, setRunsPage] = useState(1);
   const [notice, setNotice] = useState<string | null>(null);
   const [myAvailable, setMyAvailable] = useState(me.isAvailable);
   const [builderOpen, setBuilderOpen] = useState(false);
@@ -288,7 +294,7 @@ export function AutomationRules({
       setRules(body.items);
     }
     if (canManage) {
-      const runsRes = await fetch(`${apiBase}/automations/runs?limit=20`).catch(() => null);
+      const runsRes = await fetch(`${apiBase}/automations/runs?limit=100`).catch(() => null);
       if (runsRes?.ok) {
         const body = (await runsRes.json()) as { items: AutomationRunView[] };
         setRuns(body.items);
@@ -486,6 +492,15 @@ export function AutomationRules({
     setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
   }
 
+  // Recent activity pagination: 15 entries per page.
+  const RUNS_PER_PAGE = 15;
+  const runsPageCount = Math.max(1, Math.ceil(runs.length / RUNS_PER_PAGE));
+  const currentRunsPage = Math.min(runsPage, runsPageCount);
+  const pageRuns = runs.slice(
+    (currentRunsPage - 1) * RUNS_PER_PAGE,
+    currentRunsPage * RUNS_PER_PAGE,
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -622,6 +637,8 @@ export function AutomationRules({
         )}
       </div>
 
+      {aiSections}
+
       {canManage ? (
         <div className="flex flex-col gap-2">
           <p className={SECTION_LABEL}>Recent activity</p>
@@ -639,7 +656,7 @@ export function AutomationRules({
               </p>
             ) : (
               <div className="flex flex-col divide-y">
-                {runs.map((run) => (
+                {pageRuns.map((run) => (
                   <div key={run.id} className="flex flex-col gap-1 py-2.5">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <span className="font-medium">{run.ruleName}</span>
@@ -674,6 +691,34 @@ export function AutomationRules({
                 ))}
               </div>
             )}
+            {runs.length > RUNS_PER_PAGE ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3 border-t pt-3">
+                <p className="text-muted-foreground flex-1 text-xs">
+                  Showing {(currentRunsPage - 1) * RUNS_PER_PAGE + 1}–
+                  {Math.min(currentRunsPage * RUNS_PER_PAGE, runs.length)} of {runs.length}{" "}
+                  entries
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentRunsPage <= 1}
+                  onClick={() => setRunsPage(currentRunsPage - 1)}
+                >
+                  <ChevronLeft className="size-3.5" /> Previous
+                </Button>
+                <span className="text-xs font-medium">
+                  Page {currentRunsPage} of {runsPageCount}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentRunsPage >= runsPageCount}
+                  onClick={() => setRunsPage(currentRunsPage + 1)}
+                >
+                  Next <ChevronRight className="size-3.5" />
+                </Button>
+              </div>
+            ) : null}
             </CardContent>
           </Card>
         </div>
@@ -681,7 +726,7 @@ export function AutomationRules({
 
       {/* ─── Builder dialog ─────────────────────────────────────── */}
       <Dialog open={builderOpen} onOpenChange={setBuilderOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit rule" : "New automation rule"}</DialogTitle>
             <DialogDescription>

@@ -37,7 +37,7 @@ export default async function AutomationPage() {
 
   const [rules, runs, teams, tags, canned, channels] = await Promise.all([
     automationService.listRules(user.id, active.id),
-    canManage ? automationService.listRuns(user.id, active.id, 20) : Promise.resolve([]),
+    canManage ? automationService.listRuns(user.id, active.id, 100) : Promise.resolve([]),
     workspaceService.listTeams(user.id, active.id),
     prisma.tag.findMany({
       where: { workspaceId: active.id },
@@ -69,7 +69,6 @@ export default async function AutomationPage() {
     .catch(() => []);
 
   return (
-    <div className="flex flex-col gap-6">
     <AutomationRules
       workspaceId={active.id}
       initialRules={rules}
@@ -96,42 +95,42 @@ export default async function AutomationPage() {
         isAvailable: me?.isAvailable ?? true,
       }}
       canManage={canManage}
+      aiSections={
+        <div className="flex flex-col gap-6">
+          <div>
+            <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              AI configuration
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              The model, knowledge and documents that power AI replies and the composer
+              assistant.
+            </p>
+          </div>
+
+          <AiModelConfig
+            workspaceId={active.id}
+            initialConfig={aiConfig}
+            envConfigured={envAi !== null}
+            envLabel={envAiLabel}
+            canManage={canManage}
+          />
+
+          <AiKnowledge
+            workspaceId={active.id}
+            initialEntries={knowledgeEntries}
+            aiConfigured={aiStatus.configured}
+            aiLabel={aiStatus.label}
+            usageThisMonth={aiUsageThisMonth}
+            canManage={canManage}
+          />
+
+          <KnowledgeDocuments
+            workspaceId={active.id}
+            initialDocuments={knowledgeDocuments}
+            canManage={canManage}
+          />
+        </div>
+      }
     />
-
-    <div className="flex max-w-4xl flex-col gap-6">
-      <div>
-        <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          AI configuration
-        </p>
-        <p className="text-muted-foreground mt-1 text-sm">
-          The model, knowledge and documents that power AI replies and the composer
-          assistant.
-        </p>
-      </div>
-
-      <AiModelConfig
-        workspaceId={active.id}
-        initialConfig={aiConfig}
-        envConfigured={envAi !== null}
-        envLabel={envAiLabel}
-        canManage={canManage}
-      />
-
-      <AiKnowledge
-        workspaceId={active.id}
-        initialEntries={knowledgeEntries}
-        aiConfigured={aiStatus.configured}
-        aiLabel={aiStatus.label}
-        usageThisMonth={aiUsageThisMonth}
-        canManage={canManage}
-      />
-
-      <KnowledgeDocuments
-        workspaceId={active.id}
-        initialDocuments={knowledgeDocuments}
-        canManage={canManage}
-      />
-    </div>
-    </div>
   );
 }

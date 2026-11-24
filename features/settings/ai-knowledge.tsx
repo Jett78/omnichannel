@@ -126,7 +126,7 @@ export function AiKnowledge({
             <div key={entry.id} className="flex items-start gap-2 rounded-lg border px-3 py-2">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{entry.title}</p>
-                <p className="text-muted-foreground line-clamp-2 text-xs">{entry.content}</p>
+                <p className="text-muted-foreground line-clamp-3 text-xs">{entry.content}</p>
               </div>
               {canManage ? (
                 <>
@@ -165,20 +165,41 @@ export function AiKnowledge({
         </div>
 
         {canManage ? (
-          <div className="flex flex-col gap-2 border-t pt-3">
-            <Input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Title, e.g. Delivery policy"
-              aria-label="Knowledge entry title"
-            />
-            <Textarea
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              placeholder="The facts, in plain text…"
-              aria-label="Knowledge entry content"
-              rows={4}
-            />
+          <div className="flex flex-col gap-3 border-t pt-3">
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="knowledge-title"
+                className="text-muted-foreground text-xs font-medium"
+              >
+                Title
+              </label>
+              <Input
+                id="knowledge-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="e.g. Delivery policy"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="knowledge-facts"
+                className="text-muted-foreground text-xs font-medium"
+              >
+                Facts
+              </label>
+              <Textarea
+                id="knowledge-facts"
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                placeholder="The facts, in plain text — delivery times, charges, areas you serve, exceptions…"
+                rows={8}
+                className="text-sm leading-relaxed"
+              />
+              <p className="text-muted-foreground text-[11px]">
+                Written the way you would tell a new teammate. The AI quotes these facts
+                when it drafts or sends replies.
+              </p>
+            </div>
             <div className="flex justify-end gap-2">
               {editingId ? (
                 <Button variant="ghost" onClick={resetForm}>

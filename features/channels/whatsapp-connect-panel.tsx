@@ -471,7 +471,7 @@ export function WhatsAppConnectPanel({
   return (
     <>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
           {dialogMode === "edit" && editChannel ? (
             <>
               <DialogHeader>
