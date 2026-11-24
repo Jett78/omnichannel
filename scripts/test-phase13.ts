@@ -15,6 +15,7 @@ import { messagingService } from "@/services/messaging.service";
 import { storeConnectionService, storeProductService } from "@/services/store.service";
 import { aiConfigService } from "@/services/ai-config.service";
 import { knowledgeDocumentService } from "@/services/knowledge-document.service";
+import { webhookService } from "@/services/webhook.service";
 import { MAX_KNOWLEDGE_FILE_BYTES } from "@/lib/knowledge-extract";
 import { notificationService } from "@/services/notification.service";
 import { workspaceService } from "@/services/workspace.service";
@@ -1166,6 +1167,44 @@ async function main(): Promise<void> {
       !JSON.stringify(docsAfterDelete).includes("Zorawar") &&
       !JSON.stringify(docsAfterDelete).includes("extractedText"),
   );
+
+  // ── 19. Stuck webhook recovery sweep ─────────────────────────────
+  // Simulates the 2026-11-24 Upstash outage: the event row persisted
+  // but its queue job was never added (the enqueue threw).
+  const stuckEventId = `test13-${runId}-stuck-1`;
+  const stuckEvent = await prisma.webhookEvent.create({
+    data: {
+      provider: "MOCK",
+      channelId: channel.id,
+      externalEventId: stuckEventId,
+      receivedAt: new Date(Date.now() - 15 * 60_000),
+      payload: {
+        eventId: stuckEventId,
+        channelId: channel.id,
+        events: [
+          {
+            externalMessageId: `ext13-${runId}-stuck-1`,
+            senderExternalId: "cust-stuck",
+            senderName: "Customer cust-stuck",
+            text: "Did my message survive the outage?",
+            type: "TEXT",
+            sentAt: new Date().toISOString(),
+          },
+        ],
+      },
+    },
+  });
+  const beforeSweep = await prisma.message.findFirst({
+    where: { externalMessageId: `ext13-${runId}-stuck-1` },
+  });
+  assert("recovery: a stuck event sits unprocessed", beforeSweep === null);
+  const requeued = await webhookService.requeueStuckEvents();
+  assert("recovery: the sweep requeues stuck events", requeued >= 1, `requeued=${requeued}`);
+  await waitEventProcessed(stuckEvent.id);
+  const stuckMessage = await prisma.message.findFirst({
+    where: { externalMessageId: `ext13-${runId}-stuck-1` },
+  });
+  assert("recovery: the stuck message is ingested after the sweep", stuckMessage !== null);
 
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);

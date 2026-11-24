@@ -12,6 +12,8 @@ import type {
   WebhookJobData,
 } from "@/types/queue";
 
+import { webhookService } from "@/services/webhook.service";
+
 import { processGmailPollJob } from "@/workers/processors/gmail-poll.processor";
 import { processKnowledgeJob } from "@/workers/processors/knowledge.processor";
 import { processMediaJob } from "@/workers/processors/media.processor";
@@ -50,6 +52,22 @@ const workers = [
   registerWorker<OutgoingWebhookJobData>(QUEUE_NAMES.outgoingWebhook, processOutgoingWebhookJob),
   registerWorker<KnowledgeJobData>(QUEUE_NAMES.knowledge, processKnowledgeJob),
 ];
+
+// Recovery sweep: webhook events persisted while Redis was
+// unavailable sit in RECEIVED with no job (see webhook.service).
+// Re-enqueue them on every boot — processing is idempotent.
+void (async () => {
+  try {
+    const requeued = await webhookService.requeueStuckEvents();
+    if (requeued > 0) {
+      console.log(`[worker] recovery sweep requeued ${requeued} stuck webhook event(s)`);
+    }
+  } catch (error) {
+    console.error(
+      `[worker] recovery sweep failed: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+  }
+})();
 
 // Gmail inbound is polling-based (Phase 9): arm the recurring sweep
 // (every 60s) that polls every CONNECTED Gmail channel's history

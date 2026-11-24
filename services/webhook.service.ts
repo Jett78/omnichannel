@@ -37,4 +37,34 @@ export const webhookService = {
     });
     return { event, duplicate: false };
   },
+
+  /**
+   * Recovery sweep: events whose row persisted but whose queue job
+   * was never added — e.g. when Redis is unavailable at ingress time
+   * (the 2026-11-24 Upstash cap: record succeeded, enqueue threw, the
+   * route 500s and platforms retry for a while, but rows that landed
+   * sit in RECEIVED forever without this). Re-enqueues RECEIVED
+   * events older than `olderThanMinutes`; processing is idempotent,
+   * and a deterministic job id keeps a second sweep from piling up
+   * duplicates while a recovery job is still queued.
+   */
+  async requeueStuckEvents(olderThanMinutes = 10): Promise<number> {
+    const cutoff = new Date(Date.now() - olderThanMinutes * 60_000);
+    const stuck = await prisma.webhookEvent.findMany({
+      where: { status: "RECEIVED", receivedAt: { lt: cutoff } },
+      select: { id: true, provider: true },
+      orderBy: { receivedAt: "asc" },
+      take: 500,
+    });
+    let requeued = 0;
+    for (const event of stuck) {
+      await getQueues().webhook.add(
+        "webhook",
+        { webhookEventId: event.id, provider: providerEnumToId(event.provider) },
+        { jobId: `recovery-${event.id}` },
+      );
+      requeued += 1;
+    }
+    return requeued;
+  },
 };
