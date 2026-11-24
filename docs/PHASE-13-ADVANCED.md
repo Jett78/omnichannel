@@ -156,3 +156,44 @@ documents" prompt block, and the audit line (`knowledgeUsed`) names
 the files used. Suite: test:phase13 = 76 (section 18: 9 asserts,
 including a byte-built minimal PDF and a corrupt-PDF FAILED case);
 phase-4 regression 62/62.
+
+## Follow-up: configurable store API shape — any custom store API (2026-11-24)
+
+At Jeet's request ("the params might be diff… make it flexible so in
+future we can connect with any custom api url"), the store
+connection's API contract is now per-workspace configuration instead
+of code. `StoreConnection` gained eight shape columns (migration
+`20261124083419_add_store_api_shape`, applied to Neon): productsPath
+(default `/products`), searchParam (`search`), limitParam (`take`),
+responsePath (`data`; null = the response IS the array), nameField
+(`name`), priceField (`price`), stockField (`stock`), imageField
+(`images`). The defaults ARE Jeet's Multi-Ecommerce shape, so his
+live connection behaves exactly as before (verified in production
+after deploy).
+
+`resolveStoreApiShape` (services/store.service.ts) resolves partial
+input over the saved shape or the defaults; empty strings clear the
+nullable knobs; invalid values (endpoint without a leading `/`,
+illegal parameter/field names) are a clear 400. Normalization also
+grew: prices accept numeric strings ("4999"), the image field accepts
+a URL string, an array (of URLs or `{url, isPrimary, sortOrder}`
+objects), or a single `{url}` object, and stock accepts a flat count
+or an in-stock boolean. Products whose API reports no stock get
+`stockKnown: false`, and the AI prompt then says the store does not
+report stock instead of claiming in/out of stock. The `variants`
+layer (price/stock/option labels from an active-variants array)
+still applies opportunistically when a product carries one.
+
+Settings → Store connection gained a collapsed "Advanced — custom
+API shape" section with the eight fields; Save and Test both send
+the full form. Test now runs against the form's unsaved shape and
+names a sample product AS PARSED ("Store reached — read 3
+product(s). First: … — price … — in stock."), so a wrong mapping is
+visible before saving. Suite: test:phase13 = 85 (section 20: 6
+asserts against a differently-shaped fake API — `/items?q=&limit=`,
+`catalog.items` envelope, title/cost/qty/pic fields); phase-4
+regression 62/62.
+
+Not yet supported (deliberate): APIs that need an auth header/API
+key, and nested field paths (field names are single keys). Both are
+additive when a real custom store needs them.
