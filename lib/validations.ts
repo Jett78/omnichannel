@@ -305,13 +305,28 @@ export const aiConfigUpsertSchema = z.object({
   apiKey: z.string().trim().max(500).optional(),
 });
 
+// Store API-shape knobs: length caps here; the semantics (patterns,
+// defaults, "" clears a nullable knob) live in resolveStoreApiShape.
+const storeApiShapeFields = {
+  productsPath: z.string().trim().max(200).optional(),
+  searchParam: z.string().trim().max(60).nullable().optional(),
+  limitParam: z.string().trim().max(60).nullable().optional(),
+  responsePath: z.string().trim().max(120).nullable().optional(),
+  nameField: z.string().trim().max(60).optional(),
+  priceField: z.string().trim().max(60).optional(),
+  stockField: z.string().trim().max(60).optional(),
+  imageField: z.string().trim().max(60).optional(),
+};
+
 export const storeConnectionUpsertSchema = z.object({
   baseUrl: z.string().trim().min(1).max(500),
   name: z.string().trim().max(120).optional(),
+  ...storeApiShapeFields,
 });
 
 export const storeConnectionTestSchema = z.object({
   baseUrl: z.string().trim().min(1).max(500),
+  ...storeApiShapeFields,
 });
 
 export const knowledgeEntryCreateSchema = z.object({

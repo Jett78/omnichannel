@@ -14,7 +14,7 @@ export async function POST(request: Request, context: RouteContext) {
     const user = await requireApiUser(request);
     const { workspaceId } = await context.params;
     const input = storeConnectionTestSchema.parse(await parseJsonBody(request));
-    const result = await storeConnectionService.test(user.id, workspaceId, input.baseUrl);
+    const result = await storeConnectionService.test(user.id, workspaceId, input);
     return NextResponse.json(result);
   } catch (error) {
     return apiError(error);

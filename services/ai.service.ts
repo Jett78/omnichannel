@@ -291,11 +291,13 @@ export const aiAssistantService = {
           .map(
             (product) =>
               `- ${product.name} — ${formatPrice(product)} — ${
-                product.inStock
-                  ? product.totalStock > 0
-                    ? `In stock (${product.totalStock} available)`
-                    : "In stock"
-                  : "Out of stock"
+                !product.stockKnown
+                  ? "Stock level not reported by the store (do not claim it is in or out of stock)"
+                  : product.inStock
+                    ? product.totalStock > 0
+                      ? `In stock (${product.totalStock} available)`
+                      : "In stock"
+                    : "Out of stock"
               }${product.variantLabels.length ? ` — options: ${product.variantLabels.join(", ")}` : ""}`,
           )
           .join("\n")}`

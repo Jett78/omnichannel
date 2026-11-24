@@ -1206,6 +1206,112 @@ async function main(): Promise<void> {
   });
   assert("recovery: the stuck message is ingested after the sweep", stuckMessage !== null);
 
+  // ── 20. Store API shape — custom store APIs ──────────────────────
+  const customShape = {
+    productsPath: "/items",
+    searchParam: "q",
+    limitParam: "limit",
+    responsePath: "catalog.items",
+    nameField: "title",
+    priceField: "cost",
+    stockField: "qty",
+    imageField: "pic",
+  };
+  const customConnection = await storeConnectionService.upsert(userA.id, wa.id, {
+    baseUrl: "https://custom-shop.example.test",
+    ...customShape,
+  });
+  assert(
+    "shape: custom API shape saved on the connection",
+    customConnection.shape.productsPath === "/items" &&
+      customConnection.shape.responsePath === "catalog.items" &&
+      customConnection.shape.nameField === "title",
+    JSON.stringify(customConnection.shape),
+  );
+
+  const originalFetchShape = globalThis.fetch;
+  let lastStoreUrl = "";
+  globalThis.fetch = (async (input: unknown) => {
+    const url = String(input);
+    lastStoreUrl = url;
+    if (url.includes("custom-shop.example.test")) {
+      return new Response(
+        JSON.stringify({
+          catalog: {
+            items: [
+              {
+                id: "b1",
+                title: "Trail Boot X",
+                cost: "4999",
+                qty: 3,
+                pic: "https://img.example.test/boot.jpg",
+              },
+              {
+                id: "b2",
+                title: "Trail Sock",
+                cost: 499,
+                pic: "https://img.example.test/sock.jpg",
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    throw new Error(`unexpected fetch in shape test: ${url}`);
+  }) as typeof fetch;
+  try {
+    const foundCustom = await storeProductService.searchProducts(wa.id, "boot");
+    assert(
+      "shape: request uses the custom endpoint + params",
+      lastStoreUrl.includes("/items?") &&
+        lastStoreUrl.includes("limit=5") &&
+        lastStoreUrl.includes("q=boot"),
+      lastStoreUrl,
+    );
+    assert(
+      "shape: custom fields normalized (string price, flat stock, string image)",
+      foundCustom.length === 2 &&
+        foundCustom[0]?.name === "Trail Boot X" &&
+        foundCustom[0]?.priceMin === 4999 &&
+        foundCustom[0]?.totalStock === 3 &&
+        foundCustom[0]?.inStock === true &&
+        foundCustom[0]?.stockKnown === true &&
+        foundCustom[0]?.imageUrl === "https://img.example.test/boot.jpg",
+      JSON.stringify(foundCustom),
+    );
+    assert(
+      "shape: a missing stock field reads as unknown, not out-of-stock",
+      foundCustom[1]?.stockKnown === false && foundCustom[1]?.inStock === false,
+      JSON.stringify(foundCustom[1]),
+    );
+
+    const shapeTest = await storeConnectionService.test(userA.id, wa.id, {
+      baseUrl: "https://custom-shop.example.test",
+      ...customShape,
+    });
+    assert(
+      "shape: test names the first product as parsed",
+      shapeTest.ok && shapeTest.message.includes("Trail Boot X"),
+      shapeTest.message,
+    );
+  } finally {
+    globalThis.fetch = originalFetchShape;
+  }
+
+  let badShapeBlocked = false;
+  try {
+    await storeConnectionService.upsert(userA.id, wa.id, {
+      baseUrl: "https://custom-shop.example.test",
+      productsPath: "products",
+    });
+  } catch {
+    badShapeBlocked = true;
+  }
+  assert("shape: an endpoint without a leading / is rejected", badShapeBlocked);
+
+  await storeConnectionService.remove(userA.id, wa.id);
+
   // Cleanup so back-to-back suite runs don't hit residue collisions.
   await prisma.workspace.delete({ where: { id: wa.id } }).catch(() => null);
   for (const user of [userA, userC, userD, userE]) {

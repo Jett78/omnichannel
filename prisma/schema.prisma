@@ -693,9 +693,22 @@ model StoreConnection {
   baseUrl     String
   name        String?
   enabled     Boolean   @default(true)
-  createdById String
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  // API-shape mapping (defaults = Jeet's Multi-Ecommerce shape) so a
+  // custom store API with different paths/params/fields can connect:
+  // endpoint path, query parameter names, where the product list sits
+  // in the JSON (null = the response IS the array), and the product
+  // field names for name/price/stock/image.
+  productsPath String  @default("/products")
+  searchParam  String? @default("search")
+  limitParam   String? @default("take")
+  responsePath String? @default("data")
+  nameField    String  @default("name")
+  priceField   String  @default("price")
+  stockField   String  @default("stock")
+  imageField   String  @default("images")
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model KnowledgeEntry {

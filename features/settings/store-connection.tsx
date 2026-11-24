@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Store, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Store, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,35 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+export interface StoreApiShape {
+  productsPath: string;
+  searchParam: string | null;
+  limitParam: string | null;
+  responsePath: string | null;
+  nameField: string;
+  priceField: string;
+  stockField: string;
+  imageField: string;
+}
+
 export interface StoreConnectionView {
   baseUrl: string;
   name: string | null;
   enabled: boolean;
   updatedAt: string;
+  shape: StoreApiShape;
 }
+
+const DEFAULT_SHAPE: StoreApiShape = {
+  productsPath: "/products",
+  searchParam: "search",
+  limitParam: "take",
+  responsePath: "data",
+  nameField: "name",
+  priceField: "price",
+  stockField: "stock",
+  imageField: "images",
+};
 
 interface StoreConnectionCardProps {
   workspaceId: string;
@@ -24,6 +47,62 @@ interface StoreConnectionCardProps {
 
 type Notice = { kind: "ok" | "error"; text: string } | null;
 
+const SHAPE_FIELDS: {
+  key: keyof StoreApiShape;
+  label: string;
+  help: string;
+  placeholder: string;
+}[] = [
+  {
+    key: "productsPath",
+    label: "Products endpoint",
+    help: "Path added to the address above.",
+    placeholder: "/products",
+  },
+  {
+    key: "searchParam",
+    label: "Search parameter",
+    help: "Query parameter for the search text. Empty = the API has none.",
+    placeholder: "search",
+  },
+  {
+    key: "limitParam",
+    label: "Page-size parameter",
+    help: "Query parameter for how many products to fetch. Empty = don't send.",
+    placeholder: "take",
+  },
+  {
+    key: "responsePath",
+    label: "Product list location",
+    help: "Where the product array sits in the JSON reply. Empty = the reply IS the array.",
+    placeholder: "data",
+  },
+  {
+    key: "nameField",
+    label: "Name field",
+    help: "Product field holding the display name.",
+    placeholder: "name",
+  },
+  {
+    key: "priceField",
+    label: "Price field",
+    help: "Product field holding the price (when there are no variants).",
+    placeholder: "price",
+  },
+  {
+    key: "stockField",
+    label: "Stock field",
+    help: "Product field holding the stock count, or an in-stock true/false.",
+    placeholder: "stock",
+  },
+  {
+    key: "imageField",
+    label: "Image field",
+    help: "Product field holding the photo: a URL, a list, or an object with a url.",
+    placeholder: "images",
+  },
+];
+
 export function StoreConnectionCard({
   workspaceId,
   initialConnection,
@@ -32,6 +111,8 @@ export function StoreConnectionCard({
   const [connection, setConnection] = useState<StoreConnectionView | null>(initialConnection);
   const [baseUrl, setBaseUrl] = useState(initialConnection?.baseUrl ?? "");
   const [name, setName] = useState(initialConnection?.name ?? "");
+  const [shape, setShape] = useState<StoreApiShape>(initialConnection?.shape ?? DEFAULT_SHAPE);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -57,18 +138,36 @@ export function StoreConnectionCard({
     }
   }
 
+  function shapePayload(): Record<string, string> {
+    return {
+      productsPath: shape.productsPath,
+      searchParam: shape.searchParam ?? "",
+      limitParam: shape.limitParam ?? "",
+      responsePath: shape.responsePath ?? "",
+      nameField: shape.nameField,
+      priceField: shape.priceField,
+      stockField: shape.stockField,
+      imageField: shape.imageField,
+    };
+  }
+
   async function save() {
     const data = (await call("save", () =>
       fetch(`/api/workspaces/${workspaceId}/store-connection`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseUrl: baseUrl.trim(), name: name.trim() || undefined }),
+        body: JSON.stringify({
+          baseUrl: baseUrl.trim(),
+          name: name.trim() || undefined,
+          ...shapePayload(),
+        }),
       }),
     )) as { connection?: StoreConnectionView } | null;
     if (data?.connection) {
       setConnection(data.connection);
       setBaseUrl(data.connection.baseUrl);
       setName(data.connection.name ?? "");
+      setShape(data.connection.shape);
       setNotice({ kind: "ok", text: "Store connected. The AI now answers product questions from your live store." });
     }
   }
@@ -78,7 +177,7 @@ export function StoreConnectionCard({
       fetch(`/api/workspaces/${workspaceId}/store-connection/test`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseUrl: baseUrl.trim() }),
+        body: JSON.stringify({ baseUrl: baseUrl.trim(), ...shapePayload() }),
       }),
     )) as { ok?: boolean; message?: string } | null;
     if (data) {
@@ -94,6 +193,7 @@ export function StoreConnectionCard({
       setConnection(null);
       setBaseUrl("");
       setName("");
+      setShape(DEFAULT_SHAPE);
       setConfirmRemove(false);
       setNotice({ kind: "ok", text: "Store disconnected." });
     }
@@ -143,11 +243,58 @@ export function StoreConnectionCard({
                 inputMode="url"
               />
               <p className="text-muted-foreground text-xs">
-                The address of your store&apos;s API — the AI reads{" "}
-                <code className="text-[11px]">/products</code> from it. Nothing is ever
-                written to your store.
+                The address of your store&apos;s API — the AI reads products from it
+                (endpoint and fields under Advanced). Nothing is ever written to your
+                store.
               </p>
             </div>
+
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-auto justify-start gap-1 px-0 py-1 text-sm font-medium"
+                onClick={() => setShowAdvanced((open) => !open)}
+              >
+                {showAdvanced ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+                Advanced — custom API shape
+              </Button>
+              {showAdvanced ? (
+                <div className="flex flex-col gap-3 rounded-lg border p-3">
+                  <p className="text-muted-foreground text-xs">
+                    The defaults match common storefront APIs (including yours). Only
+                    change these when connecting a <strong>different</strong> API whose
+                    endpoint, parameters or field names differ — then use Test
+                    connection: it shows the first product exactly as the AI will read
+                    it.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {SHAPE_FIELDS.map((field) => (
+                      <div key={field.key} className="flex flex-col gap-1">
+                        <Label htmlFor={`shape-${field.key}`}>{field.label}</Label>
+                        <Input
+                          id={`shape-${field.key}`}
+                          value={shape[field.key] ?? ""}
+                          onChange={(event) =>
+                            setShape((current) => ({
+                              ...current,
+                              [field.key]: event.target.value,
+                            }))
+                          }
+                          placeholder={field.placeholder}
+                        />
+                        <p className="text-muted-foreground text-[11px]">{field.help}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={save} disabled={busy !== null || baseUrl.trim() === ""}>
                 {busy === "save" ? "Saving…" : connection ? "Save changes" : "Connect store"}
