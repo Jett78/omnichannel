@@ -1389,7 +1389,7 @@ export function RealInboxShell({
       {/* ─── LEFT: conversation list ─────────────────────────────────── */}
       <section
         className={cn(
-          "w-full shrink-0 flex-col border-r md:flex md:w-80",
+          "bg-card w-full shrink-0 flex-col border-r md:flex md:w-[22.5rem]",
           mobileThread ? "hidden" : "flex",
         )}
         aria-label="Conversations"
