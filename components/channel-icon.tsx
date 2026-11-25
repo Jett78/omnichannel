@@ -1,5 +1,4 @@
 import {
-  AtSign,
   Camera,
   FlaskConical,
   Globe,
@@ -63,16 +62,6 @@ export const PROVIDER_META: Record<Provider, ProviderMeta> = {
     color: "#e1306c",
     icon: Camera,
   },
-  X: {
-    provider: "X",
-    label: "X (Twitter)",
-    shortLabel: "X",
-    description:
-      "Direct messages on X — official API v2, self-serve on X's pay-per-use pricing (you pay X per DM read/sent).",
-    phase: "Phase 8 — live",
-    color: "#0f1419",
-    icon: AtSign,
-  },
   TIKTOK: {
     provider: "TIKTOK",
     label: "TikTok",
@@ -119,7 +108,6 @@ export const PROVIDER_ORDER: Provider[] = [
   "FACEBOOK",
   "INSTAGRAM",
   "WHATSAPP",
-  "X",
   "GMAIL",
   "WEBSITE",
   "TIKTOK",

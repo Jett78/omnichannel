@@ -29,7 +29,6 @@ import {
 } from "@/integrations/whatsapp/whatsapp-provider";
 import { GmailProvider, gmailProvider } from "@/integrations/gmail/gmail-provider";
 import { TelegramProvider, telegramProvider } from "@/integrations/telegram/telegram-provider";
-import { XProvider, xProvider } from "@/integrations/x/x-provider";
 import type { ChannelContext } from "@/integrations/types";
 import { channelCredentialService } from "@/services/channel-credential.service";
 import type { Channel, OAuthConnectionSession, Prisma } from "@/generated/prisma/client";
@@ -62,7 +61,6 @@ export interface MetaConnectionDeps {
   facebook?: FacebookProvider;
   instagram?: InstagramProvider;
   whatsapp?: WhatsAppProvider;
-  x?: XProvider;
   gmail?: GmailProvider;
   telegram?: TelegramProvider;
 }
@@ -757,7 +755,6 @@ export const metaConnectionService = {
       channel.provider === "FACEBOOK" ||
       channel.provider === "INSTAGRAM" ||
       channel.provider === "WHATSAPP" ||
-      channel.provider === "X" ||
       channel.provider === "GMAIL" ||
       channel.provider === "TELEGRAM"
     ) {
@@ -776,9 +773,7 @@ export const metaConnectionService = {
                 ? "whatsapp"
                 : channel.provider === "GMAIL"
                   ? "gmail"
-                  : channel.provider === "TELEGRAM"
-                    ? "telegram"
-                    : "x",
+                  : "telegram",
         externalAccountId: channel.externalAccountId,
         credentials: {
           accessToken: credential?.accessToken ?? "",
@@ -800,9 +795,7 @@ export const metaConnectionService = {
               ? (deps.whatsapp ?? whatsappProvider)
               : channel.provider === "GMAIL"
                 ? (deps.gmail ?? gmailProvider)
-                : channel.provider === "TELEGRAM"
-                  ? (deps.telegram ?? telegramProvider)
-                  : (deps.x ?? xProvider);
+                : (deps.telegram ?? telegramProvider);
       // disconnectAccount is best-effort internally (logs, never throws).
       await provider.disconnectAccount(context);
     }

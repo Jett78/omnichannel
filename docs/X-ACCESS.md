@@ -1,3 +1,20 @@
+> **REMOVED — 2026-11-25, at Jeet's request.** The X (Twitter)
+> channel was removed completely: the provider adapter, connection
+> service, connect + OAuth callback routes, webhook CRC handling,
+> Channels-page card/dialog/banners, onboarding pick, channel icon
+> metadata, env block and the Phase 8 test suite are all deleted,
+> and the `Provider` enum no longer has an `X` value (migration
+> `20261125043752_remove_x_provider`). The integration was never
+> activated on this deployment (it needed the operator's own
+> console.x.com app + prepaid credits), so no channels, sessions or
+> webhook events ever used the value. This file and X-RESEARCH.md
+> remain as historical research only.
+>
+> **Pending:** that migration is committed and verified on a local
+> database; it still needs applying to the production Neon database
+> (the deployed app is unaffected meanwhile — the database enum
+> simply keeps an extra unused value until then).
+
 # X Direct Messages — activation playbook
 
 > Research: [`X-RESEARCH.md`](./X-RESEARCH.md) (verdict: **(A) SELF-SERVE**,

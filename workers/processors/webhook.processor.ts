@@ -78,18 +78,6 @@ export async function processWebhookJob(job: Job<WebhookJobData>): Promise<void>
           }
         }
       }
-      // X payloads address the receiving account directly: the
-      // Account Activity family carries `for_user_id`, and the
-      // X Activity envelope carries it as data.filter.user_id
-      // (Phase 8).
-      if (event.provider === "X") {
-        if (typeof payload.for_user_id === "string") entryIds.add(payload.for_user_id);
-        const data = payload.data;
-        if (data && typeof data === "object") {
-          const filter = (data as { filter?: { user_id?: unknown } }).filter;
-          if (typeof filter?.user_id === "string") entryIds.add(filter.user_id);
-        }
-      }
       for (const update of statusUpdates) {
         if (update.channelExternalAccountId) entryIds.add(update.channelExternalAccountId);
       }

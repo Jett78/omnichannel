@@ -11,7 +11,6 @@ import { MetaGraphError } from "@/integrations/meta/meta-graph-client";
 import { getProvider } from "@/integrations/registry";
 import type { ChannelContext } from "@/integrations/types";
 import { TelegramApiError } from "@/integrations/telegram/telegram-client";
-import { XApiError } from "@/integrations/x/x-api-client";
 import { channelCredentialService } from "@/services/channel-credential.service";
 import { outgoingWebhookDispatch } from "@/services/outgoing-webhook.service";
 import type { Message, MessageAttachment, Prisma } from "@/generated/prisma/client";
@@ -40,12 +39,12 @@ import {
  * dead (revoked/expired token), as opposed to a transient or
  * content error: Meta Graph error 190 (invalid/expired access
  * token — WhatsApp Cloud API surfaces through the same client) or
- * an X API 401. Such failures put the channel into ERROR status so
- * the dashboard can prompt a reconnect; retrying cannot fix them.
+ * a Telegram API 401. Such failures put the channel into ERROR
+ * status so the dashboard can prompt a reconnect; retrying cannot
+ * fix them.
  */
 function isProviderAuthError(error: unknown): boolean {
   if (error instanceof MetaGraphError) return error.code === 190;
-  if (error instanceof XApiError) return error.status === 401;
   if (error instanceof TelegramApiError) return error.status === 401;
   return false;
 }

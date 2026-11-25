@@ -64,14 +64,6 @@ const envSchema = z.object({
   WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   WHATSAPP_EMBEDDED_SIGNUP_CONFIG_ID: z.string().optional(),
   WHATSAPP_GRAPH_API_VERSION: z.string().optional(),
-  // X (Twitter) Direct Messages (Phase 8). Self-serve on X's
-  // pay-per-use pricing (docs/X-RESEARCH.md). X_CLIENT_ID /
-  // X_CLIENT_SECRET are the app's OAuth 2.0 confidential-client
-  // credentials; the consumer key/secret are the OAuth 1.0a fallback
-  // webhook-signing keys; X_BEARER_TOKEN is only for the operator's
-  // one-time webhook registration; X_WEBHOOK_ID enables X Activity
-  // subscriptions at connect time. Read lazily by
-  // integrations/x/x-config.ts.
   // Gmail channel (Phase 9). GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
   // are the Google Cloud OAuth 2.0 web client used by the Gmail
   // connect flow and token refresh; read lazily by

@@ -4,8 +4,7 @@ import { AppError } from "@/lib/errors";
  * Gmail configuration (Phase 9) — SERVER ONLY.
  *
  * Values come exclusively from environment variables, read lazily on
- * every call, mirroring integrations/x/x-config.ts. Nothing here ever
- * returns a secret to the browser.
+ * every call. Nothing here ever returns a secret to the browser.
  *
  * ACCESS MODEL: Gmail API access is self-serve — the operator creates
  * a Google Cloud project, enables the Gmail API, configures an OAuth

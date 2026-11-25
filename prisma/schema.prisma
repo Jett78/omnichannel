@@ -25,7 +25,6 @@ enum Provider {
   INSTAGRAM
   WHATSAPP
   TELEGRAM
-  X
   TIKTOK
   GMAIL
   /** Website live-chat widget (Phase 11) — our own channel, no external platform. */

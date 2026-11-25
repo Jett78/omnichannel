@@ -11,7 +11,6 @@ import {
 } from "@/integrations/meta/meta-config";
 import { isTikTokConfigured, tiktokRedirectUri } from "@/integrations/tiktok/tiktok-config";
 import { getGmailAccessState } from "@/integrations/gmail/gmail-config";
-import { getXAccessState } from "@/integrations/x/x-config";
 import type { RealChannelConfig } from "@/features/channels/channels-catalog";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
@@ -62,7 +61,6 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
 
   const params = await searchParams;
   const appUrl = getEnv().APP_URL.replace(/\/+$/, "");
-  const xState = getXAccessState();
   const gmailState = getGmailAccessState();
   const metaSession: { id: string; provider: "facebook" | "instagram" } | null =
     params.meta_session &&
@@ -94,15 +92,6 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
         redirectUri: tiktokRedirectUri(),
         webhookUrl: `${appUrl}/api/webhooks/tiktok`,
       }}
-      xConfig={{
-        configured: xState.configured,
-        redirectUri: xState.redirectUri,
-        webhookUrl: xState.webhookUrl,
-        webhookIdSet: xState.webhookIdSet,
-      }}
-      xConnected={params.x_connected ?? null}
-      xWarning={params.x_warning ?? null}
-      xError={params.x_error ?? null}
       gmailConfig={{
         configured: gmailState.configured,
         redirectUri: gmailState.redirectUri,

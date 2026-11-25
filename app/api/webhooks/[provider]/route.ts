@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { AppError } from "@/lib/errors";
 import { getProvider } from "@/integrations/registry";
 import { webhookVerifyToken } from "@/integrations/meta/meta-config";
-import { xCrcSecret } from "@/integrations/x/x-config";
-import { computeCrcResponseToken } from "@/integrations/x/x-webhook";
 import { webhookService } from "@/services/webhook.service";
 import { isProviderId, providerIdToEnum, type ProviderId } from "@/types/messaging";
 
@@ -96,12 +94,6 @@ export async function POST(request: Request, context: RouteContext) {
 /**
  * GET /api/webhooks/[provider] — provider verification handshakes.
  *
- * X (Phase 8): the Challenge-Response Check. When X registers or
- * re-validates the webhook it sends ?crc_token=… and expects
- * {"response_token": "sha256=" + base64(HMAC-SHA256(crc_token, app
- * secret))} — see integrations/x/x-webhook.ts. Without a configured
- * app secret we cannot answer honestly, so the route returns 503.
- *
  * Meta: echoes hub.challenge when hub.mode=subscribe and the verify
  * token matches the provider's configured token (Instagram:
  * INSTAGRAM_WEBHOOK_VERIFY_TOKEN, falling back to
@@ -111,24 +103,6 @@ export async function POST(request: Request, context: RouteContext) {
 export async function GET(request: Request, context: RouteContext) {
   const { provider: providerParam } = await context.params;
   const url = new URL(request.url);
-
-  const crcToken = url.searchParams.get("crc_token");
-  if (providerParam.toLowerCase() === "x" && crcToken) {
-    const secret = xCrcSecret();
-    if (!secret) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "X_NOT_CONFIGURED",
-            message:
-              "Cannot answer the X CRC challenge: neither X_CLIENT_SECRET nor X_CONSUMER_SECRET is configured on this deployment.",
-          },
-        },
-        { status: 503 },
-      );
-    }
-    return NextResponse.json({ response_token: computeCrcResponseToken(crcToken, secret) });
-  }
 
   if (url.searchParams.get("hub.mode") === "subscribe" && url.searchParams.get("hub.challenge")) {
     const providerKey = providerParam.toLowerCase();

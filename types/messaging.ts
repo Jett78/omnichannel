@@ -11,7 +11,6 @@ export type ProviderId =
   | "instagram"
   | "whatsapp"
   | "telegram"
-  | "x"
   | "tiktok"
   | "gmail"
   /** Website live-chat widget (Phase 11) — our own channel, no external platform. */
@@ -24,7 +23,6 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
   "instagram",
   "whatsapp",
   "telegram",
-  "x",
   "tiktok",
   "gmail",
   "website",

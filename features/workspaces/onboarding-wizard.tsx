@@ -38,7 +38,6 @@ const CHANNEL_PICKS: Array<{ provider: Provider; blurb: string }> = [
   { provider: "FACEBOOK", blurb: "Reply to your Page's Messenger chats." },
   { provider: "INSTAGRAM", blurb: "Answer Instagram DMs from the same inbox." },
   { provider: "WHATSAPP", blurb: "Chat with customers on WhatsApp Business." },
-  { provider: "X", blurb: "Handle X direct messages." },
 ];
 
 type InviteRole = "AGENT" | "ADMIN" | "VIEWER";

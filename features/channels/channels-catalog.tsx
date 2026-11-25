@@ -85,18 +85,6 @@ export interface TikTokConfigView {
   webhookUrl: string;
 }
 
-/**
- * Public X setup facts (no secrets). X DMs are self-serve on X's
- * pay-per-use pricing (Phase 8): `configured` says whether the OAuth
- * 2.0 app credentials exist in env; `webhookIdSet` says whether
- * real-time subscriptions can be created when an account connects.
- */
-export interface XConfigView {
-  configured: boolean;
-  redirectUri: string;
-  webhookUrl: string;
-  webhookIdSet: boolean;
-}
 
 /**
  * Public Gmail setup facts (no secrets). Gmail is self-serve via a
@@ -117,10 +105,6 @@ export function ChannelsCatalog({
   metaError,
   whatsappConfig,
   tiktokConfig,
-  xConfig,
-  xConnected,
-  xWarning,
-  xError,
   gmailConfig,
   gmailConnected,
   gmailError,
@@ -133,10 +117,6 @@ export function ChannelsCatalog({
   metaError?: string | null;
   whatsappConfig?: WhatsAppConfigView;
   tiktokConfig?: TikTokConfigView;
-  xConfig?: XConfigView;
-  xConnected?: string | null;
-  xWarning?: string | null;
-  xError?: string | null;
   gmailConfig?: GmailConfigView;
   gmailConnected?: string | null;
   gmailError?: string | null;
@@ -322,27 +302,6 @@ export function ChannelsCatalog({
         </p>
       ) : null}
 
-      {xError ? (
-        <p className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-          X connection failed: {xError}
-        </p>
-      ) : null}
-
-      {xConnected ? (
-        <p className="rounded-md bg-green-50 p-3 text-sm text-green-700">
-          X account connected: <strong>{xConnected}</strong>. Its direct messages will appear in
-          the unified inbox.
-        </p>
-      ) : null}
-
-      {xWarning ? (
-        <p className="flex items-start gap-2 rounded-md bg-amber-50 p-3 text-sm text-amber-700">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-          X connected, but the real-time webhook subscription reported a problem: {xWarning}
-        </p>
-      ) : null}
-
       {gmailError ? (
         <p className="flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" />
@@ -518,12 +477,6 @@ export function ChannelsCatalog({
                   <span className="min-w-0 flex-1 leading-tight">
                     <span className="block truncate text-sm font-semibold">
                       {channel.displayName}
-                      {channel.provider === "X" && channel.config?.username ? (
-                        <span className="text-muted-foreground font-normal">
-                          {" "}
-                          @{channel.config.username}
-                        </span>
-                      ) : null}
                     </span>
                     <span className="text-muted-foreground block pt-0.5 text-xs">
                       {PROVIDER_META[channel.provider].label}
@@ -566,7 +519,6 @@ export function ChannelsCatalog({
                   {channel.provider === "FACEBOOK" ||
                   channel.provider === "INSTAGRAM" ||
                   channel.provider === "WHATSAPP" ||
-                  channel.provider === "X" ||
                   channel.provider === "GMAIL" ||
                   channel.provider === "WEBSITE" ||
                   channel.provider === "TELEGRAM" ? (
@@ -581,9 +533,7 @@ export function ChannelsCatalog({
                                 metaConfig?.instagramConfigured &&
                                 workspaceId
                               ? `/api/workspaces/${workspaceId}/channels/instagram/connect`
-                              : channel.provider === "X" && xConfig?.configured && workspaceId
-                                ? `/api/workspaces/${workspaceId}/channels/x/connect`
-                                : channel.provider === "GMAIL" &&
+                              : channel.provider === "GMAIL" &&
                                     gmailConfig?.configured &&
                                     workspaceId
                                   ? `/api/workspaces/${workspaceId}/channels/gmail/connect`
@@ -725,10 +675,6 @@ export function ChannelsCatalog({
                   {provider === "TIKTOK" ? (
                     <Button variant="outline" className="w-full" onClick={() => setSelected(provider)}>
                       Access requirements
-                    </Button>
-                  ) : provider === "X" && xConfig?.configured && workspaceId && !isConnected ? (
-                    <Button className="w-full" asChild>
-                      <a href={`/api/workspaces/${workspaceId}/channels/x/connect`}>Connect now</a>
                     </Button>
                   ) : provider === "GMAIL" && gmailConfig?.configured && workspaceId && !isConnected ? (
                     <Button className="w-full" asChild>
@@ -972,56 +918,6 @@ export function ChannelsCatalog({
                   refresh tokens expire after 7 days; publishing the app (with Google&apos;s
                   OAuth verification for Gmail scopes) is required before selling it publicly.
                   Full setup: docs/GMAIL-SETUP.md.
-                </p>
-              </div>
-            </>
-          ) : selected === "X" && xConfig ? (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-3">
-                  <ChannelIcon provider="X" size="md" />
-                  Connect X (Twitter)
-                </DialogTitle>
-                <DialogDescription>
-                  This deployment is not configured for X yet — no account can be connected until
-                  the server environment is set up. Nothing has been connected.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-3 text-sm">
-                <p>
-                  X&apos;s Direct Messages API is self-serve on <strong>pay-per-use pricing</strong>:
-                  create a developer app in the X Developer Console (console.x.com), buy API
-                  credits there, and X bills the app per DM read ($0.010) and per DM sent ($0.015).
-                  No Enterprise contract or manual approval is needed.
-                </p>
-                <p>
-                  Set these environment variables on the server and restart the app:{" "}
-                  <code>X_CLIENT_ID</code>, <code>X_CLIENT_SECRET</code> — the OAuth 2.0
-                  credentials of a confidential-client app (type &quot;Web App&quot; or
-                  &quot;Automated App or bot&quot;, OAuth 2.0 enabled). Optionally{" "}
-                  <code>X_CONSUMER_KEY</code> / <code>X_CONSUMER_SECRET</code> as the fallback
-                  webhook-signing key.
-                </p>
-                <p>
-                  In the app&apos;s User authentication settings, register this Callback URI
-                  (exact match required):
-                  <br />
-                  <code className="break-all">{xConfig.redirectUri}</code>
-                </p>
-                <p>
-                  Webhook callback URL: <code className="break-all">{xConfig.webhookUrl}</code> —
-                  register it once via X&apos;s Webhooks API, then set <code>X_WEBHOOK_ID</code>{" "}
-                  so connecting an account also creates its real-time DM subscriptions.
-                  {xConfig.webhookIdSet
-                    ? " This deployment already has a webhook id configured."
-                    : " This deployment does not have a webhook id yet, so new connections will work over REST but won't receive real-time events until it is set."}
-                </p>
-                <p className="text-muted-foreground">
-                  Each business connects its own X account with OAuth (scopes dm.read, dm.write,
-                  tweet.read, users.read, offline.access). X only exposes the connected
-                  account&apos;s own DMs, message history is limited to the last 30 days, and
-                  whether a customer can be messaged depends on their DM settings. Full setup:
-                  docs/X-ACCESS.md.
                 </p>
               </div>
             </>
