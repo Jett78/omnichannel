@@ -221,6 +221,37 @@ function whatsappHandler(call: RecordedCall): FakeResult {
       json: { error: { message: "(#100) Invalid parameter: unknown WABA", code: 100 } },
     };
   }
+  if (call.method === "GET" && path === "/v25.0/waba-test") {
+    // A messaging-only token (e.g. the temporary token the Meta dashboard
+    // generates for a test number) is refused WABA management reads with
+    // exactly this error, while the number itself stays readable.
+    return {
+      status: 400,
+      json: {
+        error: { message: "(#100) Authorization Error", code: 100, type: "OAuthException" },
+      },
+    };
+  }
+  if (call.method === "GET" && path === "/v25.0/phone-test") {
+    return {
+      json: {
+        id: "phone-test",
+        display_phone_number: "+1 555-000-0000",
+        verified_name: "Test Biz",
+        status: "CONNECTED",
+        code_verification_status: "VERIFIED",
+        quality_rating: "GREEN",
+      },
+    };
+  }
+  if (call.method === "GET" && path === "/v25.0/phone-missing") {
+    return {
+      status: 400,
+      json: {
+        error: { message: "(#100) Authorization Error", code: 100, type: "OAuthException" },
+      },
+    };
+  }
   if (call.method === "GET" && path === "/v25.0/waba-1/phone_numbers") {
     return { json: PHONE_NUMBERS_RESPONSE };
   }
@@ -801,6 +832,46 @@ async function main(): Promise<void> {
       "Change number: after disconnect, a different number connects",
       changed.channel.externalAccountId === "phone-1" && changed.channel.id !== manual.channel.id,
     );
+  }
+
+  // ── 6c. Manual connect with a messaging-only token ─────────────────────────
+  console.log("6c. Manual connect fallback (messaging-only token)");
+  {
+    const wsD = await workspaceService.createWorkspace(userA.id, { name: `WS D ${runId}` });
+    createdWorkspaceIds.push(wsD.id);
+    const testConnect = await whatsappConnectionService.connectManually(
+      userA.id,
+      wsD.id,
+      { wabaId: "waba-test", phoneNumberId: "phone-test", accessToken: "dashboard-test-token" },
+      { whatsapp: waProvider },
+    );
+    const testConfig = testConnect.channel.config as Record<string, unknown> | null;
+    assert(
+      "Fallback: test number connects via the phone-number read",
+      testConnect.channel.externalAccountId === "phone-test" &&
+        testConnect.channel.status === "CONNECTED" &&
+        testConfig?.wabaId === "waba-test" &&
+        testConfig?.wabaName === "Test Biz",
+    );
+    const testCred = await channelCredentialService.getDecryptedChannelCredentialForServer(
+      testConnect.channel.id,
+    );
+    assert(
+      "Fallback: the dashboard token is stored",
+      testCred?.accessToken === "dashboard-test-token",
+    );
+
+    const channelsBefore = await prisma.channel.count({ where: { workspaceId: wsD.id } });
+    await expectThrows("Fallback: a number the token cannot read is rejected", () =>
+      whatsappConnectionService.connectManually(
+        userA.id,
+        wsD.id,
+        { wabaId: "waba-test", phoneNumberId: "phone-missing", accessToken: "dashboard-test-token" },
+        { whatsapp: waProvider },
+      ),
+    );
+    const channelsAfter = await prisma.channel.count({ where: { workspaceId: wsD.id } });
+    assert("Fallback: rejected connect created no channel", channelsAfter === channelsBefore);
   }
 
   // ── 7. Webhook pipeline ────────────────────────────────────────────────────

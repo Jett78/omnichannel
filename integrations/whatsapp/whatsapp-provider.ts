@@ -839,6 +839,44 @@ export class WhatsAppProvider implements IMessagingProvider {
     });
   }
 
+  async getPhoneNumber(
+    phoneNumberId: string,
+    accessToken: string,
+  ): Promise<WhatsAppPhoneNumber> {
+    const number = await this.client.get<GraphPhoneNumber>(
+      GRAPH_HOST,
+      `/${this.version()}/${phoneNumberId}`,
+      {
+        accessToken,
+        ...this.proofOptions(accessToken),
+        params: {
+          fields:
+            "id,display_phone_number,verified_name,code_verification_status,name_status,status,quality_rating,messaging_limit",
+        },
+      },
+    );
+    const eligible =
+      number.status === "CONNECTED" || number.code_verification_status === "VERIFIED";
+    return {
+      id: number.id,
+      displayPhoneNumber: number.display_phone_number ?? number.id,
+      verifiedName: number.verified_name ?? number.display_phone_number ?? number.id,
+      ...(number.status ? { status: number.status } : {}),
+      ...(number.code_verification_status
+        ? { codeVerificationStatus: number.code_verification_status }
+        : {}),
+      ...(number.name_status ? { nameStatus: number.name_status } : {}),
+      ...(number.quality_rating ? { qualityRating: number.quality_rating } : {}),
+      ...(number.messaging_limit ? { messagingLimit: number.messaging_limit } : {}),
+      eligible,
+      ...(!eligible
+        ? {
+            ineligibleReason: `This number is not connected/verified yet (status: ${number.status ?? "unknown"}, code verification: ${number.code_verification_status ?? "unknown"}). Finish registration/verification in WhatsApp Manager first.`,
+          }
+        : {}),
+    };
+  }
+
   async subscribeWaba(wabaId: string, accessToken: string): Promise<void> {
     const response = await this.client.post<GraphSuccessResponse>(
       GRAPH_HOST,

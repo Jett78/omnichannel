@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import type { CreateWhatsAppTemplateInput } from "@/lib/validations";
 import { requireWorkspacePermission } from "@/lib/workspace-auth";
 import { requireWhatsAppEmbeddedConfig } from "@/integrations/meta/meta-config";
+import { MetaGraphError } from "@/integrations/meta/meta-graph-client";
 import {
   WHATSAPP_SCOPES,
   WhatsAppProvider,
@@ -234,6 +235,68 @@ async function finalizeChannel(
   return channel;
 }
 
+/**
+ * True when Meta refused a read for authorization reasons (missing
+ * whatsapp_business_management scope or no management role on the
+ * WABA). Messaging-only tokens — e.g. the temporary token the Meta
+ * dashboard generates for a test number — hit exactly this on WABA
+ * reads while still being fully able to message.
+ */
+function isGraphAuthorizationError(error: unknown): boolean {
+  return (
+    error instanceof MetaGraphError &&
+    error.type === "OAuthException" &&
+    (error.code === 100 || error.code === 200 || error.code === 10)
+  );
+}
+
+/**
+ * Validate a token against a WABA + phone number. Strict path first:
+ * read the WABA and list its numbers. When the token is messaging-only
+ * and Meta refuses those management reads, fall back to reading the
+ * phone number node directly (allowed with the messaging scope) and
+ * take the WABA name from the number's verified name. Any other Graph
+ * failure is surfaced as a readable bad-request error naming Meta's
+ * own message, instead of an opaque 500.
+ */
+async function resolveWabaAndPhoneNumber(
+  provider: WhatsAppProvider,
+  wabaId: string,
+  phoneNumberId: string,
+  accessToken: string,
+  notListedMessage: string,
+): Promise<{ waba: WhatsAppBusinessAccount; phoneNumber: WhatsAppPhoneNumber }> {
+  try {
+    const waba = await provider.getWaba(wabaId, accessToken);
+    const phoneNumbers = await provider.listPhoneNumbers(wabaId, accessToken);
+    const phoneNumber = phoneNumbers.find((number) => number.id === phoneNumberId);
+    if (!phoneNumber) {
+      throw AppError.badRequest(notListedMessage);
+    }
+    return { waba, phoneNumber };
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    if (!isGraphAuthorizationError(error)) {
+      if (error instanceof MetaGraphError) {
+        throw AppError.badRequest(`Meta rejected the token check: ${error.message}`);
+      }
+      throw error;
+    }
+    let phoneNumber: WhatsAppPhoneNumber;
+    try {
+      phoneNumber = await provider.getPhoneNumber(phoneNumberId, accessToken);
+    } catch (fallbackError) {
+      if (fallbackError instanceof MetaGraphError) {
+        throw AppError.badRequest(
+          `Meta rejected this token for that phone number: ${fallbackError.message}`,
+        );
+      }
+      throw fallbackError;
+    }
+    return { waba: { id: wabaId, name: phoneNumber.verifiedName }, phoneNumber };
+  }
+}
+
 async function subscribeBestEffort(
   provider: WhatsAppProvider,
   wabaId: string,
@@ -406,14 +469,13 @@ export const whatsappConnectionService = {
     await requireWorkspacePermission(actorUserId, workspaceId, "channels.manage");
     const provider = deps.whatsapp ?? whatsappProvider;
 
-    const waba = await provider.getWaba(input.wabaId, input.accessToken);
-    const phoneNumbers = await provider.listPhoneNumbers(input.wabaId, input.accessToken);
-    const phoneNumber = phoneNumbers.find((number) => number.id === input.phoneNumberId);
-    if (!phoneNumber) {
-      throw AppError.badRequest(
-        "That phone number is not listed on the given WhatsApp Business Account.",
-      );
-    }
+    const { waba, phoneNumber } = await resolveWabaAndPhoneNumber(
+      provider,
+      input.wabaId,
+      input.phoneNumberId,
+      input.accessToken,
+      "That phone number is not listed on the given WhatsApp Business Account.",
+    );
 
     const { webhookSubscription, subscriptionWarning } = await subscribeBestEffort(
       provider,
@@ -449,14 +511,13 @@ export const whatsappConnectionService = {
     const wabaId = channelWabaId(channel);
     const provider = deps.whatsapp ?? whatsappProvider;
 
-    await provider.getWaba(wabaId, input.accessToken);
-    const phoneNumbers = await provider.listPhoneNumbers(wabaId, input.accessToken);
-    const phoneNumber = phoneNumbers.find((number) => number.id === channel.externalAccountId);
-    if (!phoneNumber) {
-      throw AppError.badRequest(
-        "That token does not have access to this channel's phone number on its WhatsApp Business Account.",
-      );
-    }
+    const { phoneNumber } = await resolveWabaAndPhoneNumber(
+      provider,
+      wabaId,
+      channel.externalAccountId,
+      input.accessToken,
+      "That token does not have access to this channel's phone number on its WhatsApp Business Account.",
+    );
 
     const { webhookSubscription, subscriptionWarning } = await subscribeBestEffort(
       provider,
