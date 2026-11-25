@@ -312,3 +312,16 @@ export function requireWhatsAppEmbeddedConfig(): WhatsAppEmbeddedConfig {
 export function whatsappAppSecret(): string | undefined {
   return getWhatsAppConfig().signatureSecret;
 }
+
+/**
+ * Every app secret a WhatsApp webhook signature may legitimately be
+ * checked against: the primary (WHATSAPP_APP_SECRET || META_APP_SECRET)
+ * plus META_APP_SECRET_2 when set. A WhatsApp channel's events are
+ * signed by whichever Meta app owns its WABA's subscription, and the
+ * current test number lives under a second app ("OmniChannel Dev"),
+ * so both secrets must verify. Deduped, order-stable.
+ */
+export function whatsappAppSecrets(): string[] {
+  const secrets = [whatsappAppSecret(), process.env.META_APP_SECRET_2?.trim() || undefined];
+  return [...new Set(secrets.filter((s): s is string => Boolean(s)))];
+}

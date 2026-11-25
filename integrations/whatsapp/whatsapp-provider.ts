@@ -19,7 +19,7 @@ import type {
 import {
   getWhatsAppConfig,
   requireWhatsAppEmbeddedConfig,
-  whatsappAppSecret,
+  whatsappAppSecrets,
 } from "@/integrations/meta/meta-config";
 import {
   MetaGraphClient,
@@ -362,10 +362,13 @@ export class WhatsAppProvider implements IMessagingProvider {
   // ─── Webhooks ─────────────────────────────────────────────────────────────
 
   verifyWebhook(req: WebhookVerificationRequest): boolean {
-    return verifyMetaSignature(
-      req.rawBody,
-      req.headers.get("x-hub-signature-256"),
-      whatsappAppSecret(),
+    // A channel's WABA may be subscribed under a different Meta app
+    // than the primary one (the current test number lives under
+    // "OmniChannel Dev"); accept a signature from any configured
+    // WhatsApp app secret.
+    const signature = req.headers.get("x-hub-signature-256");
+    return whatsappAppSecrets().some((secret) =>
+      verifyMetaSignature(req.rawBody, signature, secret),
     );
   }
 

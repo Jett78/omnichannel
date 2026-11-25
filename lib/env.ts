@@ -44,6 +44,11 @@ const envSchema = z.object({
   // boots unconfigured and the connect flow fails with a clear 503.
   META_APP_ID: z.string().optional(),
   META_APP_SECRET: z.string().optional(),
+  // Second Meta app secret, accepted ONLY for WhatsApp webhook
+  // signature checks (meta-config.ts whatsappAppSecrets). Needed while
+  // the WhatsApp test number lives under a separate Meta app
+  // ("OmniChannel Dev", NepalTech business) than the main app.
+  META_APP_SECRET_2: z.string().optional(),
   META_GRAPH_API_VERSION: z.string().optional(),
   META_FACEBOOK_REDIRECT_URI: z.string().optional(),
   META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
