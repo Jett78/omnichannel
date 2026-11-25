@@ -1451,7 +1451,7 @@ export function RealInboxShell({
                 aria-pressed={statusFilter === chip.value}
                 onClick={() => setStatusFilter(chip.value)}
                 className={cn(
-                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  "flex-1 rounded-full border px-2 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors",
                   statusFilter === chip.value
                     ? chip.activeClass
                     : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
@@ -1538,7 +1538,7 @@ export function RealInboxShell({
                       <span className="mt-0.5 flex items-center justify-between gap-2">
                         <span
                           className={cn(
-                            "truncate text-xs",
+                            "min-w-0 flex-1 truncate text-xs",
                             conversation.unreadCount > 0
                               ? "text-foreground font-medium"
                               : "text-muted-foreground",
