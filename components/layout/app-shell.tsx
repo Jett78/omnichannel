@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   Header,
@@ -34,7 +34,31 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const fullBleed = pathname === "/inbox";
+
+  // Desktop sidebar collapse (icon rail) persists across reloads.
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("omnichannel:sidebar-collapsed") === "1") {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSidebarCollapsed(true);
+      }
+    } catch {
+      // Storage unavailable (private mode) — sidebar just stays expanded.
+    }
+  }, []);
+
+  function toggleSidebar() {
+    setSidebarCollapsed((value) => {
+      try {
+        window.localStorage.setItem("omnichannel:sidebar-collapsed", value ? "0" : "1");
+      } catch {
+        // Non-fatal: the choice simply won't persist.
+      }
+      return !value;
+    });
+  }
 
   return (
     <div className="flex min-h-screen w-full">
@@ -43,6 +67,8 @@ export function AppShell({
         activeWorkspaceId={activeWorkspaceId}
         user={user}
         inboxOpenCount={inboxOpenCount}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
         className="sticky top-0 hidden h-screen lg:flex"
       />
       {mobileOpen ? (
