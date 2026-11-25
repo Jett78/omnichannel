@@ -2267,7 +2267,7 @@ export function RealInboxShell({
       {/* ─── RIGHT: contact panel ────────────────────────────────────── */}
       {selected ? (
         <aside
-          className="hidden w-[300px] shrink-0 overflow-y-auto border-l xl:block"
+          className="hidden w-[330px] shrink-0 overflow-y-auto border-l xl:block"
           aria-label="Contact details"
         >
           <div className="flex flex-col items-center gap-1.5 px-4 pt-6 pb-4 text-center">
