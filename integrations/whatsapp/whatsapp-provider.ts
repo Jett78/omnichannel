@@ -138,6 +138,26 @@ export interface WhatsAppTemplate {
   components: WhatsAppTemplateComponent[];
 }
 
+/** Template creation (Phase 14): UTILITY/MARKETING text templates. */
+export interface WhatsAppTemplateCreateInput {
+  name: string;
+  language: string;
+  category: "UTILITY" | "MARKETING";
+  headerText?: string;
+  /** Example value for the header's single {{1}} variable, when used. */
+  headerExample?: string;
+  bodyText: string;
+  /** Example values for the body's {{1}}..{{n}} variables, in order. */
+  bodyExamples?: string[];
+  footerText?: string;
+}
+
+export interface WhatsAppTemplateCreateResult {
+  id?: string;
+  status?: string;
+  category?: string;
+}
+
 interface GraphTemplate {
   id?: string;
   name: string;
@@ -898,6 +918,79 @@ export class WhatsAppProvider implements IMessagingProvider {
         ...(component.format ? { format: component.format } : {}),
       })),
     }));
+  }
+
+  /**
+   * Create a message template on the WABA (Phase 14). Meta reviews
+   * every template; a created template comes back PENDING until it is
+   * APPROVED (or REJECTED). Variables in the header/body require
+   * example values in the creation payload — the service enforces
+   * that before this is called.
+   */
+  async createTemplate(
+    wabaId: string,
+    accessToken: string,
+    input: WhatsAppTemplateCreateInput,
+  ): Promise<WhatsAppTemplateCreateResult> {
+    const components: Array<Record<string, unknown>> = [];
+    if (input.headerText) {
+      components.push({
+        type: "HEADER",
+        format: "TEXT",
+        text: input.headerText,
+        ...(input.headerExample ? { example: { header_text: [input.headerExample] } } : {}),
+      });
+    }
+    components.push({
+      type: "BODY",
+      text: input.bodyText,
+      ...(input.bodyExamples && input.bodyExamples.length > 0
+        ? { example: { body_text: [input.bodyExamples] } }
+        : {}),
+    });
+    if (input.footerText) {
+      components.push({ type: "FOOTER", text: input.footerText });
+    }
+    const response = await this.client.post<{
+      id?: string;
+      status?: string;
+      category?: string;
+    }>(GRAPH_HOST, `/${this.version()}/${wabaId}/message_templates`, {
+      accessToken,
+      ...this.proofOptions(accessToken),
+      body: {
+        name: input.name,
+        language: input.language,
+        category: input.category,
+        components,
+      },
+    });
+    return {
+      ...(response.id ? { id: response.id } : {}),
+      ...(response.status ? { status: response.status } : {}),
+      ...(response.category ? { category: response.category } : {}),
+    };
+  }
+
+  /**
+   * Delete a template by name (Phase 14). Meta deletes every language
+   * variant of that name on the WABA.
+   */
+  async deleteTemplate(wabaId: string, accessToken: string, name: string): Promise<void> {
+    const response = await this.client.del<GraphSuccessResponse>(
+      GRAPH_HOST,
+      `/${this.version()}/${wabaId}/message_templates`,
+      {
+        accessToken,
+        ...this.proofOptions(accessToken),
+        params: { name },
+      },
+    );
+    if (response.success !== true) {
+      throw new MetaGraphError(`Deleting template "${name}" was not confirmed by Meta`, {
+        status: 502,
+      });
+    }
   }
 }
 

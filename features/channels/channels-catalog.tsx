@@ -32,6 +32,7 @@ import {
   WhatsAppConnectPanel,
   type WhatsAppConfigView,
 } from "@/features/channels/whatsapp-connect-panel";
+import { WhatsAppTemplatesPanel } from "@/features/channels/whatsapp-templates-panel";
 import type { Provider } from "@/generated/prisma/client";
 import { cn } from "@/lib/utils";
 
@@ -373,6 +374,10 @@ export function ChannelsCatalog({
           editSignal={waEditSignal}
           editChannelId={waEditChannelId}
         />
+      ) : null}
+
+      {workspaceId ? (
+        <WhatsAppTemplatesPanel workspaceId={workspaceId} connectedChannels={realChannels} />
       ) : null}
 
       {workspaceId ? (

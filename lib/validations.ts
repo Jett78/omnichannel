@@ -146,6 +146,30 @@ export const whatsappRegisterSchema = z.object({
 });
 export type WhatsAppRegisterInput = z.infer<typeof whatsappRegisterSchema>;
 
+// ─── Phase 14: WhatsApp template management ───────────────────────────────────
+// Meta's rules: names are lowercase letters, numbers and underscores;
+// AUTHENTICATION templates follow stricter component rules and are not
+// creatable from this form (they still list and send normally).
+
+export const createWhatsAppTemplateSchema = z.object({
+  name: z
+    .string()
+    .min(1, "A template name is required")
+    .max(512)
+    .regex(
+      /^[a-z0-9_]+$/,
+      "Template names can only use lowercase letters, numbers and underscores",
+    ),
+  language: z.string().min(2, "A language code is required").max(32),
+  category: z.enum(["UTILITY", "MARKETING"]),
+  headerText: z.string().max(60).optional(),
+  headerExample: z.string().max(1000).optional(),
+  bodyText: z.string().min(1, "The template body is required").max(1024),
+  bodyExamples: z.array(z.string().min(1).max(1000)).max(25).default([]),
+  footerText: z.string().max(60).optional(),
+});
+export type CreateWhatsAppTemplateInput = z.infer<typeof createWhatsAppTemplateSchema>;
+
 export const assignConversationSchema = z.object({
   assigneeId: z.string().min(1).nullable(),
 });

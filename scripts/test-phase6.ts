@@ -4,7 +4,7 @@ import type { Job } from "bullmq";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { whatsappRegisterSchema } from "@/lib/validations";
+import { createWhatsAppTemplateSchema, whatsappRegisterSchema } from "@/lib/validations";
 import { registerProvider } from "@/integrations/registry";
 import { MetaGraphError, type FetchLike } from "@/integrations/meta/meta-graph-client";
 import type { ChannelContext } from "@/integrations/types";
@@ -232,6 +232,19 @@ function whatsappHandler(call: RecordedCall): FakeResult {
   }
   if (call.method === "GET" && path === "/v25.0/waba-1/message_templates") {
     return { json: TEMPLATES_RESPONSE };
+  }
+  if (call.method === "POST" && path === "/v25.0/waba-1/message_templates") {
+    const body = JSON.parse(call.bodyText) as { name?: string };
+    if (body.name === "meta_reject") {
+      return {
+        status: 400,
+        json: { error: { message: "(#132000) Template already exists", code: 132000 } },
+      };
+    }
+    return { json: { id: "tpl-created-1", status: "PENDING", category: "UTILITY" } };
+  }
+  if (call.method === "DELETE" && path === "/v25.0/waba-1/message_templates") {
+    return { json: { success: true } };
   }
   if (call.method === "POST" && path === "/v25.0/phone-1/register") {
     const body = JSON.parse(call.bodyText) as { pin?: string };
@@ -1012,6 +1025,206 @@ async function main(): Promise<void> {
     );
     await expectThrows("Cross-workspace: B cannot disconnect A's WhatsApp channel", () =>
       metaConnectionService.disconnectChannel(userB.id, wsA.id, waChannelId, { whatsapp: waProvider }),
+    );
+  }
+
+  // ── 9b. Template management (Phase 14) ─────────────────────────────────────
+  console.log("9b. Template management (create / list-all / delete)");
+  {
+    const all = await whatsappConnectionService.listAllTemplates(userA.id, wsA.id, waChannelId, {
+      whatsapp: waProvider,
+    });
+    assert(
+      "Manage list: every status incl. PENDING, header text derived",
+      all.length === 3 &&
+        all.find((t) => t.name === "promo_offer")?.status === "PENDING" &&
+        all.find((t) => t.name === "order_update")?.headerText === "Order update",
+      JSON.stringify(all),
+    );
+
+    assert(
+      "Create schema: rejects bad names + AUTHENTICATION category",
+      !createWhatsAppTemplateSchema.safeParse({
+        name: "Bad Name!",
+        language: "en_US",
+        category: "UTILITY",
+        bodyText: "Hi",
+      }).success &&
+        !createWhatsAppTemplateSchema.safeParse({
+          name: "otp_code",
+          language: "en_US",
+          category: "AUTHENTICATION",
+          bodyText: "Your code is {{1}}",
+          bodyExamples: ["123456"],
+        }).success &&
+        createWhatsAppTemplateSchema.safeParse({
+          name: "order_shipped",
+          language: "en_US",
+          category: "UTILITY",
+          bodyText: "Hi {{1}}",
+          bodyExamples: ["Ram"],
+        }).success,
+    );
+
+    const created = await whatsappConnectionService.createTemplate(
+      userA.id,
+      wsA.id,
+      waChannelId,
+      {
+        name: "delivery_update",
+        language: "en_US",
+        category: "UTILITY",
+        headerText: "Delivery update",
+        bodyText: "Hi {{1}}, your parcel {{2}} arrives today.",
+        bodyExamples: ["Sita", "PKG-42"],
+        footerText: "NimbleBazaar",
+      },
+      { whatsapp: waProvider },
+    );
+    assert(
+      "Create: returns Meta's PENDING status",
+      created.status === "PENDING" && created.id === "tpl-created-1",
+      JSON.stringify(created),
+    );
+    const createCall = waFake.calls.find(
+      (c) => c.method === "POST" && c.url.includes("/message_templates"),
+    );
+    const createBody = JSON.parse(createCall?.bodyText ?? "{}") as {
+      name?: string;
+      components?: Array<{
+        type?: string;
+        text?: string;
+        example?: { body_text?: string[][] };
+      }>;
+    };
+    assert(
+      "Create: Graph payload carries header/body examples/footer",
+      createBody.name === "delivery_update" &&
+        createBody.components?.some(
+          (c) => c.type === "BODY" && c.example?.body_text?.[0]?.join(",") === "Sita,PKG-42",
+        ) === true &&
+        createBody.components?.some((c) => c.type === "FOOTER" && c.text === "NimbleBazaar") ===
+          true,
+      JSON.stringify(createBody),
+    );
+
+    const postsBefore = waFake.calls.filter(
+      (c) => c.method === "POST" && c.url.includes("/message_templates"),
+    ).length;
+    await expectThrows(
+      "Create: example count must match body variables (no Graph call made)",
+      () =>
+        whatsappConnectionService.createTemplate(
+          userA.id,
+          wsA.id,
+          waChannelId,
+          {
+            name: "mismatch_tpl",
+            language: "en_US",
+            category: "UTILITY",
+            bodyText: "Hi {{1}}, order {{2}} shipped.",
+            bodyExamples: ["Ram"],
+          },
+          { whatsapp: waProvider },
+        ),
+      "example",
+    );
+    await expectThrows(
+      "Create: variables must be numbered {{1}}, {{2}}… in order",
+      () =>
+        whatsappConnectionService.createTemplate(
+          userA.id,
+          wsA.id,
+          waChannelId,
+          {
+            name: "gap_tpl",
+            language: "en_US",
+            category: "UTILITY",
+            bodyText: "Your code is {{2}}.",
+            bodyExamples: ["123456"],
+          },
+          { whatsapp: waProvider },
+        ),
+      "numbered in order",
+    );
+    await expectThrows(
+      "Create: header {{1}} without an example is refused",
+      () =>
+        whatsappConnectionService.createTemplate(
+          userA.id,
+          wsA.id,
+          waChannelId,
+          {
+            name: "header_tpl",
+            language: "en_US",
+            category: "UTILITY",
+            headerText: "Order {{1}} update",
+            bodyText: "It shipped.",
+            bodyExamples: [],
+          },
+          { whatsapp: waProvider },
+        ),
+      "example value for it",
+    );
+    const postsAfter = waFake.calls.filter(
+      (c) => c.method === "POST" && c.url.includes("/message_templates"),
+    ).length;
+    assert(
+      "Create: refused payloads never reach Meta",
+      postsAfter === postsBefore,
+      `${postsBefore} → ${postsAfter}`,
+    );
+
+    await expectThrows(
+      "Create: Meta's rejection surfaces (132000)",
+      () =>
+        whatsappConnectionService.createTemplate(
+          userA.id,
+          wsA.id,
+          waChannelId,
+          {
+            name: "meta_reject",
+            language: "en_US",
+            category: "UTILITY",
+            bodyText: "Hello.",
+            bodyExamples: [],
+          },
+          { whatsapp: waProvider },
+        ),
+      "132000",
+    );
+
+    await whatsappConnectionService.deleteTemplate(userA.id, wsA.id, waChannelId, "promo_offer", {
+      whatsapp: waProvider,
+    });
+    const deleteCall = waFake.calls.find(
+      (c) => c.method === "DELETE" && c.url.includes("/message_templates"),
+    );
+    assert(
+      "Delete: DELETE sent with the template name",
+      Boolean(deleteCall) && new URL(deleteCall?.url ?? "").searchParams.get("name") === "promo_offer",
+      deleteCall?.url,
+    );
+
+    await expectThrows("Cross-workspace: B cannot manage A's templates", () =>
+      whatsappConnectionService.listAllTemplates(userB.id, wsA.id, waChannelId, {
+        whatsapp: waProvider,
+      }),
+    );
+    await expectThrows("Cross-workspace: B cannot create on A's WABA", () =>
+      whatsappConnectionService.createTemplate(
+        userB.id,
+        wsA.id,
+        waChannelId,
+        {
+          name: "evil_tpl",
+          language: "en_US",
+          category: "UTILITY",
+          bodyText: "Hi.",
+          bodyExamples: [],
+        },
+        { whatsapp: waProvider },
+      ),
     );
   }
 

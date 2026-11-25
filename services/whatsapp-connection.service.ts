@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { AppError } from "@/lib/errors";
 import { decryptText, encryptText } from "@/lib/encryption";
 import { prisma } from "@/lib/prisma";
+import type { CreateWhatsAppTemplateInput } from "@/lib/validations";
 import { requireWorkspacePermission } from "@/lib/workspace-auth";
 import { requireWhatsAppEmbeddedConfig } from "@/integrations/meta/meta-config";
 import {
@@ -76,6 +77,24 @@ export interface WhatsAppTemplateView {
   category: string;
   bodyText: string | null;
   paramsCount: number;
+}
+
+/** Management view (Phase 14): every template on the WABA, any status. */
+export interface WhatsAppTemplateAdminView extends WhatsAppTemplateView {
+  id: string | null;
+  status: string;
+  headerText: string | null;
+  footerText: string | null;
+}
+
+/** Distinct {{n}} placeholder numbers in a template text, ascending. */
+function templatePlaceholders(text: string | undefined): number[] {
+  if (!text) return [];
+  const found = new Set<number>();
+  for (const match of text.matchAll(/\{\{\s*(\d+)\s*\}\}/g)) {
+    found.add(Number(match[1]));
+  }
+  return [...found].sort((a, b) => a - b);
 }
 
 const SESSION_TTL_MS = 15 * 60 * 1000;
@@ -532,5 +551,122 @@ export const whatsappConnectionService = {
           paramsCount: placeholders.size,
         };
       });
+  },
+
+  /**
+   * Template management (Phase 14): EVERY template on the channel's
+   * WABA, whatever its review status, for the Channels page manager.
+   * Requires channels.manage (owners/admins) — agents only ever see
+   * the APPROVED list above.
+   */
+  async listAllTemplates(
+    actorUserId: string,
+    workspaceId: string,
+    channelId: string,
+    deps: WhatsAppConnectionDeps = {},
+  ): Promise<WhatsAppTemplateAdminView[]> {
+    const channel = await loadWhatsAppChannel(
+      actorUserId,
+      workspaceId,
+      channelId,
+      "channels.manage",
+    );
+    const provider = deps.whatsapp ?? whatsappProvider;
+    const token = await decryptedToken(channel.id);
+    const templates = await provider.listTemplates(channelWabaId(channel), token);
+    return templates.map((template) => {
+      const body = template.components.find((component) => component.type === "BODY");
+      const header = template.components.find((component) => component.type === "HEADER");
+      const footer = template.components.find((component) => component.type === "FOOTER");
+      return {
+        id: template.id ?? null,
+        name: template.name,
+        status: template.status,
+        language: template.language,
+        category: template.category,
+        bodyText: body?.text ?? null,
+        headerText: header?.text ?? null,
+        footerText: footer?.text ?? null,
+        paramsCount: templatePlaceholders(body?.text).length,
+      };
+    });
+  },
+
+  /**
+   * Create a template on the WABA (Phase 14). Meta requires example
+   * values for every {{n}} variable at creation time; the counts are
+   * cross-checked here so Meta never gets a payload it must reject.
+   * The template returns as PENDING — Meta's review decides.
+   */
+  async createTemplate(
+    actorUserId: string,
+    workspaceId: string,
+    channelId: string,
+    input: CreateWhatsAppTemplateInput,
+    deps: WhatsAppConnectionDeps = {},
+  ): Promise<{ id: string | null; status: string; category: string }> {
+    const channel = await loadWhatsAppChannel(
+      actorUserId,
+      workspaceId,
+      channelId,
+      "channels.manage",
+    );
+    const bodyVars = templatePlaceholders(input.bodyText);
+    if (bodyVars.length !== input.bodyExamples.length) {
+      throw AppError.badRequest(
+        `The body uses ${bodyVars.length} variable${bodyVars.length === 1 ? "" : "s"} (${bodyVars.map((n) => `{{${n}}}`).join(", ") || "none"}) but ${input.bodyExamples.length} example value${input.bodyExamples.length === 1 ? "" : "s"} were given — Meta needs one example per variable.`,
+      );
+    }
+    if (bodyVars.length > 0 && bodyVars[bodyVars.length - 1] !== bodyVars.length) {
+      throw AppError.badRequest(
+        "Body variables must be numbered in order: {{1}}, {{2}}, {{3}}…",
+      );
+    }
+    const headerVars = templatePlaceholders(input.headerText);
+    if (headerVars.length > 1 || (headerVars.length === 1 && headerVars[0] !== 1)) {
+      throw AppError.badRequest("A header can use at most one variable, and it must be {{1}}.");
+    }
+    if (headerVars.length === 1 && !input.headerExample) {
+      throw AppError.badRequest("The header uses {{1}} — give an example value for it.");
+    }
+    if (headerVars.length === 0 && input.headerExample) {
+      throw AppError.badRequest("An example was given for the header, but the header has no {{1}} variable.");
+    }
+    const provider = deps.whatsapp ?? whatsappProvider;
+    const token = await decryptedToken(channel.id);
+    const result = await provider.createTemplate(channelWabaId(channel), token, {
+      name: input.name,
+      language: input.language,
+      category: input.category,
+      bodyText: input.bodyText,
+      ...(input.bodyExamples.length > 0 ? { bodyExamples: input.bodyExamples } : {}),
+      ...(input.headerText ? { headerText: input.headerText } : {}),
+      ...(input.headerExample ? { headerExample: input.headerExample } : {}),
+      ...(input.footerText ? { footerText: input.footerText } : {}),
+    });
+    return {
+      id: result.id ?? null,
+      status: result.status ?? "PENDING",
+      category: result.category ?? input.category,
+    };
+  },
+
+  /** Delete a template (all its languages) from the WABA (Phase 14). */
+  async deleteTemplate(
+    actorUserId: string,
+    workspaceId: string,
+    channelId: string,
+    name: string,
+    deps: WhatsAppConnectionDeps = {},
+  ): Promise<void> {
+    const channel = await loadWhatsAppChannel(
+      actorUserId,
+      workspaceId,
+      channelId,
+      "channels.manage",
+    );
+    const provider = deps.whatsapp ?? whatsappProvider;
+    const token = await decryptedToken(channel.id);
+    await provider.deleteTemplate(channelWabaId(channel), token, name);
   },
 };
