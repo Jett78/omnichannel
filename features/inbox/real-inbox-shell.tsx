@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowUpDown,
   Bookmark,
+  Check,
   CheckCheck,
   Copy,
   FileText,
@@ -14,6 +15,7 @@ import {
   MoreHorizontal,
   Paperclip,
   Pencil,
+  Reply,
   RotateCcw,
   Search,
   Smile,
@@ -26,7 +28,7 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
 import { PROVIDER_META } from "@/components/channel-icon";
@@ -308,6 +310,35 @@ function formatMessageTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/** Day-divider label for the thread: "Today, Nov 24, 2026" style. */
+function formatDayLabel(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const rest = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  if (isSameDay(date, now)) return `Today, ${rest}`;
+  if (isSameDay(date, yesterday)) return `Yesterday, ${rest}`;
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 const PRIORITY_META: Record<ConversationPriority, { label: string; className: string }> = {
   URGENT: { label: "Urgent", className: "text-red-600" },
   HIGH: { label: "High", className: "text-orange-600" },
@@ -335,37 +366,16 @@ type SortMode = "latest" | "waiting" | "priority";
  *  Unassigned / Mentions) live in the sidebar's Inbox dropdown and
  *  arrive here as the ?view= initial tab — no in-inbox switcher. */
 
+/* Active filter chip = one solid primary pill (the reference design);
+ * the per-status tint lives on the rows' status badges instead. */
+const STATUS_CHIP_ACTIVE = "border-transparent bg-primary font-semibold text-primary-foreground";
+
 const STATUS_CHIPS: Array<{ value: StatusFilter; label: string; activeClass: string }> = [
-  {
-    value: "ALL",
-    label: "All",
-    activeClass:
-      "border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100",
-  },
-  {
-    value: "OPEN",
-    label: "Open",
-    activeClass:
-      "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300",
-  },
-  {
-    value: "PENDING",
-    label: "Pending",
-    activeClass:
-      "border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-300",
-  },
-  {
-    value: "SNOOZED",
-    label: "Snoozed",
-    activeClass:
-      "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300",
-  },
-  {
-    value: "RESOLVED",
-    label: "Resolved",
-    activeClass:
-      "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300",
-  },
+  { value: "ALL", label: "All", activeClass: STATUS_CHIP_ACTIVE },
+  { value: "OPEN", label: "Open", activeClass: STATUS_CHIP_ACTIVE },
+  { value: "PENDING", label: "Pending", activeClass: STATUS_CHIP_ACTIVE },
+  { value: "SNOOZED", label: "Snoozed", activeClass: STATUS_CHIP_ACTIVE },
+  { value: "RESOLVED", label: "Resolved", activeClass: STATUS_CHIP_ACTIVE },
 ];
 
 const DRAFTS_KEY = "uoi.inbox.drafts.v1";
@@ -1425,7 +1435,7 @@ export function RealInboxShell({
             <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
             <Input
               placeholder="Search conversations"
-              className="pl-9"
+              className="rounded-full border-transparent bg-muted/70 pl-9 focus-visible:bg-card"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               aria-label="Search conversations"
@@ -1441,10 +1451,10 @@ export function RealInboxShell({
                 aria-pressed={statusFilter === chip.value}
                 onClick={() => setStatusFilter(chip.value)}
                 className={cn(
-                  "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                   statusFilter === chip.value
                     ? chip.activeClass
-                    : "border-border bg-background text-muted-foreground hover:border-foreground/30 hover:text-foreground",
+                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
                 )}
               >
                 {chip.label}
@@ -1454,7 +1464,7 @@ export function RealInboxShell({
           <div className="flex gap-2">
             <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
               <SelectTrigger
-                className="h-8 min-w-0 flex-1 gap-1.5 text-xs [&>span]:truncate"
+                className="h-9 min-w-0 flex-1 gap-1.5 rounded-full bg-card px-3.5 text-xs [&>span]:truncate"
                 aria-label="Sort conversations"
               >
                 <ArrowUpDown className="text-muted-foreground size-3.5 shrink-0" />
@@ -1469,7 +1479,7 @@ export function RealInboxShell({
             {knownChannels.length > 1 ? (
               <Select value={channelFilter} onValueChange={setChannelFilter}>
                 <SelectTrigger
-                  className="h-8 min-w-0 flex-1 gap-1.5 text-xs [&>span]:truncate"
+                  className="h-9 min-w-0 flex-1 gap-1.5 rounded-full bg-card px-3.5 text-xs [&>span]:truncate"
                   aria-label="Filter by channel"
                 >
                   <ListFilter className="text-muted-foreground size-3.5 shrink-0" />
@@ -1488,14 +1498,14 @@ export function RealInboxShell({
           </div>
         </div>
         <ScrollArea className="min-h-0 flex-1">
-          <ul className="flex flex-col px-2 pb-2">
+          <ul className="flex flex-col gap-1.5 px-3 pb-3">
             {visible.map((conversation) => {
               const isActive = selected?.id === conversation.id;
               return (
                 <li key={conversation.id}>
                   <div
                     className={cn(
-                      "hover:bg-accent/70 relative flex w-full cursor-pointer gap-3 rounded-lg px-2.5 py-3 text-left transition-colors",
+                      "relative flex w-full cursor-pointer gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-muted/70",
                       isActive && "bg-accent hover:bg-accent",
                     )}
                     onClick={() => void selectConversation(conversation.id)}
@@ -1557,6 +1567,9 @@ export function RealInboxShell({
                         <Badge variant="muted" className="px-1.5 text-[10px]">
                           {conversation.status}
                         </Badge>
+                        <Badge variant="muted" className="px-1.5 text-[10px]">
+                          {PROVIDER_META[conversation.channel.provider].label}
+                        </Badge>
                         {conversation.awaitingReply && conversation.status === "OPEN" ? (
                           <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-600">
                             <AlarmClock className="size-3" /> Waiting{" "}
@@ -1590,7 +1603,7 @@ export function RealInboxShell({
       >
         {selected ? (
           <>
-            <div className="flex h-16 shrink-0 items-center gap-3 border-b px-4">
+            <div className="bg-card flex h-16 shrink-0 items-center gap-3 border-b px-4">
               <Button
                 variant="ghost"
                 size="icon"
@@ -1606,9 +1619,11 @@ export function RealInboxShell({
                 provider={selected.channel.provider}
               />
               <div className="min-w-0 flex-1 leading-tight">
-                <p className="truncate text-sm font-semibold">{selected.contact.displayName}</p>
+                <p className="truncate text-[15px] font-bold">{selected.contact.displayName}</p>
                 <p className="text-muted-foreground truncate text-xs">
-                  via {PROVIDER_META[selected.channel.provider].label} · {selected.status}
+                  via {PROVIDER_META[selected.channel.provider].label}
+                  {selected.contact.phone ? ` · ${selected.contact.phone}` : ""} ·{" "}
+                  {selected.status}
                 </p>
               </div>
               {selected.status === "OPEN" || selected.status === "PENDING" ? (
@@ -1617,7 +1632,7 @@ export function RealInboxShell({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                      className="rounded-full border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
                     >
                       <AlarmClock className="size-3.5" /> Snooze
                     </Button>
@@ -1648,7 +1663,7 @@ export function RealInboxShell({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/20"
+                  className="rounded-full border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/20"
                   onClick={() => void changeStatus("reopen")}
                 >
                   {selected.status === "SNOOZED" ? "Unsnooze" : "Reopen"}
@@ -1656,16 +1671,23 @@ export function RealInboxShell({
               ) : (
                 <Button
                   size="sm"
-                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                  className="rounded-full border border-amber-300 bg-amber-100 font-semibold text-amber-900 hover:bg-amber-200 hover:text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/25"
                   onClick={() => void changeStatus("resolve")}
                 >
-                  Resolve
+                  <Check className="size-3.5" /> Resolve
                 </Button>
               )}
+              <Button
+                size="sm"
+                className="rounded-full bg-emerald-600 font-semibold text-white hover:bg-emerald-700"
+                onClick={() => textareaRef.current?.focus()}
+              >
+                <Reply className="size-3.5" /> Reply
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="size-8" aria-label="More actions">
-                    <MoreHorizontal className="size-4" />
+                  <Button variant="outline" size="sm" className="rounded-full" aria-label="More actions">
+                    <MoreHorizontal className="size-4" /> More
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -1681,8 +1703,13 @@ export function RealInboxShell({
 
             <ScrollArea className="min-h-0 flex-1">
               <div className="flex w-full flex-col gap-4 px-4 py-5">
-                {messages.map((message) =>
-                  message.messageType === "SYSTEM" || message.senderType === "SYSTEM" ? (
+                {messages.map((message, index) => {
+                  const previousMessage = messages[index - 1];
+                  const showDayDivider =
+                    !previousMessage ||
+                    !isSameDay(new Date(previousMessage.createdAt), new Date(message.createdAt));
+                  const node =
+                    message.messageType === "SYSTEM" || message.senderType === "SYSTEM" ? (
                     <div key={message.id} className="flex justify-center">
                       <p className="text-muted-foreground max-w-[85%] text-center text-xs">
                         {message.content} · {formatMessageTime(message.createdAt)}
@@ -1717,7 +1744,7 @@ export function RealInboxShell({
                           side="right"
                           onCopy={() => copyMessage(message)}
                         />
-                        <div className="bg-background rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap shadow-xs">
+                        <div className="bg-card rounded-2xl rounded-bl-md border px-3.5 py-2.5 text-sm break-words whitespace-pre-wrap">
                           <MessageAttachments workspaceId={workspaceId} message={message} />
                           {message.content}
                         </div>
@@ -1752,7 +1779,7 @@ export function RealInboxShell({
                         <p className="text-muted-foreground mt-1 flex items-center justify-end gap-1 pr-1 text-[11px]">
                           {formatMessageTime(message.createdAt)} · {message.status.toLowerCase()}
                           {message.status === "READ" || message.status === "DELIVERED" ? (
-                            <CheckCheck className="size-3.5 text-sky-600" />
+                            <CheckCheck className="size-3.5 text-indigo-500" />
                           ) : null}
                         </p>
                         {message.status === "FAILED" && messageErrorText(message) ? (
@@ -1762,8 +1789,20 @@ export function RealInboxShell({
                         ) : null}
                       </div>
                     </div>
-                  ),
-                )}
+                  );
+                  return (
+                    <Fragment key={message.id}>
+                      {showDayDivider ? (
+                        <div className="flex justify-center">
+                          <span className="bg-card text-muted-foreground rounded-full border px-3 py-1 text-[11px] font-medium">
+                            {formatDayLabel(message.createdAt)}
+                          </span>
+                        </div>
+                      ) : null}
+                      {node}
+                    </Fragment>
+                  );
+                })}
                 {messages.length === 0 ? (
                   <p className="text-muted-foreground py-8 text-center text-sm">
                     No messages in this conversation yet.
@@ -1773,7 +1812,7 @@ export function RealInboxShell({
               </div>
             </ScrollArea>
 
-            <div className="shrink-0 border-t px-4 py-3">
+            <div className="shrink-0 px-4 pt-1 pb-4">
               <div className="w-full">
                 {isWhatsApp && composerMode === "reply" && whatsappWindowClosed ? (
                   <p className="mb-2 flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -1784,7 +1823,7 @@ export function RealInboxShell({
                 ) : null}
                 <div
                   className={cn(
-                    "relative rounded-xl border shadow-xs focus-within:ring-ring/40 focus-within:ring-[3px]",
+                    "relative rounded-2xl border bg-card focus-within:ring-ring/40 focus-within:ring-[3px]",
                     composerMode === "note" && "border-amber-300 bg-amber-50/50",
                   )}
                 >
@@ -1997,7 +2036,7 @@ export function RealInboxShell({
                       type="button"
                       onClick={() => setComposerMode("reply")}
                       className={cn(
-                        "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
+                        "flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium",
                         composerMode === "reply"
                           ? "bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-100"
                           : "text-muted-foreground hover:text-indigo-700",
@@ -2009,7 +2048,7 @@ export function RealInboxShell({
                       type="button"
                       onClick={() => setComposerMode("note")}
                       className={cn(
-                        "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
+                        "flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium",
                         composerMode === "note"
                           ? "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100"
                           : "text-muted-foreground hover:text-amber-700",
@@ -2022,7 +2061,7 @@ export function RealInboxShell({
                         type="button"
                         onClick={() => setComposerMode("template")}
                         className={cn(
-                          "flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium",
+                          "flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium",
                           composerMode === "template"
                             ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-100"
                             : "text-muted-foreground hover:text-emerald-700",
@@ -2228,7 +2267,7 @@ export function RealInboxShell({
                     </span>
                     <Button
                       className={cn(
-                        "ml-auto text-white",
+                        "ml-auto rounded-full px-4 text-white",
                         composerMode === "note"
                           ? "bg-amber-500 hover:bg-amber-600"
                           : composerMode === "template"
@@ -2267,7 +2306,7 @@ export function RealInboxShell({
       {/* ─── RIGHT: contact panel ────────────────────────────────────── */}
       {selected ? (
         <aside
-          className="hidden w-[330px] shrink-0 overflow-y-auto border-l xl:block"
+          className="bg-card hidden w-[330px] shrink-0 overflow-y-auto border-l xl:block"
           aria-label="Contact details"
         >
           <div className="flex flex-col items-center gap-1.5 px-4 pt-6 pb-4 text-center">
@@ -2277,7 +2316,10 @@ export function RealInboxShell({
               provider={selected.channel.provider}
               size="lg"
             />
-            <p className="text-sm font-semibold">{selected.contact.displayName}</p>
+            <p className="text-base font-bold">{selected.contact.displayName}</p>
+            {selected.contact.phone ? (
+              <p className="text-muted-foreground text-xs">{selected.contact.phone}</p>
+            ) : null}
             <p className="text-muted-foreground text-xs">
               via {PROVIDER_META[selected.channel.provider].label}
             </p>
@@ -2293,7 +2335,7 @@ export function RealInboxShell({
                   void setPriority(value === "none" ? null : (value as ConversationPriority))
                 }
               >
-                <SelectTrigger aria-label="Set priority">
+                <SelectTrigger aria-label="Set priority" className="rounded-xl border-transparent bg-muted/60">
                   <SelectValue placeholder="No priority" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2321,7 +2363,7 @@ export function RealInboxShell({
                 value={selected.assignee?.id ?? "unassigned"}
                 onValueChange={(value) => void assign(value === "unassigned" ? null : value)}
               >
-                <SelectTrigger aria-label="Assign conversation">
+                <SelectTrigger aria-label="Assign conversation" className="rounded-xl border-transparent bg-muted/60">
                   <SelectValue placeholder="Unassigned" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2337,7 +2379,7 @@ export function RealInboxShell({
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-2 w-full border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100 hover:text-violet-900 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
+                className="mt-2 w-full rounded-full border-violet-300 bg-violet-50 text-violet-800 hover:bg-violet-100 hover:text-violet-900 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-200 dark:hover:bg-violet-500/20"
                 onClick={() => void assign(currentUserId)}
               >
                 Assign to me
@@ -2350,7 +2392,7 @@ export function RealInboxShell({
               </h3>
               <div className="flex flex-wrap gap-1.5">
                 {selected.tags.map((tag) => (
-                  <Badge key={tag.id} variant="secondary" className="gap-1 pr-1">
+                  <Badge key={tag.id} variant="secondary" className="gap-1 rounded-full pr-1">
                     {tag.name}
                     <button
                       type="button"
@@ -2377,12 +2419,12 @@ export function RealInboxShell({
                   }}
                   placeholder="Add a tag…"
                   aria-label="Add a tag"
-                  className="h-8"
+                  className="h-8 rounded-full px-3.5"
                 />
                 <Button
                   size="sm"
                   variant="outline"
-                  className="border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 hover:text-indigo-900 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200 dark:hover:bg-indigo-500/20"
+                  className="rounded-full border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 hover:text-indigo-900 dark:border-indigo-500/40 dark:bg-indigo-500/10 dark:text-indigo-200 dark:hover:bg-indigo-500/20"
                   onClick={() => void addTag()}
                   disabled={!tagInput.trim()}
                 >
@@ -2462,21 +2504,29 @@ export function RealInboxShell({
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted-foreground">Phone</dt>
-                    <dd className="font-medium">{selected.contact.phone ?? "—"}</dd>
+                    <dd className="rounded-md bg-muted/60 px-2 py-0.5 font-medium">
+                      {selected.contact.phone ?? "—"}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted-foreground">Email</dt>
-                    <dd className="truncate font-medium">{selected.contact.email ?? "—"}</dd>
+                    <dd className="truncate rounded-md bg-muted/60 px-2 py-0.5 font-medium">
+                      {selected.contact.email ?? "—"}
+                    </dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted-foreground">Channel</dt>
-                    <dd className="font-medium">
+                    <dd className="rounded-md bg-muted/60 px-2 py-0.5 font-medium">
                       {PROVIDER_META[selected.channel.provider].shortLabel}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted-foreground">Status</dt>
-                    <dd className="font-medium">{selected.status}</dd>
+                    <dd>
+                      <Badge variant="muted" className="rounded-full px-2">
+                        {selected.status}
+                      </Badge>
+                    </dd>
                   </div>
                 </dl>
               )}
