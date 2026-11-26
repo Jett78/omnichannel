@@ -124,8 +124,11 @@ export default async function DashboardPage() {
                   }.`
                 : "All caught up — no open conversations right now."}
             </p>
-            <div className="flex flex-wrap gap-2 pt-4">
-              <Button asChild className="bg-white text-indigo-700 hover:bg-indigo-50">
+            <div className="flex gap-2 pt-4">
+              <Button
+                asChild
+                className="flex-1 bg-white whitespace-nowrap text-indigo-700 hover:bg-indigo-50 sm:flex-none"
+              >
                 <Link href="/inbox">
                   Open inbox <ArrowRight className="size-4" />
                 </Link>
@@ -134,14 +137,14 @@ export default async function DashboardPage() {
                 <Button
                   asChild
                   variant="outline"
-                  className="border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                  className="flex-1 border-white/40 bg-white/10 whitespace-nowrap text-white hover:bg-white/20 hover:text-white sm:flex-none"
                 >
                   <Link href="/channels">Connect a channel</Link>
                 </Button>
               ) : null}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2.5">
+          <div className="grid w-full grid-cols-3 gap-2.5 lg:w-auto">
             {[
               { label: "Open now", value: open },
               { label: "Unassigned", value: unassigned },
@@ -149,10 +152,12 @@ export default async function DashboardPage() {
             ].map((tile) => (
               <div
                 key={tile.label}
-                className="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/25 backdrop-blur"
+                className="rounded-2xl bg-white/10 px-3 py-3 ring-1 ring-white/25 backdrop-blur sm:px-4"
               >
-                <p className="text-2xl font-bold">{tile.value}</p>
-                <p className="text-[11px] tracking-wide text-indigo-100 uppercase">{tile.label}</p>
+                <p className="text-xl font-bold sm:text-2xl">{tile.value}</p>
+                <p className="text-[10px] tracking-wide text-indigo-100 uppercase sm:text-[11px]">
+                  {tile.label}
+                </p>
               </div>
             ))}
           </div>
