@@ -5,7 +5,6 @@ import {
   Bell,
   Bot,
   Cable,
-  CircleHelp,
   Inbox,
   LayoutDashboard,
   PanelLeftClose,
@@ -180,23 +179,6 @@ export function Sidebar({
       </nav>
 
       <div className="mt-auto border-t p-3">
-        <Link
-          href="/settings"
-          onClick={onNavigate}
-          title="Help & docs"
-          className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium"
-        >
-          <CircleHelp className="size-4 shrink-0" />
-          <span
-            className={cn(
-              "min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-150",
-              collapsed ? "opacity-0" : "opacity-100",
-            )}
-            aria-hidden={collapsed}
-          >
-            Help &amp; docs
-          </span>
-        </Link>
         {user ? (
           collapsed ? (
             <div className="flex flex-col items-start gap-2 px-2 pt-3">

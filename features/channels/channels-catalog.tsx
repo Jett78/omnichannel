@@ -3,9 +3,9 @@
 import {
   Code2,
   FlaskConical,
+  MoreVertical,
   Plug,
-  Plus,
-  Puzzle,
+  PlugZap,
   RefreshCw,
   Settings,
   Trash2,
@@ -36,6 +36,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { MetaConnectionPanel } from "@/features/channels/meta-connection-panel";
 import { TelegramConnectPanel } from "@/features/channels/telegram-connect-panel";
 import { WebsiteConnectPanel } from "@/features/channels/website-connect-panel";
@@ -82,22 +89,6 @@ const CONNECTED_SUBLABELS: Partial<Record<Provider, string>> = {
   WEBSITE: "Website live chat",
   WHATSAPP: "WhatsApp Business",
 };
-
-/** "2 days ago" style relative time for the Last connected line. */
-function timeAgo(iso: string): string {
-  const seconds = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return days === 1 ? "1 day ago" : `${days} days ago`;
-  const weeks = Math.floor(days / 7);
-  if (weeks < 5) return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
-  const months = Math.floor(days / 30);
-  return months <= 1 ? "1 month ago" : `${months} months ago`;
-}
 
 /** Public Meta setup facts (no secrets) passed from the server page. */
 export interface MetaConfigView {
@@ -212,6 +203,7 @@ export function ChannelsCatalog({
     setWebSnippetChannelId(channelId);
     setWebSnippetSignal((signal) => signal + 1);
   }
+  const connectedCount = realChannels.filter((c) => c.status === "CONNECTED").length;
   const connectedProviders = new Set(
     realChannels.filter((c) => c.status === "CONNECTED").map((c) => c.provider),
   );
@@ -288,34 +280,45 @@ export function ChannelsCatalog({
     }
   }
 
-  const connectedCount = realChannels.filter((c) => c.status === "CONNECTED").length;
-
   return (
     <div className="flex w-full flex-col gap-8">
-      {/* Connected accounts header — reference design (Jeet,
-          2026-11-26): light tinted panel, icon tile, Add Account. */}
-      <section className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-indigo-50 via-violet-50/50 to-transparent px-6 py-6 dark:from-indigo-950/40 dark:via-violet-950/20 dark:to-transparent">
+      {/* Hero — gradient block (restored at Jeet's request,
+          2026-11-26; the light Connected Accounts panel was reverted). */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-8 text-white sm:px-8">
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-20 right-10 size-52 rounded-full bg-indigo-200/30 blur-3xl dark:bg-indigo-500/10"
+          className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-white/10 blur-2xl"
         />
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
-              <Puzzle className="size-7" />
-            </span>
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">Connected Accounts</h2>
-              <p className="text-muted-foreground pt-0.5 text-sm">
-                Manage your connected social and messaging accounts
-              </p>
-            </div>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-28 left-1/3 size-56 rounded-full bg-fuchsia-300/20 blur-3xl"
+        />
+        <div className="relative flex flex-wrap items-end justify-between gap-4">
+          <div className="max-w-xl">
+            <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-indigo-100 uppercase">
+              <PlugZap className="size-4" /> Channels
+            </p>
+            <h2 className="pt-2 text-3xl font-bold tracking-tight">
+              Every conversation, one inbox
+            </h2>
+            <p className="pt-2 text-sm leading-relaxed text-indigo-100">
+              Connect your messaging accounts and reply to customers from a single place.
+              Messenger and Instagram connect through Meta&apos;s official sign-in — you
+              always approve access on the platform itself.
+            </p>
           </div>
-          <Button asChild className="gap-1.5">
-            <a href="#all-channels">
-              <Plus className="size-4" /> Add Account
-            </a>
-          </Button>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium ring-1 ring-white/25 backdrop-blur">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-emerald-300" />
+              </span>
+              {connectedCount} connected
+            </span>
+            <span className="inline-flex items-center rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium ring-1 ring-white/25 backdrop-blur">
+              {PROVIDER_ORDER.length} channels available
+            </span>
+          </div>
         </div>
       </section>
 
@@ -565,99 +568,75 @@ export function ChannelsCatalog({
                       {statusLabel}
                     </Badge>
 
-                    {channel.provider === "WEBSITE" && workspaceId ? (
-                      <span className="flex items-center gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => openWebsiteSnippet(channel.id)}
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 shrink-0"
+                          aria-label={`Actions for ${channel.displayName}`}
                         >
-                          <Code2 className="size-3.5" />
-                          Embed code
+                          <MoreVertical className="size-4" />
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => openWebsiteEdit(channel.id)}
-                        >
-                          <Settings className="size-3.5" />
-                          Settings
-                        </Button>
-                      </span>
-                    ) : channel.status === "CONNECTED" ? (
-                      <span className="flex w-48 flex-col items-start">
-                        {hasReconnect ? (
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        {channel.provider === "WEBSITE" && workspaceId ? (
+                          <>
+                            <DropdownMenuItem onClick={() => openWebsiteSnippet(channel.id)}>
+                              <Code2 /> Embed code
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openWebsiteEdit(channel.id)}>
+                              <Settings /> Settings
+                            </DropdownMenuItem>
+                          </>
+                        ) : null}
+                        {channel.status === "CONNECTED" && hasReconnect ? (
                           oauthHref ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="gap-1.5 px-2 font-medium"
-                              asChild
-                            >
+                            <DropdownMenuItem asChild>
                               <a href={oauthHref}>
-                                <RefreshCw className="size-3.5" />
-                                Reconnect
+                                <RefreshCw /> Reconnect
                               </a>
-                            </Button>
+                            </DropdownMenuItem>
                           ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="gap-1.5 px-2 font-medium"
-                              onClick={openReconnect}
-                            >
-                              <RefreshCw className="size-3.5" />
-                              Reconnect
-                            </Button>
+                            <DropdownMenuItem onClick={openReconnect}>
+                              <RefreshCw /> Reconnect
+                            </DropdownMenuItem>
                           )
                         ) : null}
-                        {channel.updatedAt ? (
-                          <span className="text-muted-foreground px-2 text-xs">
-                            Last connected: {timeAgo(channel.updatedAt)}
-                          </span>
+                        {channel.status !== "CONNECTED" && hasReconnect ? (
+                          oauthHref ? (
+                            <DropdownMenuItem asChild>
+                              <a href={oauthHref}>
+                                <Plug />{" "}
+                                {channel.status === "DISCONNECTED" ? "Connect" : "Reconnect"}
+                              </a>
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={openReconnect}>
+                              <Plug />{" "}
+                              {channel.status === "DISCONNECTED" ? "Connect" : "Reconnect"}
+                            </DropdownMenuItem>
+                          )
                         ) : null}
-                      </span>
-                    ) : hasReconnect ? (
-                      oauthHref ? (
-                        <Button size="sm" className="gap-1.5" asChild>
-                          <a href={oauthHref}>
-                            <Plug className="size-3.5" />
-                            {channel.status === "DISCONNECTED" ? "Connect" : "Reconnect"}
-                          </a>
-                        </Button>
-                      ) : (
-                        <Button size="sm" className="gap-1.5" onClick={openReconnect}>
-                          <Plug className="size-3.5" />
-                          {channel.status === "DISCONNECTED" ? "Connect" : "Reconnect"}
-                        </Button>
-                      )
-                    ) : null}
-
-                    <span className="flex items-center gap-2">
-                      {channel.status === "CONNECTED" ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => setDisconnectTarget(channel)}
-                          disabled={disconnectingId !== null}
+                        {channel.status === "CONNECTED" ? (
+                          <DropdownMenuItem
+                            onClick={() => setDisconnectTarget(channel)}
+                            disabled={disconnectingId !== null}
+                          >
+                            <Unplug /> Disconnect
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => setDeleteTarget(channel)}
+                          disabled={deletingId !== null}
                         >
-                          <Unplug className="size-3.5" />
-                          {disconnectingId === channel.id ? "Disconnecting…" : "Disconnect"}
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        className="gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-950/40 dark:hover:bg-red-950/60"
-                        onClick={() => setDeleteTarget(channel)}
-                        disabled={deletingId !== null}
-                      >
-                        <Trash2 className="size-3.5" />
-                        {deletingId === channel.id ? "Deleting…" : "Delete"}
-                      </Button>
-                    </span>
+                          <Trash2 /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+
                   </li>
                 );
               })}
