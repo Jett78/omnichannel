@@ -1780,7 +1780,7 @@ export function RealInboxShell({
       >
         {selected ? (
           <>
-            <div className="bg-card flex h-16 shrink-0 items-center gap-3 border-b px-4">
+            <div className="bg-card flex h-16 shrink-0 items-center gap-2 border-b px-3 sm:gap-3 sm:px-4">
               <Button
                 variant="ghost"
                 size="icon"
@@ -1809,9 +1809,11 @@ export function RealInboxShell({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="rounded-full border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                      className="shrink-0 rounded-full border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:bg-amber-500/20"
+                      aria-label="Snooze conversation"
                     >
-                      <AlarmClock className="size-3.5" /> Snooze
+                      <AlarmClock className="size-3.5" />
+                      <span className="hidden min-[480px]:inline">Snooze</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -1840,7 +1842,7 @@ export function RealInboxShell({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-full border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/20"
+                  className="shrink-0 rounded-full border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 hover:text-sky-900 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200 dark:hover:bg-sky-500/20"
                   onClick={() => void changeStatus("reopen")}
                 >
                   {selected.status === "SNOOZED" ? "Unsnooze" : "Reopen"}
@@ -1848,24 +1850,34 @@ export function RealInboxShell({
               ) : (
                 <Button
                   size="sm"
-                  className="rounded-full border border-amber-300 bg-amber-100 font-semibold text-amber-900 hover:bg-amber-200 hover:text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/25"
+                  className="shrink-0 rounded-full border border-amber-300 bg-amber-100 font-semibold text-amber-900 hover:bg-amber-200 hover:text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-100 dark:hover:bg-amber-500/25"
                   onClick={() => void changeStatus("resolve")}
+                  aria-label="Resolve conversation"
                 >
-                  <Check className="size-3.5" /> Resolve
+                  <Check className="size-3.5" />
+                  <span className="hidden min-[480px]:inline">Resolve</span>
                 </Button>
               )}
               <Button
                 size="sm"
-                className="rounded-full bg-emerald-600 font-semibold text-white hover:bg-emerald-700"
+                className="shrink-0 rounded-full bg-emerald-600 font-semibold text-white hover:bg-emerald-700"
                 onClick={() => textareaRef.current?.focus()}
+                aria-label="Reply"
               >
-                <Reply className="size-3.5" /> Reply
+                <Reply className="size-3.5" />
+                <span className="hidden min-[480px]:inline">Reply</span>
               </Button>
               {data.canManage ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="rounded-full" aria-label="More actions">
-                      <MoreHorizontal className="size-4" /> More
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 rounded-full"
+                      aria-label="More actions"
+                    >
+                      <MoreHorizontal className="size-4" />
+                      <span className="hidden min-[480px]:inline">More</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
