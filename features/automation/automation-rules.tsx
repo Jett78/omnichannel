@@ -934,16 +934,22 @@ export function AutomationRules({
             </span>
             <div className="flex flex-col gap-3">
               {drafts.map((draft, index) => (
-                <div key={index} className="flex flex-col gap-2.5 rounded-xl border bg-background p-3.5">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-primary/10 text-primary flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                <div
+                  key={index}
+                  className="flex flex-col gap-3 rounded-xl border bg-background p-4"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="bg-primary/10 text-primary flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold">
                       {index + 1}
                     </span>
                     <Select
                       value={draft.type}
                       onValueChange={(value) => updateDraft(index, { type: value })}
                     >
-                      <SelectTrigger className="w-52" aria-label="Action type">
+                      <SelectTrigger
+                        className="h-10 flex-1 bg-muted/30 font-medium sm:w-60 sm:flex-none"
+                        aria-label="Action type"
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -954,11 +960,11 @@ export function AutomationRules({
                         ))}
                       </SelectContent>
                     </Select>
-                    <div className="ml-auto flex gap-1">
+                    <div className="ml-auto flex items-center gap-0.5 rounded-lg bg-muted/40 p-0.5 ring-1 ring-border/50">
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-7"
+                        className="size-7 rounded-md"
                         disabled={index === 0}
                         onClick={() =>
                           setDrafts((prev) => {
@@ -975,7 +981,7 @@ export function AutomationRules({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-7"
+                        className="size-7 rounded-md"
                         disabled={index === drafts.length - 1}
                         onClick={() =>
                           setDrafts((prev) => {
@@ -992,7 +998,7 @@ export function AutomationRules({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="size-7 text-red-600"
+                        className="size-7 rounded-md text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
                         disabled={drafts.length === 1}
                         onClick={() =>
                           setDrafts((prev) => prev.filter((_, i) => i !== index))
@@ -1004,189 +1010,239 @@ export function AutomationRules({
                     </div>
                   </div>
 
-                  {draft.type === "assign" ? (
-                    <div className="flex flex-wrap gap-2">
-                      <Select
-                        value={draft.strategy}
-                        onValueChange={(value) => updateDraft(index, { strategy: value })}
-                      >
-                        <SelectTrigger className="w-48" aria-label="Assignment strategy">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="round_robin">Round-robin (available)</SelectItem>
-                          <SelectItem value="least_busy">Least busy (available)</SelectItem>
-                          <SelectItem value="specific">A specific person</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {draft.strategy === "specific" ? (
+                  <div className="flex flex-col gap-3 border-t border-dashed pt-3">
+                    {draft.type === "assign" ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                            Strategy
+                          </span>
+                          <Select
+                            value={draft.strategy}
+                            onValueChange={(value) => updateDraft(index, { strategy: value })}
+                          >
+                            <SelectTrigger className="h-10 w-full bg-muted/30" aria-label="Assignment strategy">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="round_robin">Round-robin (available)</SelectItem>
+                              <SelectItem value="least_busy">Least busy (available)</SelectItem>
+                              <SelectItem value="specific">A specific person</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </label>
+                        {draft.strategy === "specific" ? (
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                              Assign to
+                            </span>
+                            <Select
+                              value={draft.userId || undefined}
+                              onValueChange={(value) => updateDraft(index, { userId: value })}
+                            >
+                              <SelectTrigger className="h-10 w-full bg-muted/30" aria-label="Assign to">
+                                <SelectValue placeholder="Choose a member" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {assignableMembers.map((member) => (
+                                  <SelectItem key={member.userId} value={member.userId}>
+                                    {member.name} ({member.role.toLowerCase()})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </label>
+                        ) : null}
+                        {teams.length > 0 && draft.strategy !== "specific" ? (
+                          <label className="flex flex-col gap-1.5">
+                            <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                              Team
+                            </span>
+                            <Select
+                              value={draft.teamId || "any"}
+                              onValueChange={(value) =>
+                                updateDraft(index, { teamId: value === "any" ? "" : value })
+                              }
+                            >
+                              <SelectTrigger className="h-10 w-full bg-muted/30" aria-label="Restrict to team">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="any">Any team</SelectItem>
+                                {teams.map((team) => (
+                                  <SelectItem key={team.id} value={team.id}>
+                                    {team.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </label>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {draft.type === "ai_reply" ? (
+                      <p className="rounded-lg bg-primary/5 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground ring-1 ring-primary/10">
+                        The AI writes and sends a reply from the conversation and your knowledge
+                        base (managed under “AI assistant” on this page). It stops replying in a
+                        conversation once a human agent has replied there. Needs the AI key
+                        configured — without it, the run records “not configured” and nothing is
+                        sent.
+                      </p>
+                    ) : null}
+
+                    {draft.type === "add_tag" ? (
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                          Tag name
+                        </span>
+                        <Input
+                          className="h-10 bg-muted/30"
+                          value={draft.name}
+                          onChange={(event) => updateDraft(index, { name: event.target.value })}
+                          placeholder="Tag name, e.g. vip"
+                          aria-label="Tag name"
+                        />
+                      </label>
+                    ) : null}
+
+                    {draft.type === "send_canned" ? (
+                      canned.length > 0 ? (
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                            Saved reply
+                          </span>
+                          <Select
+                            value={draft.cannedResponseId || undefined}
+                            onValueChange={(value) =>
+                              updateDraft(index, { cannedResponseId: value })
+                            }
+                          >
+                            <SelectTrigger className="h-10 w-full bg-muted/30" aria-label="Saved reply">
+                              <SelectValue placeholder="Choose a saved reply" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {canned.map((item) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                  {item.title}
+                                  {item.category ? ` · ${item.category}` : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </label>
+                      ) : (
+                        <p className="text-muted-foreground text-xs">
+                          No saved replies yet — create one from the inbox (Saved replies) first.
+                        </p>
+                      )
+                    ) : null}
+
+                    {draft.type === "notify" ? (
+                      <div className="flex flex-col gap-3">
+                        <label className="flex flex-col gap-1.5">
+                          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                            Message
+                          </span>
+                          <Input
+                            className="h-10 bg-muted/30"
+                            value={draft.message}
+                            onChange={(event) =>
+                              updateDraft(index, { message: event.target.value })
+                            }
+                            placeholder="Message, e.g. New chat from {{contact.name}}"
+                            aria-label="Notification message"
+                          />
+                        </label>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                            Send to
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {members.map((member) => {
+                              const active = draft.userIds.includes(member.userId);
+                              return (
+                                <button
+                                  key={member.userId}
+                                  type="button"
+                                  onClick={() =>
+                                    updateDraft(index, {
+                                      userIds: active
+                                        ? draft.userIds.filter((id) => id !== member.userId)
+                                        : [...draft.userIds, member.userId],
+                                    })
+                                  }
+                                  className={
+                                    active
+                                      ? "rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground ring-1 ring-primary transition-colors"
+                                      : "rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border/60 transition-colors hover:bg-muted hover:text-foreground hover:ring-border"
+                                  }
+                                >
+                                  {member.name}
+                                </button>
+                              );
+                            })}
+                            {draft.userIds.length === 0 ? (
+                              <span className="text-muted-foreground py-1 text-xs">
+                                (none picked = owners &amp; admins)
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {draft.type === "set_status" ? (
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                          New status
+                        </span>
                         <Select
-                          value={draft.userId || undefined}
-                          onValueChange={(value) => updateDraft(index, { userId: value })}
+                          value={draft.status}
+                          onValueChange={(value) => updateDraft(index, { status: value })}
                         >
-                          <SelectTrigger className="w-52" aria-label="Assign to">
-                            <SelectValue placeholder="Choose a member" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {assignableMembers.map((member) => (
-                              <SelectItem key={member.userId} value={member.userId}>
-                                {member.name} ({member.role.toLowerCase()})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : null}
-                      {teams.length > 0 && draft.strategy !== "specific" ? (
-                        <Select
-                          value={draft.teamId || "any"}
-                          onValueChange={(value) =>
-                            updateDraft(index, { teamId: value === "any" ? "" : value })
-                          }
-                        >
-                          <SelectTrigger className="w-48" aria-label="Restrict to team">
+                          <SelectTrigger className="h-10 w-full bg-muted/30 sm:w-60" aria-label="New status">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="any">Any team</SelectItem>
-                            {teams.map((team) => (
-                              <SelectItem key={team.id} value={team.id}>
-                                {team.name}
-                              </SelectItem>
-                            ))}
+                            <SelectItem value="RESOLVED">Resolved</SelectItem>
+                            <SelectItem value="OPEN">Open (reopen)</SelectItem>
                           </SelectContent>
                         </Select>
-                      ) : null}
-                    </div>
-                  ) : null}
+                      </label>
+                    ) : null}
 
-                  {draft.type === "ai_reply" ? (
-                    <p className="text-muted-foreground text-xs leading-relaxed">
-                      The AI writes and sends a reply from the conversation and your knowledge
-                      base (managed under “AI assistant” on this page). It stops replying in a conversation once
-                      a human agent has replied there. Needs the AI key configured — without
-                      it, the run records “not configured” and nothing is sent.
-                    </p>
-                  ) : null}
-
-                  {draft.type === "add_tag" ? (
-                    <Input
-                      value={draft.name}
-                      onChange={(event) => updateDraft(index, { name: event.target.value })}
-                      placeholder="Tag name, e.g. vip"
-                      aria-label="Tag name"
-                    />
-                  ) : null}
-
-                  {draft.type === "send_canned" ? (
-                    canned.length > 0 ? (
-                      <Select
-                        value={draft.cannedResponseId || undefined}
-                        onValueChange={(value) =>
-                          updateDraft(index, { cannedResponseId: value })
-                        }
-                      >
-                        <SelectTrigger aria-label="Saved reply">
-                          <SelectValue placeholder="Choose a saved reply" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {canned.map((item) => (
-                            <SelectItem key={item.id} value={item.id}>
-                              {item.title}
-                              {item.category ? ` · ${item.category}` : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <p className="text-muted-foreground text-xs">
-                        No saved replies yet — create one from the inbox (Saved replies) first.
-                      </p>
-                    )
-                  ) : null}
-
-                  {draft.type === "notify" ? (
-                    <div className="flex flex-col gap-2">
-                      <Input
-                        value={draft.message}
-                        onChange={(event) => updateDraft(index, { message: event.target.value })}
-                        placeholder="Message, e.g. New chat from {{contact.name}}"
-                        aria-label="Notification message"
-                      />
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className="text-muted-foreground py-1 text-xs">Send to:</span>
-                        {members.map((member) => {
-                          const active = draft.userIds.includes(member.userId);
-                          return (
-                            <button
-                              key={member.userId}
-                              type="button"
-                              onClick={() =>
-                                updateDraft(index, {
-                                  userIds: active
-                                    ? draft.userIds.filter((id) => id !== member.userId)
-                                    : [...draft.userIds, member.userId],
-                                })
-                              }
-                              className={
-                                active
-                                  ? "rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground ring-1 ring-primary transition-colors"
-                                  : "rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border/60 transition-colors hover:bg-muted hover:text-foreground hover:ring-border"
-                              }
-                            >
-                              {member.name}
-                            </button>
-                          );
-                        })}
-                        {draft.userIds.length === 0 ? (
-                          <span className="text-muted-foreground py-1 text-xs">
-                            (none picked = owners &amp; admins)
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {draft.type === "set_status" ? (
-                    <Select
-                      value={draft.status}
-                      onValueChange={(value) => updateDraft(index, { status: value })}
-                    >
-                      <SelectTrigger className="w-52" aria-label="New status">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="RESOLVED">Resolved</SelectItem>
-                        <SelectItem value="OPEN">Open (reopen)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : null}
-
-                  {draft.type === "set_priority" ? (
-                    <Select
-                      value={draft.priority}
-                      onValueChange={(value) => updateDraft(index, { priority: value })}
-                    >
-                      <SelectTrigger className="w-52" aria-label="Priority">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="LOW">Low</SelectItem>
-                        <SelectItem value="MEDIUM">Medium</SelectItem>
-                        <SelectItem value="HIGH">High</SelectItem>
-                        <SelectItem value="URGENT">Urgent</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : null}
+                    {draft.type === "set_priority" ? (
+                      <label className="flex flex-col gap-1.5">
+                        <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                          Priority
+                        </span>
+                        <Select
+                          value={draft.priority}
+                          onValueChange={(value) => updateDraft(index, { priority: value })}
+                        >
+                          <SelectTrigger className="h-10 w-full bg-muted/30 sm:w-60" aria-label="Priority">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="LOW">Low</SelectItem>
+                            <SelectItem value="MEDIUM">Medium</SelectItem>
+                            <SelectItem value="HIGH">High</SelectItem>
+                            <SelectItem value="URGENT">Urgent</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </label>
+                    ) : null}
+                  </div>
                 </div>
               ))}
               {drafts.length < 10 ? (
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="self-start border-dashed"
+                  className="w-full border-dashed py-5 text-muted-foreground hover:text-foreground"
                   onClick={() => setDrafts((prev) => [...prev, emptyDraft()])}
                 >
-                  <Plus className="size-3.5" /> Add action
+                  <Plus className="size-4" /> Add action
                 </Button>
               ) : null}
             </div>
