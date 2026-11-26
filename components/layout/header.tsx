@@ -68,6 +68,7 @@ const TITLES: Record<string, string> = {
   "/analytics": "Analytics",
   "/settings": "Settings",
   "/onboarding": "Onboarding",
+  "/profile": "Profile",
 };
 
 const NAV_PAGES = Object.entries(TITLES).map(([href, label]) => ({ href, label }));
@@ -243,7 +244,7 @@ export function Header({
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/settings">
+                <Link href="/profile">
                   <UserRound className="size-4" /> Profile
                 </Link>
               </DropdownMenuItem>

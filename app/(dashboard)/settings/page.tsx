@@ -1,10 +1,7 @@
-import { BadgeCheck, TriangleAlert } from "lucide-react";
-import Link from "next/link";
+import { TriangleAlert } from "lucide-react";
 import { redirect } from "next/navigation";
 
-import { AvatarWithBadge } from "@/components/avatar-with-badge";
 import { PageHeader } from "@/components/layout/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NotificationPreferences } from "@/features/settings/notification-preferences";
@@ -50,38 +47,8 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Settings"
-        description={`Profile, workspace and preferences for ${active.name}. Team members and roles live on the Team page.`}
+        description={`Workspace settings and preferences for ${active.name}. Your personal account lives on the Profile page; team members and roles live on the Team page.`}
       />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Profile</CardTitle>
-          <CardDescription>Your account across every workspace you belong to.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap items-center gap-4">
-            <AvatarWithBadge name={user.name || user.email} image={user.image} size="lg" />
-            <div className="min-w-0 flex-1 leading-tight">
-              <p className="flex flex-wrap items-center gap-2 font-medium">
-                {user.name}
-                {user.emailVerified ? (
-                  <Badge variant="success">
-                    <BadgeCheck className="size-3" /> Email verified
-                  </Badge>
-                ) : (
-                  <Badge variant="warning">Email not verified</Badge>
-                )}
-              </p>
-              <p className="text-muted-foreground truncate text-sm">{user.email}</p>
-            </div>
-            {!user.emailVerified ? (
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/verify-email">Verify email</Link>
-              </Button>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
 
       <WorkspaceSettings
         workspace={{
