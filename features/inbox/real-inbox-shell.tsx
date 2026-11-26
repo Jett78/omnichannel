@@ -18,7 +18,6 @@ import {
   PanelRight,
   Paperclip,
   Pencil,
-  Reply,
   RotateCcw,
   Search,
   Smile,
@@ -1865,15 +1864,6 @@ export function RealInboxShell({
                   <span className="hidden min-[480px]:inline">Resolve</span>
                 </Button>
               )}
-              <Button
-                size="sm"
-                className="shrink-0 rounded-full bg-emerald-600 font-semibold text-white hover:bg-emerald-700"
-                onClick={() => textareaRef.current?.focus()}
-                aria-label="Reply"
-              >
-                <Reply className="size-3.5" />
-                <span className="hidden min-[480px]:inline">Reply</span>
-              </Button>
               <Button
                 variant="outline"
                 size="sm"
