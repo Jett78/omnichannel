@@ -35,12 +35,14 @@ export async function POST(request: Request, context: RouteContext) {
       throw AppError.badRequest("Attach a file in the 'file' form field.");
     }
     const title = form.get("title");
+    const entryId = form.get("entryId");
     const bytes = Buffer.from(await file.arrayBuffer());
     const item = await knowledgeDocumentService.upload(user.id, workspaceId, {
       fileName: file.name || "document",
       mimeType: file.type || "",
       bytes,
       ...(typeof title === "string" && title.trim() ? { title } : {}),
+      ...(typeof entryId === "string" && entryId.trim() ? { entryId: entryId.trim() } : {}),
     });
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {

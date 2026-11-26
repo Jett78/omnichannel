@@ -734,7 +734,8 @@ model KnowledgeEntry {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documents KnowledgeDocument[]
 
   @@index([workspaceId])
 }
@@ -776,10 +777,13 @@ model KnowledgeDocument {
   createdById   String
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
+  entryId       String?
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entry     KnowledgeEntry? @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId, status])
+  @@index([entryId])
 }
 
 /** One row per AI action (suggest/rewrite/summarize/sentiment/translate) — honest usage counting. */

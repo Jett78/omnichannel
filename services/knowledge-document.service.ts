@@ -31,6 +31,8 @@ export interface KnowledgeDocumentView {
   charCount: number | null;
   createdAt: string;
   updatedAt: string;
+  /** The knowledge entry this document belongs to (null = unattached). */
+  entryId: string | null;
 }
 
 type DocumentRow = {
@@ -45,6 +47,7 @@ type DocumentRow = {
   charCount: number | null;
   createdAt: Date;
   updatedAt: Date;
+  entryId: string | null;
 };
 
 function toView(row: DocumentRow): KnowledgeDocumentView {
@@ -60,6 +63,7 @@ function toView(row: DocumentRow): KnowledgeDocumentView {
     charCount: row.charCount,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    entryId: row.entryId,
   };
 }
 
@@ -75,6 +79,7 @@ const VIEW_SELECT = {
   charCount: true,
   createdAt: true,
   updatedAt: true,
+  entryId: true,
 } as const;
 
 export const knowledgeDocumentService = {
@@ -94,7 +99,13 @@ export const knowledgeDocumentService = {
   async upload(
     actorUserId: string,
     workspaceId: string,
-    input: { fileName: string; mimeType: string; bytes: Buffer; title?: string },
+    input: {
+      fileName: string;
+      mimeType: string;
+      bytes: Buffer;
+      title?: string;
+      entryId?: string;
+    },
   ): Promise<KnowledgeDocumentView> {
     await requireWorkspacePermission(actorUserId, workspaceId, "workspace.update");
     const fileName = input.fileName.trim();
@@ -106,6 +117,13 @@ export const knowledgeDocumentService = {
     if (input.bytes.length > MAX_KNOWLEDGE_FILE_BYTES) {
       throw AppError.badRequest("Knowledge files can be at most 5 MB.");
     }
+    if (input.entryId) {
+      const entry = await prisma.knowledgeEntry.findFirst({
+        where: { id: input.entryId, workspaceId },
+        select: { id: true },
+      });
+      if (!entry) throw AppError.badRequest("That knowledge entry does not exist.");
+    }
     const row = await prisma.knowledgeDocument.create({
       data: {
         workspaceId,
@@ -115,6 +133,7 @@ export const knowledgeDocumentService = {
         sizeBytes: input.bytes.length,
         data: Uint8Array.from(input.bytes),
         createdById: actorUserId,
+        ...(input.entryId ? { entryId: input.entryId } : {}),
       },
       select: VIEW_SELECT,
     });

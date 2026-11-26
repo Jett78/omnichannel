@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { AutomationRules } from "@/features/automation/automation-rules";
 import { AiKnowledge } from "@/features/settings/ai-knowledge";
 import { AiModelConfig } from "@/features/settings/ai-model-config";
-import { KnowledgeDocuments } from "@/features/settings/knowledge-documents";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { getAiStatus, getEnvAiConfig } from "@/lib/ai";
@@ -118,18 +117,11 @@ export default async function AutomationPage() {
           <AiKnowledge
             workspaceId={active.id}
             initialEntries={knowledgeEntries}
+            initialDocuments={knowledgeDocuments}
             aiConfigured={aiStatus.configured}
             aiLabel={aiStatus.label}
             usageThisMonth={aiUsageThisMonth}
             canManage={canManage}
-            documentsSlot={
-              <KnowledgeDocuments
-                embedded
-                workspaceId={active.id}
-                initialDocuments={knowledgeDocuments}
-                canManage={canManage}
-              />
-            }
           />
         </div>
       }
