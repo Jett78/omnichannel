@@ -1,10 +1,18 @@
 "use client";
 
-import { Pencil, Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { KnowledgeEntryView } from "@/services/ai.service";
@@ -16,12 +24,18 @@ interface AiKnowledgeProps {
   aiLabel: string | null;
   usageThisMonth: number;
   canManage: boolean;
+  /** Knowledge documents UI, rendered inside this card (Dograh-style:
+   *  one knowledge base holding both typed entries and files). */
+  documentsSlot?: ReactNode;
 }
 
 /**
- * Settings → AI assistant & knowledge base (Phase 13G). Knowledge
+ * Automation → AI assistant & knowledge base (Phase 13G). Knowledge
  * entries ground the composer's AI suggestions; management is
  * OWNER/ADMIN (workspace.update), matching the service gates.
+ * Adding and editing an entry happens in a modal (Jeet, 2026-11-26),
+ * and the knowledge documents live inside this same card, the way
+ * Dograh keeps every knowledge source in one Knowledge Base.
  */
 export function AiKnowledge({
   workspaceId,
@@ -30,9 +44,11 @@ export function AiKnowledge({
   aiLabel,
   usageThisMonth,
   canManage,
+  documentsSlot,
 }: AiKnowledgeProps) {
   const [entries, setEntries] = useState(initialEntries);
   const [notice, setNotice] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -40,10 +56,18 @@ export function AiKnowledge({
 
   const apiBase = `/api/workspaces/${workspaceId}/knowledge`;
 
-  function resetForm() {
+  function openAdd() {
     setEditingId(null);
     setTitle("");
     setContent("");
+    setDialogOpen(true);
+  }
+
+  function openEdit(entry: KnowledgeEntryView) {
+    setEditingId(entry.id);
+    setTitle(entry.title);
+    setContent(entry.content);
+    setDialogOpen(true);
   }
 
   async function save() {
@@ -68,7 +92,7 @@ export function AiKnowledge({
           ? prev.map((entry) => (entry.id === editingId ? body.item : entry))
           : [...prev, body.item].sort((a, b) => a.title.localeCompare(b.title)),
       );
-      resetForm();
+      setDialogOpen(false);
     } else {
       setNotice("Could not save that knowledge entry.");
     }
@@ -78,7 +102,7 @@ export function AiKnowledge({
     const res = await fetch(`${apiBase}/${entry.id}`, { method: "DELETE" }).catch(() => null);
     if (res?.ok) {
       setEntries((prev) => prev.filter((item) => item.id !== entry.id));
-      if (editingId === entry.id) resetForm();
+      if (editingId === entry.id) setDialogOpen(false);
     } else {
       setNotice("Could not delete that knowledge entry.");
     }
@@ -92,8 +116,8 @@ export function AiKnowledge({
         </CardTitle>
         <CardDescription>
           The inbox composer&apos;s AI can suggest replies, rewrite drafts, summarize threads,
-          detect sentiment and translate — always as a draft the agent approves. Entries below
-          ground its suggestions in your own policies and facts.
+          detect sentiment and translate — always as a draft the agent approves. Entries and
+          documents below ground its suggestions in your own policies and facts.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -121,6 +145,17 @@ export function AiKnowledge({
           </p>
         ) : null}
 
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Entries
+          </p>
+          {canManage ? (
+            <Button size="sm" className="gap-1.5" onClick={openAdd}>
+              <Plus className="size-3.5" /> Add entry
+            </Button>
+          ) : null}
+        </div>
+
         <div className="flex flex-col gap-2">
           {entries.map((entry) => (
             <div key={entry.id} className="flex items-start gap-2 rounded-lg border px-3 py-2">
@@ -135,11 +170,7 @@ export function AiKnowledge({
                     size="icon"
                     className="text-muted-foreground size-7 shrink-0"
                     aria-label={`Edit ${entry.title}`}
-                    onClick={() => {
-                      setEditingId(entry.id);
-                      setTitle(entry.title);
-                      setContent(entry.content);
-                    }}
+                    onClick={() => openEdit(entry)}
                   >
                     <Pencil className="size-3.5" />
                   </Button>
@@ -164,58 +195,65 @@ export function AiKnowledge({
           ) : null}
         </div>
 
-        {canManage ? (
-          <div className="flex flex-col gap-3 border-t pt-3">
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="knowledge-title"
-                className="text-muted-foreground text-xs font-medium"
-              >
-                Title
-              </label>
-              <Input
-                id="knowledge-title"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="e.g. Delivery policy"
-              />
+        {documentsSlot ? <div className="border-t pt-4">{documentsSlot}</div> : null}
+      </CardContent>
+
+      {canManage ? (
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{editingId ? "Edit entry" : "Add entry"}</DialogTitle>
+              <DialogDescription>
+                A fact the AI can quote when it drafts or sends replies — written the way you
+                would tell a new teammate.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="knowledge-title"
+                  className="text-muted-foreground text-xs font-medium"
+                >
+                  Title
+                </label>
+                <Input
+                  id="knowledge-title"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder="e.g. Delivery policy"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="knowledge-facts"
+                  className="text-muted-foreground text-xs font-medium"
+                >
+                  Facts
+                </label>
+                <Textarea
+                  id="knowledge-facts"
+                  value={content}
+                  onChange={(event) => setContent(event.target.value)}
+                  placeholder="The facts, in plain text — delivery times, charges, areas you serve, exceptions…"
+                  rows={8}
+                  className="text-sm leading-relaxed"
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor="knowledge-facts"
-                className="text-muted-foreground text-xs font-medium"
-              >
-                Facts
-              </label>
-              <Textarea
-                id="knowledge-facts"
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                placeholder="The facts, in plain text — delivery times, charges, areas you serve, exceptions…"
-                rows={8}
-                className="text-sm leading-relaxed"
-              />
-              <p className="text-muted-foreground text-[11px]">
-                Written the way you would tell a new teammate. The AI quotes these facts
-                when it drafts or sends replies.
-              </p>
-            </div>
-            <div className="flex justify-end gap-2">
-              {editingId ? (
-                <Button variant="ghost" onClick={resetForm}>
-                  Cancel edit
-                </Button>
-              ) : null}
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
               <Button
                 onClick={() => void save()}
                 disabled={!title.trim() || !content.trim() || saving}
               >
                 {saving ? "Saving…" : editingId ? "Save changes" : "Add entry"}
               </Button>
-            </div>
-          </div>
-        ) : null}
-      </CardContent>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </Card>
   );
 }

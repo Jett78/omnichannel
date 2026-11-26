@@ -122,12 +122,14 @@ export default async function AutomationPage() {
             aiLabel={aiStatus.label}
             usageThisMonth={aiUsageThisMonth}
             canManage={canManage}
-          />
-
-          <KnowledgeDocuments
-            workspaceId={active.id}
-            initialDocuments={knowledgeDocuments}
-            canManage={canManage}
+            documentsSlot={
+              <KnowledgeDocuments
+                embedded
+                workspaceId={active.id}
+                initialDocuments={knowledgeDocuments}
+                canManage={canManage}
+              />
+            }
           />
         </div>
       }
