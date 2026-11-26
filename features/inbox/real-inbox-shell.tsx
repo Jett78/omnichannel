@@ -2249,6 +2249,20 @@ export function RealInboxShell({
                         <FileText className="size-3.5" /> Template
                       </button>
                     ) : null}
+                    {composerMode === "reply" ? (
+                      <button
+                        type="button"
+                        onClick={() => setAiOpen((open) => !open)}
+                        className={cn(
+                          "ml-auto flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[13px] font-semibold text-violet-600 transition-colors hover:bg-violet-50 hover:text-violet-700 dark:text-violet-400 dark:hover:bg-violet-500/15 dark:hover:text-violet-300",
+                          aiOpen && "bg-violet-100 dark:bg-violet-500/20",
+                        )}
+                        aria-label="AI assistant"
+                        title="AI assistant — suggest, rewrite, summarize, translate"
+                      >
+                        <Sparkles className="size-4" /> AI Assist
+                      </button>
+                    ) : null}
                   </div>
                   {composerMode === "template" ? (
                     <div className="flex flex-col gap-2 px-3 py-2">
@@ -2425,18 +2439,6 @@ export function RealInboxShell({
                         onClick={() => setCannedManageOpen(true)}
                       >
                         <Bookmark className="size-4" />
-                      </Button>
-                    ) : null}
-                    {composerMode === "reply" ? (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 shrink-0 hover:bg-fuchsia-50 hover:text-fuchsia-600 dark:hover:bg-fuchsia-500/15 dark:hover:text-fuchsia-300"
-                        aria-label="AI assistant"
-                        title="AI assistant — suggest, rewrite, summarize, translate"
-                        onClick={() => setAiOpen((open) => !open)}
-                      >
-                        <Sparkles className="size-4" />
                       </Button>
                     ) : null}
                     <span className="text-muted-foreground text-xs">
