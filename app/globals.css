@@ -167,3 +167,11 @@
 .rounded-full {
   border-radius: calc(var(--radius) - 2px);
 }
+
+/* Badges are short (~20px tall), so the shared 10px curve would still
+   read as a pill on them; they take a tighter 6px corner instead.
+   Count bubbles (unread numbers) are plain spans, not Badge
+   components, and stay circular on purpose. */
+[data-slot="badge"] {
+  border-radius: calc(var(--radius) - 6px);
+}
