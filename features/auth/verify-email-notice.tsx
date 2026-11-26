@@ -51,14 +51,6 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
           if (data && typeof data === "object" && "verified" in data && data.verified === true) {
             clearInterval(timer);
             setJustVerified(true);
-            setTimeout(() => {
-              if (cancelled) return;
-              if (sessionEmail) {
-                router.refresh();
-              } else {
-                router.push(`/login?verified=1&email=${encodeURIComponent(email)}`);
-              }
-            }, 1400);
           }
         } catch {
           // A failed poll is not fatal — the next tick retries.
@@ -71,6 +63,22 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email, verified]);
+
+  // Continue automatically once verification lands. This must live in
+  // its own effect: when the timed navigation sat inside the polling
+  // effect, flipping `verified` re-ran that effect and its cleanup
+  // cancelled the pending redirect (found in live QA, 2026-11-26).
+  useEffect(() => {
+    if (!justVerified) return;
+    const timer = setTimeout(() => {
+      if (sessionEmail) {
+        router.refresh();
+      } else if (email) {
+        router.push(`/login?verified=1&email=${encodeURIComponent(email)}`);
+      }
+    }, 1400);
+    return () => clearTimeout(timer);
+  }, [justVerified, sessionEmail, email, router]);
 
   async function onResend() {
     if (!email) {
