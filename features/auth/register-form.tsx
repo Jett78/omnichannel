@@ -1,14 +1,14 @@
 "use client";
 
-import { Mail, User } from "lucide-react";
+import { ArrowRight, Mail, User } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthCard, authButtonClass, authIconClass, authInputClass } from "@/features/auth/auth-card";
 import { PasswordInput } from "@/features/auth/password-input";
 import { createVerificationWatch } from "@/features/auth/verification-watch-client";
 import { authClient } from "@/lib/auth-client";
@@ -74,86 +74,81 @@ export function RegisterForm({ nextPath }: { nextPath?: string | null }) {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="text-xl">Create your account</CardTitle>
-        <CardDescription>
-          Start managing every customer conversation from one inbox. We&apos;ll email you a
-          verification link — your account activates as soon as you click it.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="name">Full name</Label>
-            <div className="relative">
-              <User className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-              <Input
-                id="name"
-                name="name"
-                placeholder="Jeet Deula"
-                autoComplete="name"
-                required
-                className="h-11 pl-10"
-              />
-            </div>
-            {fieldError("name")}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Work email</Label>
-            <div className="relative">
-              <Mail className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="you@company.com"
-                autoComplete="email"
-                required
-                className="h-11 pl-10"
-              />
-            </div>
-            {fieldError("email")}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
-            <PasswordInput id="password" name="password" autoComplete="new-password" required />
-            {fieldError("password") ?? (
-              <p className="text-muted-foreground text-xs">At least 8 characters.</p>
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="confirmPassword">Confirm password</Label>
-            <PasswordInput
-              id="confirmPassword"
-              name="confirmPassword"
-              autoComplete="new-password"
+    <AuthCard
+      title="Create your account"
+      description="Start managing every customer conversation from one inbox. We'll email you a verification link to activate your account."
+    >
+      <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="name">Full name</Label>
+          <div className="group relative">
+            <User className={authIconClass} />
+            <Input
+              id="name"
+              name="name"
+              placeholder="Jeet Deula"
+              autoComplete="name"
               required
+              className={authInputClass}
             />
-            {fieldError("confirmPassword")}
           </div>
-          {error ? (
-            <p
-              className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm"
-              role="alert"
-            >
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" disabled={pending} className="h-11 w-full rounded-full font-semibold">
-            {pending ? "Creating account…" : "Create account"}
-          </Button>
-          <p className="text-muted-foreground text-center text-sm">
-            Already have an account?{" "}
-            <Link
-              href={nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login"}
-              className="text-primary font-medium underline-offset-4 hover:underline"
-            >
-              Sign in
-            </Link>
+          {fieldError("name")}
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="email">Work email</Label>
+          <div className="group relative">
+            <Mail className={authIconClass} />
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="you@company.com"
+              autoComplete="email"
+              required
+              className={authInputClass}
+            />
+          </div>
+          {fieldError("email")}
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="password">Password</Label>
+          <PasswordInput id="password" name="password" autoComplete="new-password" required />
+          {fieldError("password") ?? (
+            <p className="text-muted-foreground text-xs">At least 8 characters.</p>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="confirmPassword">Confirm password</Label>
+          <PasswordInput
+            id="confirmPassword"
+            name="confirmPassword"
+            autoComplete="new-password"
+            required
+          />
+          {fieldError("confirmPassword")}
+        </div>
+        {error ? (
+          <p
+            className="border-destructive/30 bg-destructive/10 text-destructive rounded-xl border px-3.5 py-2.5 text-sm"
+            role="alert"
+          >
+            {error}
           </p>
-        </form>
-      </CardContent>
-    </Card>
+        ) : null}
+        <Button type="submit" disabled={pending} className={authButtonClass}>
+          {pending ? "Creating account…" : "Create account"}
+          {!pending ? <ArrowRight className="size-4" /> : null}
+        </Button>
+        <p className="text-muted-foreground text-center text-sm">
+          Already have an account?{" "}
+          <Link
+            href={nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login"}
+            className="text-primary font-semibold underline-offset-4 hover:underline"
+          >
+            Sign in
+          </Link>
+        </p>
+      </form>
+    </AuthCard>
   );
 }

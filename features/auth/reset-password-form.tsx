@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { AuthCard, authButtonClass } from "@/features/auth/auth-card";
 import { PasswordInput } from "@/features/auth/password-input";
 import { authClient } from "@/lib/auth-client";
 import { resetPasswordSchema } from "@/lib/validations";
@@ -64,12 +64,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="text-xl">Reset password</CardTitle>
-        <CardDescription>Choose a new password for your account.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <AuthCard title="Reset password" description="Choose a new password for your account.">
         {done ? (
           <div className="flex flex-col items-center gap-4 text-center">
             <span className="flex size-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
@@ -109,17 +104,13 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
             </div>
             {error ? (
               <p
-                className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm"
+                className="border-destructive/30 bg-destructive/10 text-destructive rounded-xl border px-3.5 py-2.5 text-sm"
                 role="alert"
               >
                 {error}
               </p>
             ) : null}
-            <Button
-              type="submit"
-              disabled={pending || !token}
-              className="h-11 w-full rounded-full font-semibold"
-            >
+            <Button type="submit" disabled={pending || !token} className={authButtonClass}>
               {pending ? "Resetting…" : "Reset password"}
             </Button>
             <Link
@@ -130,7 +121,6 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
             </Link>
           </form>
         )}
-      </CardContent>
-    </Card>
+    </AuthCard>
   );
 }

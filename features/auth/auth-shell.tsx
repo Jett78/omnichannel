@@ -88,7 +88,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
             {CHANNELS.map((provider) => (
               <span
                 key={provider}
-                className="flex size-9 items-center justify-center rounded-full bg-white/10 ring-1 ring-white/15"
+                className="flex size-9 items-center justify-center rounded-full bg-white"
               >
                 <ProviderGlyph provider={provider} className="size-4.5" />
               </span>
@@ -111,7 +111,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
             Every customer conversation, in one place.
           </span>
         </div>
-        <div className="relative w-full max-w-md">{children}</div>
+        <div className="relative w-full max-w-lg">{children}</div>
         <p className="text-muted-foreground relative flex gap-4 text-xs">
           <Link href="/privacy" className="underline-offset-4 hover:underline">
             Privacy Policy

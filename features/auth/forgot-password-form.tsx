@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthCard, authButtonClass, authIconClass, authInputClass } from "@/features/auth/auth-card";
 import { authClient } from "@/lib/auth-client";
 import { forgotPasswordSchema } from "@/lib/validations";
 
@@ -44,15 +44,10 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle className="text-xl">Forgot password</CardTitle>
-        <CardDescription>
-          Enter the email you signed up with and we&apos;ll send you a secure link to reset your
-          password.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <AuthCard
+      title="Forgot password"
+      description="Enter the email you signed up with and we'll send you a secure link to reset your password."
+    >
         {sentTo ? (
           <div className="flex flex-col items-center gap-4 text-center">
             <span className="bg-accent text-primary flex size-14 items-center justify-center rounded-full">
@@ -76,8 +71,8 @@ export function ForgotPasswordForm() {
           <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+              <div className="group relative">
+                <Mail className={authIconClass} />
                 <Input
                   id="email"
                   name="email"
@@ -85,19 +80,19 @@ export function ForgotPasswordForm() {
                   placeholder="you@company.com"
                   autoComplete="email"
                   required
-                  className="h-11 pl-10"
+                  className={authInputClass}
                 />
               </div>
             </div>
             {error ? (
               <p
-                className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm"
+                className="border-destructive/30 bg-destructive/10 text-destructive rounded-xl border px-3.5 py-2.5 text-sm"
                 role="alert"
               >
                 {error}
               </p>
             ) : null}
-            <Button type="submit" disabled={pending} className="h-11 w-full rounded-full font-semibold">
+            <Button type="submit" disabled={pending} className={authButtonClass}>
               {pending ? "Sending…" : "Send reset link"}
             </Button>
             <Link
@@ -108,7 +103,6 @@ export function ForgotPasswordForm() {
             </Link>
           </form>
         )}
-      </CardContent>
-    </Card>
+    </AuthCard>
   );
 }

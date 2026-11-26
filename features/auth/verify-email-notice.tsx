@@ -1,14 +1,14 @@
 "use client";
 
-import { CheckCircle2, MailCheck } from "lucide-react";
+import { CheckCircle2, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AuthCard, authButtonClass, authIconClass, authInputClass } from "@/features/auth/auth-card";
 import {
   clearVerificationWatch,
   exchangeVerificationWatch,
@@ -147,19 +147,18 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
 
   if (verified) {
     return (
-      <Card className="w-full max-w-md">
-        <CardContent className="flex flex-col items-center gap-4 pt-6 text-center">
+      <AuthCard
+        title="Email verified"
+        description={
+          sessionEmail || watchId
+            ? "Your email address is verified. Signing you in…"
+            : "Your email address is verified. Taking you to sign in…"
+        }
+      >
+        <div className="flex flex-col items-center gap-4 text-center">
           <span className="flex size-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
             <CheckCircle2 className="size-7" />
           </span>
-          <div>
-            <p className="font-medium">Email verified</p>
-            <p className="text-muted-foreground mt-1 text-sm">
-              {sessionEmail || watchId
-                ? "Your email address is verified. Signing you in…"
-                : "Your email address is verified. Taking you to sign in…"}
-            </p>
-          </div>
           <Button asChild className="rounded-full px-5">
             {sessionEmail || watchId ? (
               <Link href="/dashboard">Continue to your inbox</Link>
@@ -169,49 +168,44 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
               </Link>
             )}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </AuthCard>
     );
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader className="items-center text-center">
-        <span className="bg-accent text-primary mx-auto flex size-14 items-center justify-center rounded-full">
-          <MailCheck className="size-7" />
-        </span>
-        <CardTitle className="text-xl">Verify your email</CardTitle>
-        <CardDescription>
-          {email ? (
-            <>
-              We sent a verification link to{" "}
-              <span className="text-foreground font-medium">{email}</span>. Click it to activate
-              your account — the link expires in 1 hour.
-            </>
-          ) : (
-            "Enter your email and we'll send you a verification link to activate your account."
-          )}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <AuthCard
+      title="Verify your email"
+      description={
+        email ? (
+          <>
+            We sent a verification link to{" "}
+            <span className="text-foreground font-medium">{email}</span>. Click it to activate your
+            account — the link expires in 1 hour.
+          </>
+        ) : (
+          "Enter your email and we'll send you a verification link to activate your account."
+        )
+      }
+    >
+      <div className="flex flex-col gap-4">
         {!sessionEmail && !initialEmail ? (
           <div className="flex flex-col gap-2">
             <Label htmlFor="verify-email">Email</Label>
-            <Input
-              id="verify-email"
-              type="email"
-              placeholder="you@company.com"
-              value={emailInput}
-              onChange={(event) => setEmailInput(event.target.value)}
-              className="h-11"
-            />
+            <div className="group relative">
+              <Mail className={authIconClass} />
+              <Input
+                id="verify-email"
+                type="email"
+                placeholder="you@company.com"
+                value={emailInput}
+                onChange={(event) => setEmailInput(event.target.value)}
+                className={authInputClass}
+              />
+            </div>
           </div>
         ) : null}
-        <Button
-          onClick={() => void onResend()}
-          disabled={pending}
-          className="h-11 w-full rounded-full font-semibold"
-        >
+        <Button onClick={() => void onResend()} disabled={pending} className={authButtonClass}>
           {pending ? "Sending…" : "Resend verification email"}
         </Button>
         {message ? <p className="text-center text-sm">{message}</p> : null}
@@ -221,17 +215,20 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
               <span className="bg-primary absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" />
               <span className="bg-primary relative inline-flex size-2 rounded-full" />
             </span>
-            Waiting for the click — this page continues on its own once you tap the link, on
-            any device.
+            Waiting for the click — this page continues on its own once you tap the link, on any
+            device.
           </p>
         ) : null}
         <p className="text-muted-foreground text-center text-sm">
           Already verified?{" "}
-          <Link href="/login" className="text-primary font-medium underline-offset-4 hover:underline">
+          <Link
+            href="/login"
+            className="text-primary font-semibold underline-offset-4 hover:underline"
+          >
             Sign in
           </Link>
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </AuthCard>
   );
 }
