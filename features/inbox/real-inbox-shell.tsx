@@ -11,6 +11,7 @@ import {
   FileText,
   Flag,
   Flame,
+  Globe,
   ListFilter,
   Lock,
   MoreHorizontal,
@@ -47,6 +48,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -362,10 +364,13 @@ type AssigneeTab = "all" | "mine" | "unassigned" | "mentions";
 type StatusFilter = "ALL" | "OPEN" | "PENDING" | "RESOLVED" | "SNOOZED";
 type SortMode = "latest" | "waiting" | "priority";
 
-/** Filter-bar design: statuses as one-tap tinted chips, sort +
- *  channel as two compact selects. The assignee views (All / Mine /
- *  Unassigned / Mentions) live in the sidebar's Inbox dropdown and
- *  arrive here as the ?view= initial tab — no in-inbox switcher. */
+/** Filter-bar design (Jeet's reference, 2026-11-26): three filter
+ *  icons beside the search — status (All / Open / Pending / Snoozed /
+ *  Resolved), sort (Latest activity first) and channel, each a small
+ *  dropdown. Channels appear in rows as just their brand icon. The
+ *  assignee views (All / Mine / Unassigned / Mentions) live in the
+ *  sidebar's Inbox dropdown and arrive here as the ?view= initial
+ *  tab — no in-inbox switcher. */
 
 /* Active filter chip = one solid primary pill (the reference design);
  * the per-status tint lives on the rows' status badges instead. */
@@ -1431,8 +1436,8 @@ export function RealInboxShell({
             </span>
           </span>
         </div>
-        <div className="px-4 pb-2">
-          <div className="relative">
+        <div className="flex items-center gap-1.5 px-4 pb-3">
+          <div className="relative min-w-0 flex-1">
             <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
             <Input
               placeholder="Search conversations"
@@ -1442,61 +1447,149 @@ export function RealInboxShell({
               aria-label="Search conversations"
             />
           </div>
-        </div>
-        <div className="space-y-2.5 px-4 pb-3">
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
-            {STATUS_CHIPS.map((chip) => (
-              <button
-                key={chip.value}
-                type="button"
-                aria-pressed={statusFilter === chip.value}
-                onClick={() => setStatusFilter(chip.value)}
+          {/* Three filter icons beside the search (Jeet's reference):
+              status, sort and channel, each behind one icon dropdown.
+              A filled trigger + dot marks a non-default filter. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
                 className={cn(
-                  "flex-1 rounded-full border px-2 py-1.5 text-[11px] font-medium whitespace-nowrap transition-colors",
-                  statusFilter === chip.value
-                    ? chip.activeClass
-                    : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                  "relative size-9 shrink-0 rounded-full",
+                  statusFilter !== "ALL" && "bg-accent text-foreground",
                 )}
+                aria-label="Filter by status"
+                title="Filter by status"
               >
-                {chip.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <Select value={sortMode} onValueChange={(v) => setSortMode(v as SortMode)}>
-              <SelectTrigger
-                className="h-9 min-w-0 flex-1 gap-1.5 rounded-full bg-card px-3.5 text-xs [&>span]:truncate"
-                aria-label="Sort conversations"
-              >
-                <ArrowUpDown className="text-muted-foreground size-3.5 shrink-0" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="latest">Latest activity</SelectItem>
-                <SelectItem value="waiting">Waiting longest</SelectItem>
-                <SelectItem value="priority">Priority</SelectItem>
-              </SelectContent>
-            </Select>
-            {knownChannels.length > 1 ? (
-              <Select value={channelFilter} onValueChange={setChannelFilter}>
-                <SelectTrigger
-                  className="h-9 min-w-0 flex-1 gap-1.5 rounded-full bg-card px-3.5 text-xs [&>span]:truncate"
-                  aria-label="Filter by channel"
+                <ListFilter className="size-4" />
+                {statusFilter !== "ALL" ? (
+                  <span className="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full" />
+                ) : null}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel>Status</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {STATUS_CHIPS.map((chip) => (
+                <DropdownMenuItem
+                  key={chip.value}
+                  onSelect={() => setStatusFilter(chip.value)}
                 >
-                  <ListFilter className="text-muted-foreground size-3.5 shrink-0" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">All channels</SelectItem>
-                  {knownChannels.map((channel) => (
-                    <SelectItem key={channel.id} value={channel.id}>
-                      {channel.displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-          </div>
+                  <Check
+                    className={cn(
+                      "size-4",
+                      statusFilter === chip.value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {chip.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  "relative size-9 shrink-0 rounded-full",
+                  sortMode !== "latest" && "bg-accent text-foreground",
+                )}
+                aria-label="Sort conversations"
+                title="Sort conversations"
+              >
+                <ArrowUpDown className="size-4" />
+                {sortMode !== "latest" ? (
+                  <span className="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full" />
+                ) : null}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {(
+                [
+                  { value: "latest", label: "Latest activity" },
+                  { value: "waiting", label: "Waiting longest" },
+                  { value: "priority", label: "Priority" },
+                ] as Array<{ value: SortMode; label: string }>
+              ).map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onSelect={() => setSortMode(option.value)}
+                >
+                  <Check
+                    className={cn(
+                      "size-4",
+                      sortMode === option.value ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {knownChannels.length > 1 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "relative size-9 shrink-0 rounded-full",
+                    channelFilter !== "ALL" && "bg-accent text-foreground",
+                  )}
+                  aria-label="Filter by channel"
+                  title="Filter by channel"
+                >
+                  {channelFilter === "ALL" ? (
+                    <Globe className="size-4" />
+                  ) : (
+                    <ProviderGlyph
+                      provider={
+                        knownChannels.find((c) => c.id === channelFilter)?.provider ??
+                        "WEBSITE"
+                      }
+                      className="size-4"
+                    />
+                  )}
+                  {channelFilter !== "ALL" ? (
+                    <span className="bg-primary absolute top-1.5 right-1.5 size-1.5 rounded-full" />
+                  ) : null}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel>Channel</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setChannelFilter("ALL")}>
+                  <Check
+                    className={cn(
+                      "size-4",
+                      channelFilter === "ALL" ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  <Globe className="size-3.5" />
+                  All channels
+                </DropdownMenuItem>
+                {knownChannels.map((channel) => (
+                  <DropdownMenuItem
+                    key={channel.id}
+                    onSelect={() => setChannelFilter(channel.id)}
+                  >
+                    <Check
+                      className={cn(
+                        "size-4",
+                        channelFilter === channel.id ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <ProviderGlyph provider={channel.provider} className="size-3.5" />
+                    <span className="truncate">{channel.displayName}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
         <ScrollArea className="min-h-0 flex-1">
           <ul className="flex flex-col gap-1.5 px-3 pb-3">
@@ -1520,7 +1613,6 @@ export function RealInboxShell({
                     <AvatarWithBadge
                       name={conversation.contact.displayName}
                       image={conversation.contact.avatarUrl}
-                      provider={conversation.channel.provider}
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
@@ -1568,9 +1660,15 @@ export function RealInboxShell({
                         <Badge variant="muted" className="px-1.5 text-[10px]">
                           {conversation.status}
                         </Badge>
-                        <Badge variant="muted" className="px-1.5 text-[10px]">
-                          {PROVIDER_META[conversation.channel.provider].label}
-                        </Badge>
+                        <span
+                          className="inline-flex shrink-0 items-center"
+                          title={`${PROVIDER_META[conversation.channel.provider].label} · ${conversation.channel.displayName}`}
+                        >
+                          <ProviderGlyph
+                            provider={conversation.channel.provider}
+                            className="size-3.5"
+                          />
+                        </span>
                         {conversation.awaitingReply && conversation.status === "OPEN" ? (
                           <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-600">
                             <AlarmClock className="size-3" /> Waiting{" "}
