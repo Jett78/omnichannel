@@ -3,83 +3,87 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.75rem;
+  --radius: 0.5rem;
   /*
-   * Brand palette (Jeet's pick, 2026-11-25): PRIMARY = indigo (hue 277,
-   * the app-icon color), SECONDARY = amber (--brand, hue 72, the
-   * Automation amber). Every surface tint below is a wash of one of
-   * those two hues — change the hue in one place and the whole app
-   * follows. Semantic colors (destructive, success…) stay semantic.
+   * Framed Sheet design system (redesign R1, 2026-11-26; direction
+   * dealt by the taste skill, seed 37570278). The app chrome — sidebar
+   * and top bar — is ONE tinted frame: a single low-chroma step of the
+   * brand's indigo. Work sits on a white sheet (the --card surface)
+   * inset 8px from the window's right and bottom edges, 16px corners,
+   * a 1px edge, no shadow. Colour budget: under 3% — the brand lives
+   * in the logo mark and the frame tint; data carries the chroma
+   * (chart-1 teal, chart-2 blue, chart-3 amber). Primary actions are
+   * near-black ink. Semantic colours stay semantic.
    */
-  --brand: oklch(0.72 0.15 72);
-  --brand-foreground: oklch(0.99 0.01 72);
-  --background: oklch(0.984 0.008 277);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.511 0.262 276.966);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0.02 277);
-  --secondary-foreground: oklch(0.32 0.09 277);
-  --muted: oklch(0.958 0.016 277);
-  --muted-foreground: oklch(0.52 0.035 277);
-  --accent: oklch(0.945 0.028 277);
-  --accent-foreground: oklch(0.3 0.1 277);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0.022 277);
-  --input: oklch(0.9 0.022 277);
-  --ring: oklch(0.511 0.262 276.966);
-  --chart-1: oklch(0.511 0.262 276.966);
-  --chart-2: oklch(0.72 0.15 72);
-  --chart-3: oklch(0.696 0.17 162.48);
-  --chart-4: oklch(0.6 0.118 184.704);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.972 0.014 277);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.511 0.262 276.966);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.925 0.04 277);
-  --sidebar-accent-foreground: oklch(0.3 0.11 277);
-  --sidebar-border: oklch(0.9 0.022 277);
-  --sidebar-ring: oklch(0.511 0.262 276.966);
+  --brand: #a86f0c;
+  --brand-foreground: #ffffff;
+  --background: #eceef3;
+  --foreground: #131416;
+  --card: #ffffff;
+  --card-foreground: #131416;
+  --popover: #ffffff;
+  --popover-foreground: #131416;
+  --primary: #17181c;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f1f3;
+  --secondary-foreground: #353736;
+  --muted: #f4f6f8;
+  --muted-foreground: #5d5f60;
+  --accent: #e6e8eb;
+  --accent-foreground: #131416;
+  --destructive: #c4242a;
+  --border: #e4e6ea;
+  --input: #cfd2d8;
+  --ring: #1b6c80;
+  --chart-1: #1b6c80;
+  --chart-2: #2f70bb;
+  --chart-3: #a86f0c;
+  --chart-4: #8a8f98;
+  --chart-5: #c4242a;
+  --sidebar: #eceef3;
+  --sidebar-foreground: #131416;
+  --sidebar-primary: #17181c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e0e3ea;
+  --sidebar-accent-foreground: #131416;
+  --sidebar-border: #eceef3;
+  --sidebar-ring: #1b6c80;
 }
 
 .dark {
-  --brand: oklch(0.78 0.15 72);
-  --brand-foreground: oklch(0.2 0.04 72);
-  --background: oklch(0.16 0.02 277);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.025 277);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.025 277);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.68 0.19 277);
-  --primary-foreground: oklch(0.99 0.005 277);
-  --secondary: oklch(0.28 0.04 277);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.28 0.04 277);
-  --muted-foreground: oklch(0.708 0.02 277);
-  --accent: oklch(0.3 0.05 277);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.68 0.19 277);
-  --chart-1: oklch(0.68 0.19 277);
-  --chart-2: oklch(0.78 0.15 72);
-  --chart-3: oklch(0.696 0.17 162.48);
-  --chart-4: oklch(0.696 0.14 182.503);
-  --chart-5: oklch(0.712 0.194 13.428);
-  --sidebar: oklch(0.19 0.03 277);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.68 0.19 277);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.28 0.05 277);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.68 0.19 277);
+  --brand: #d99a26;
+  --brand-foreground: #1c1503;
+  --background: #0e0f12;
+  --foreground: #f4f4f5;
+  --card: #17181c;
+  --card-foreground: #f4f4f5;
+  --popover: #1d1e23;
+  --popover-foreground: #f4f4f5;
+  --primary: #f4f4f5;
+  --primary-foreground: #131416;
+  --secondary: #1d1e23;
+  --secondary-foreground: #e4e4e7;
+  --muted: #1d1e23;
+  --muted-foreground: #9ca0a8;
+  --accent: #26272c;
+  --accent-foreground: #f4f4f5;
+  --destructive: #e5534b;
+  --border: rgb(255 255 255 / 8%);
+  --input: rgb(255 255 255 / 14%);
+  --ring: #3aa7c2;
+  --chart-1: #3aa7c2;
+  --chart-2: #5b93d6;
+  --chart-3: #d99a26;
+  --chart-4: #8a8f98;
+  --chart-5: #e5534b;
+  --sidebar: #0e0f12;
+  --sidebar-foreground: #f4f4f5;
+  --sidebar-primary: #f4f4f5;
+  --sidebar-primary-foreground: #131416;
+  --sidebar-accent: #1d1e23;
+  --sidebar-accent-foreground: #f4f4f5;
+  --sidebar-border: #0e0f12;
+  --sidebar-ring: #3aa7c2;
 }
 
 @theme inline {
@@ -120,8 +124,8 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --font-sans: var(--font-manrope), ui-sans-system, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-plex-sans), ui-sans-system, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 /*

@@ -135,7 +135,7 @@ export function Header({
   }
 
   return (
-    <header className="bg-background/95 sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b px-4 backdrop-blur sm:px-6">
+    <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-3 px-4 sm:px-6">
       <Button
         variant="ghost"
         size="icon"

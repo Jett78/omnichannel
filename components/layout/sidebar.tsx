@@ -64,12 +64,12 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "bg-sidebar text-sidebar-foreground flex shrink-0 flex-col overflow-x-hidden border-r transition-[width] duration-300 ease-in-out",
-        collapsed ? "w-16" : "w-64",
+        "bg-sidebar text-sidebar-foreground flex shrink-0 flex-col overflow-x-hidden transition-[width] duration-300 ease-in-out",
+        collapsed ? "w-16" : "w-[228px]",
         className,
       )}
     >
-      <div className="flex h-14 items-center gap-2 border-b px-4">
+      <div className="flex h-12 items-center gap-2 px-4">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white shadow-sm">
           U
         </span>
@@ -95,7 +95,7 @@ export function Sidebar({
         ) : null}
       </div>
 
-      <div className="border-b px-3 py-3">
+      <div className="px-3 py-3">
         <p
           className={cn(
             "text-muted-foreground px-1 pb-1.5 text-[11px] font-medium tracking-wide whitespace-nowrap uppercase transition-opacity duration-150",
@@ -144,8 +144,8 @@ export function Sidebar({
               className={cn(
                 "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand"
-                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  ? "bg-white text-foreground ring-1 ring-black/[0.05] dark:bg-white/10 dark:ring-white/10"
+                  : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/5",
               )}
             >
               <Icon className="size-4 shrink-0" />
@@ -171,7 +171,7 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto border-t p-3">
+      <div className="mt-auto p-3">
         {onToggleCollapse ? (
           <button
             type="button"
@@ -268,8 +268,8 @@ function InboxNavGroup({
         className={cn(
           "relative flex items-center rounded-lg pr-1 transition-colors",
           active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand"
-            : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            ? "bg-white text-foreground ring-1 ring-black/[0.05] dark:bg-white/10 dark:ring-white/10"
+            : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/5",
         )}
       >
         <Link
@@ -336,8 +336,8 @@ function InboxSubList({
             className={cn(
               "rounded-lg py-1.5 pr-3 pl-10 text-[13px] transition-colors",
               isActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                ? "bg-white font-medium text-foreground ring-1 ring-black/[0.05] dark:bg-white/10 dark:ring-white/10"
+                : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/5",
             )}
           >
             {item.label}

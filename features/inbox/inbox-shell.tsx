@@ -30,7 +30,7 @@ export function InboxShell({
     return <RealInboxShell currentUserName={currentUserName} data={realData} />;
   }
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] w-full items-center justify-center p-6">
+    <div className="flex h-full min-h-0 w-full items-center justify-center p-6">
       <div className="flex max-w-md flex-col items-center text-center">
         <span className="bg-accent text-primary flex size-16 items-center justify-center rounded-full">
           <Inbox className="size-8" />
