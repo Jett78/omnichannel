@@ -1,6 +1,6 @@
 "use client";
 
-import { Mail } from "lucide-react";
+import { CheckCircle2, Mail } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -13,7 +13,15 @@ import { PasswordInput } from "@/features/auth/password-input";
 import { authClient } from "@/lib/auth-client";
 import { loginSchema } from "@/lib/validations";
 
-export function LoginForm({ nextPath }: { nextPath?: string | null }) {
+export function LoginForm({
+  nextPath,
+  justVerified,
+  initialEmail,
+}: {
+  nextPath?: string | null;
+  justVerified?: boolean;
+  initialEmail?: string | null;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [unverified, setUnverified] = useState(false);
@@ -96,6 +104,15 @@ export function LoginForm({ nextPath }: { nextPath?: string | null }) {
       </CardHeader>
       <CardContent>
         <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+          {justVerified ? (
+            <p
+              className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200"
+              role="status"
+            >
+              <CheckCircle2 className="size-4 shrink-0" />
+              Email verified — sign in to continue into your account.
+            </p>
+          ) : null}
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
             <div className="relative">
@@ -107,6 +124,7 @@ export function LoginForm({ nextPath }: { nextPath?: string | null }) {
                 placeholder="you@company.com"
                 autoComplete="email"
                 required
+                defaultValue={initialEmail ?? ""}
                 className="h-11 pl-10"
               />
             </div>

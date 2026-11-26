@@ -2,7 +2,8 @@
 
 import { CheckCircle2, MailCheck } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,14 +12,65 @@ import { Label } from "@/components/ui/label";
 import { authClient, useSession } from "@/lib/auth-client";
 
 export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | null }) {
+  const router = useRouter();
   const { data: session } = useSession();
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [emailInput, setEmailInput] = useState(initialEmail ?? "");
+  const [justVerified, setJustVerified] = useState(false);
 
   const sessionEmail = session?.user.email;
-  const verified = session?.user.emailVerified ?? false;
+  const verified = (session?.user.emailVerified ?? false) || justVerified;
   const email = sessionEmail ?? emailInput;
+
+  // Cross-device watch: the verification link is often clicked on
+  // another device (e.g. the phone's mail app) while THIS tab stays
+  // open. Poll the verification status and continue automatically —
+  // no session exists yet, so a verified flip sends the user to the
+  // sign-in page with a success banner; a signed-in session just
+  // refreshes into the app.
+  useEffect(() => {
+    if (!email || verified) return;
+    let cancelled = false;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (attempts > 150) {
+        clearInterval(timer);
+        return;
+      }
+      void (async () => {
+        try {
+          const res = await fetch(
+            `/api/auth/verification-status?email=${encodeURIComponent(email)}`,
+            { cache: "no-store" },
+          );
+          if (!res.ok) return;
+          const data: unknown = await res.json();
+          if (cancelled) return;
+          if (data && typeof data === "object" && "verified" in data && data.verified === true) {
+            clearInterval(timer);
+            setJustVerified(true);
+            setTimeout(() => {
+              if (cancelled) return;
+              if (sessionEmail) {
+                router.refresh();
+              } else {
+                router.push(`/login?verified=1&email=${encodeURIComponent(email)}`);
+              }
+            }, 1400);
+          }
+        } catch {
+          // A failed poll is not fatal — the next tick retries.
+        }
+      })();
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email, verified]);
 
   async function onResend() {
     if (!email) {
@@ -54,11 +106,19 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
           <div>
             <p className="font-medium">Email verified</p>
             <p className="text-muted-foreground mt-1 text-sm">
-              Your email address is verified. You&apos;re all set.
+              {sessionEmail
+                ? "Your email address is verified. You're all set."
+                : "Your email address is verified. Taking you to sign in…"}
             </p>
           </div>
           <Button asChild className="rounded-full px-5">
-            <Link href="/dashboard">Continue to your inbox</Link>
+            {sessionEmail ? (
+              <Link href="/dashboard">Continue to your inbox</Link>
+            ) : (
+              <Link href={`/login?verified=1&email=${encodeURIComponent(email)}`}>
+                Continue to sign in
+              </Link>
+            )}
           </Button>
         </CardContent>
       </Card>
@@ -106,6 +166,16 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
           {pending ? "Sending…" : "Resend verification email"}
         </Button>
         {message ? <p className="text-center text-sm">{message}</p> : null}
+        {email ? (
+          <p className="text-muted-foreground flex items-center justify-center gap-2 text-center text-sm">
+            <span className="relative flex size-2">
+              <span className="bg-primary absolute inline-flex h-full w-full animate-ping rounded-full opacity-60" />
+              <span className="bg-primary relative inline-flex size-2 rounded-full" />
+            </span>
+            Waiting for the click — this page continues on its own once you tap the link, on
+            any device.
+          </p>
+        ) : null}
         <p className="text-muted-foreground text-center text-sm">
           Already verified?{" "}
           <Link href="/login" className="text-primary font-medium underline-offset-4 hover:underline">
