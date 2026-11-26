@@ -1768,9 +1768,9 @@ export function RealInboxShell({
                           }
                           onDelete={() => setPendingDeleteMessage(message)}
                         />
-                        <div className="rounded-2xl rounded-br-md bg-indigo-200 px-3.5 py-2.5 text-sm text-indigo-950 dark:bg-indigo-500/35 dark:text-indigo-50">
+                        <div className="rounded-2xl rounded-br-md bg-indigo-300 px-3.5 py-2.5 text-sm text-indigo-950 dark:bg-indigo-500/40 dark:text-indigo-50">
                           {message.messageType === "TEMPLATE" ? (
-                            <span className="mb-1 inline-flex items-center gap-1 rounded bg-indigo-300/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase dark:bg-indigo-400/30">
+                            <span className="mb-1 inline-flex items-center gap-1 rounded bg-indigo-400/50 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase dark:bg-indigo-400/35">
                               <FileText className="size-3" /> Template
                             </span>
                           ) : null}
