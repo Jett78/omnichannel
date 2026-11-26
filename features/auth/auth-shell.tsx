@@ -101,7 +101,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Form side */}
-      <main className="relative flex flex-col items-center justify-center gap-6 overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-amber-50 p-6 sm:p-10 dark:from-indigo-950/40 dark:via-neutral-950 dark:to-amber-950/30">
+      <main className="relative flex flex-col items-center justify-center gap-6 overflow-hidden bg-gradient-to-br from-indigo-50 via-white to-amber-50 p-4 sm:p-10 dark:from-indigo-950/40 dark:via-neutral-950 dark:to-amber-950/30">
         <div className="relative flex flex-col items-center gap-2 text-center lg:hidden">
           <span className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-lg font-bold text-white">
             U
