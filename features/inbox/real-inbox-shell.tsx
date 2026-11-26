@@ -10,6 +10,7 @@ import {
   Copy,
   FileText,
   Flag,
+  Flame,
   ListFilter,
   Lock,
   MoreHorizontal,
@@ -31,7 +32,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
-import { PROVIDER_META } from "@/components/channel-icon";
+import { PROVIDER_META, ProviderGlyph } from "@/components/channel-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -1767,9 +1768,9 @@ export function RealInboxShell({
                           }
                           onDelete={() => setPendingDeleteMessage(message)}
                         />
-                        <div className="rounded-2xl rounded-br-md bg-indigo-100 px-3.5 py-2.5 text-sm text-indigo-950 dark:bg-indigo-500/20 dark:text-indigo-50">
+                        <div className="rounded-2xl rounded-br-md bg-indigo-200 px-3.5 py-2.5 text-sm text-indigo-950 dark:bg-indigo-500/35 dark:text-indigo-50">
                           {message.messageType === "TEMPLATE" ? (
-                            <span className="mb-1 inline-flex items-center gap-1 rounded bg-indigo-200/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase dark:bg-indigo-400/20">
+                            <span className="mb-1 inline-flex items-center gap-1 rounded bg-indigo-300/70 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase dark:bg-indigo-400/30">
                               <FileText className="size-3" /> Template
                             </span>
                           ) : null}
@@ -2314,7 +2315,7 @@ export function RealInboxShell({
               name={selected.contact.displayName}
               image={selected.contact.avatarUrl}
               provider={selected.channel.provider}
-              size="lg"
+              size="xl"
             />
             <p className="text-base font-bold">{selected.contact.displayName}</p>
             {selected.contact.phone ? (
@@ -2342,8 +2343,58 @@ export function RealInboxShell({
                   <SelectItem value="none">No priority</SelectItem>
                   <SelectItem value="LOW">Low</SelectItem>
                   <SelectItem value="MEDIUM">Medium</SelectItem>
-                  <SelectItem value="HIGH">High</SelectItem>
-                  <SelectItem value="URGENT">Urgent</SelectItem>
+                  <SelectItem value="HIGH">
+                    <span className="flex items-center gap-1.5">
+                      <Flame className="size-3.5 fill-orange-100 text-orange-500" /> High
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="URGENT">
+                    <span className="flex items-center gap-1.5">
+                      <Flame className="size-3.5 fill-red-100 text-red-600" /> Urgent
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <label className="text-muted-foreground block pt-3 pb-1 text-xs">Status</label>
+              <Select
+                value={selected.status}
+                onValueChange={(value) => {
+                  if (value === selected.status) return;
+                  if (value === "RESOLVED") void changeStatus("resolve");
+                  else if (value === "OPEN") void changeStatus("reopen");
+                  else if (value === "SNOOZED") void snooze(null);
+                }}
+              >
+                <SelectTrigger
+                  aria-label="Set status"
+                  className="rounded-xl border-transparent bg-muted/60"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="OPEN">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-emerald-500" /> Open
+                    </span>
+                  </SelectItem>
+                  {/* Pending is a real status but no endpoint sets it
+                      manually — shown disabled so a pending conversation
+                      still displays correctly. */}
+                  <SelectItem value="PENDING" disabled>
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-amber-500" /> Pending
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="SNOOZED">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-sky-500" /> Snoozed
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="RESOLVED">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-violet-500" /> Resolved
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {selected.status === "SNOOZED" ? (
@@ -2419,7 +2470,7 @@ export function RealInboxShell({
                   }}
                   placeholder="Add a tag…"
                   aria-label="Add a tag"
-                  className="h-8 rounded-full px-3.5"
+                  className="h-8 rounded-full border-dashed px-3.5"
                 />
                 <Button
                   size="sm"
@@ -2435,7 +2486,7 @@ export function RealInboxShell({
 
             <section>
               <div className="flex items-center justify-between pb-2">
-                <h3 className="text-xs font-semibold tracking-wide uppercase">Customer details</h3>
+                <h3 className="text-xs font-semibold tracking-wide uppercase">Custom fields</h3>
                 {!contactEditing ? (
                   <Button
                     variant="ghost"
@@ -2516,7 +2567,8 @@ export function RealInboxShell({
                   </div>
                   <div className="flex justify-between gap-3">
                     <dt className="text-muted-foreground">Channel</dt>
-                    <dd className="rounded-md bg-muted/60 px-2 py-0.5 font-medium">
+                    <dd className="flex items-center gap-1.5 rounded-md bg-muted/60 px-2 py-0.5 font-medium">
+                      <ProviderGlyph provider={selected.channel.provider} className="size-3.5" />
                       {PROVIDER_META[selected.channel.provider].shortLabel}
                     </dd>
                   </div>

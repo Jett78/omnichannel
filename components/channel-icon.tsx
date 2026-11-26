@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { BRAND_GRADIENTS, BrandGlyph } from "@/components/brand-icons";
 import { cn } from "@/lib/utils";
 import type { Provider } from "@/generated/prisma/client";
 
@@ -113,7 +114,11 @@ export const PROVIDER_ORDER: Provider[] = [
   "TIKTOK",
 ];
 
-/** Circular brand tile for a provider (channels grid, lists). */
+/**
+ * Brand tile for a provider (channels grid, lists): a squircle in the
+ * brand colour / gradient carrying the ACCURATE brand glyph in white
+ * (providers without a brand mark fall back to their Lucide icon).
+ */
 export function ChannelIcon({
   provider,
   size = "md",
@@ -126,24 +131,52 @@ export function ChannelIcon({
   const meta = PROVIDER_META[provider];
   const Icon = meta.icon;
   const sizes = {
-    sm: "size-7 [&_svg]:size-3.5",
-    md: "size-10 [&_svg]:size-5",
-    lg: "size-12 [&_svg]:size-6",
+    sm: { tile: "size-7", glyph: "size-4" },
+    md: { tile: "size-10", glyph: "size-5" },
+    lg: { tile: "size-12", glyph: "size-6" },
   } as const;
+  const gradient = BRAND_GRADIENTS[provider];
   return (
     <span
       aria-label={meta.label}
       title={meta.label}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full text-white",
-        sizes[size],
+        "inline-flex shrink-0 items-center justify-center rounded-[30%] text-white",
+        sizes[size].tile,
         className,
       )}
-      style={{ backgroundColor: meta.color }}
+      style={
+        gradient ? { backgroundImage: gradient } : { backgroundColor: meta.color }
+      }
     >
-      <Icon />
+      <BrandGlyph provider={provider} tone="white" className={sizes[size].glyph} />
+      {/* BrandGlyph renders nothing for WEBSITE / MOCK — use the Lucide icon there. */}
+      {provider === "WEBSITE" || provider === "MOCK" ? (
+        <Icon className={sizes[size].glyph} />
+      ) : null}
     </span>
   );
+}
+
+/**
+ * A standalone provider glyph at any size: the accurate brand mark in
+ * its brand colour where one exists, otherwise the provider's Lucide
+ * icon tinted with the brand colour. Used in tables, chips and rows
+ * where a full tile would be too heavy.
+ */
+export function ProviderGlyph({
+  provider,
+  className,
+}: {
+  provider: Provider;
+  className?: string;
+}) {
+  const meta = PROVIDER_META[provider];
+  const Icon = meta.icon;
+  if (provider === "WEBSITE" || provider === "MOCK") {
+    return <Icon className={className} style={{ color: meta.color }} aria-label={meta.label} />;
+  }
+  return <BrandGlyph provider={provider} className={className} />;
 }
 
 /** Tiny channel badge meant to overlay an avatar's bottom-right corner. */
@@ -155,12 +188,13 @@ export function ChannelBadge({ provider, className }: { provider: Provider; clas
       aria-label={meta.label}
       title={meta.label}
       className={cn(
-        "ring-background absolute right-0 bottom-0 inline-flex size-4 items-center justify-center rounded-full text-white ring-2 [&_svg]:size-2.5",
+        "ring-background absolute right-0 bottom-0 inline-flex size-4 items-center justify-center rounded-full text-white ring-2",
         className,
       )}
       style={{ backgroundColor: meta.color }}
     >
-      <Icon />
+      <BrandGlyph provider={provider} tone="white" className="size-2.5" />
+      {provider === "WEBSITE" || provider === "MOCK" ? <Icon className="size-2.5" /> : null}
     </span>
   );
 }

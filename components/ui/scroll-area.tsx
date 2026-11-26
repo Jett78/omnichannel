@@ -16,7 +16,10 @@ function ScrollArea({
       className={cn("relative overflow-hidden", className)}
       {...props}
     >
-      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit]">
+      {/* [&>div]:block! undoes Radix's inline display:table wrapper,
+          which sizes to max-content and defeats text truncation
+          (truncate/ellipsis) anywhere inside a ScrollArea. */}
+      <ScrollAreaPrimitive.Viewport className="size-full rounded-[inherit] [&>div]:block!">
         {children}
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />

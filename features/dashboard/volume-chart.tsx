@@ -10,13 +10,18 @@ import {
   YAxis,
 } from "recharts";
 
-import { SAMPLE_VOLUME_14D } from "@/features/dashboard/sample-data";
+export interface VolumePoint {
+  day: string;
+  conversations: number;
+  resolved: number;
+}
 
-export function VolumeChart() {
+/** Real conversation volume (new + resolved per day) from the analytics service. */
+export function VolumeChart({ data }: { data: VolumePoint[] }) {
   return (
-    <div className="h-64 w-full" role="img" aria-label="Sample chart: conversation volume, last 14 days">
+    <div className="h-64 w-full" role="img" aria-label="Conversation volume, last 14 days">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={SAMPLE_VOLUME_14D} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
           <defs>
             <linearGradient id="volumeFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.28} />

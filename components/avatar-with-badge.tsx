@@ -38,10 +38,15 @@ export function AvatarWithBadge({
   name: string;
   image?: string | null;
   provider?: Provider;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }) {
-  const sizes = { sm: "size-8 text-[11px]", md: "size-10 text-xs", lg: "size-12 text-sm" } as const;
+  const sizes = {
+    sm: "size-8 text-[11px]",
+    md: "size-10 text-xs",
+    lg: "size-12 text-sm",
+    xl: "size-[72px] text-xl",
+  } as const;
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       <Avatar className={sizes[size]}>
