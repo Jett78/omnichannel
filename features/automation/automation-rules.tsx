@@ -86,7 +86,7 @@ interface MemberOption {
   name: string;
   email: string;
   role: string;
-  teamId: string | null;
+  teamIds: string[];
   isAvailable: boolean;
 }
 

@@ -78,7 +78,7 @@ export default async function AutomationPage() {
         name: member.user.name,
         email: member.user.email,
         role: member.role,
-        teamId: member.teamId,
+        teamIds: member.teamMemberships.map((membership) => membership.teamId),
         isAvailable: member.isAvailable,
       }))}
       teams={teams.map((team) => ({ id: team.id, name: team.name }))}

@@ -9,10 +9,14 @@ import {
   createTeamSchema,
   createWorkspaceSchema,
   inviteMemberSchema,
+  setTeamMembersSchema,
+  updateTeamSchema,
   updateWorkspaceSchema,
   type CreateTeamInput,
   type CreateWorkspaceData,
   type InviteMemberInput,
+  type SetTeamMembersInput,
+  type UpdateTeamInput,
   type UpdateWorkspaceInput,
 } from "@/lib/validations";
 import { requireWorkspaceMembership, requireWorkspacePermission } from "@/lib/workspace-auth";
@@ -34,6 +38,40 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 50);
   return base.length >= 2 ? base : "workspace";
+}
+
+/**
+ * Make a team's membership exactly `memberIds` (Chatwoot-style sync):
+ * every id must be a member of the workspace; rows not in the set are
+ * removed and missing rows are created, in one transaction.
+ */
+async function syncTeamMembership(
+  teamId: string,
+  workspaceId: string,
+  memberIds: string[],
+): Promise<void> {
+  const uniqueIds = [...new Set(memberIds)];
+  if (uniqueIds.length > 0) {
+    const found = await prisma.workspaceMember.count({
+      where: { workspaceId, id: { in: uniqueIds } },
+    });
+    if (found !== uniqueIds.length) {
+      throw AppError.badRequest("One or more selected people are not members of this workspace");
+    }
+  }
+  await prisma.$transaction([
+    prisma.teamMember.deleteMany({
+      where: { teamId, ...(uniqueIds.length > 0 ? { workspaceMemberId: { notIn: uniqueIds } } : {}) },
+    }),
+    ...(uniqueIds.length > 0
+      ? [
+          prisma.teamMember.createMany({
+            data: uniqueIds.map((workspaceMemberId) => ({ teamId, workspaceMemberId })),
+            skipDuplicates: true,
+          }),
+        ]
+      : []),
+  ]);
 }
 
 async function uniqueSlug(base: string): Promise<string> {
@@ -146,7 +184,10 @@ export const workspaceService = {
       where: { workspaceId },
       include: {
         user: { select: { id: true, name: true, email: true, image: true } },
-        team: { select: { id: true, name: true } },
+        teamMemberships: {
+          include: { team: { select: { id: true, name: true } } },
+          orderBy: { createdAt: "asc" },
+        },
       },
       orderBy: { createdAt: "asc" },
     });
@@ -359,13 +400,26 @@ export const workspaceService = {
     return { removed: true as const };
   },
 
-  // ─── Teams ──────────────────────────────────────────────────────────────
+  // ─── Teams (Chatwoot-style: many-to-many membership) ─────────────────
 
   async listTeams(userId: string, workspaceId: string) {
     await requireWorkspaceMembership(userId, workspaceId);
     return prisma.team.findMany({
       where: { workspaceId },
-      include: { _count: { select: { members: true } } },
+      include: {
+        teamMembers: {
+          include: {
+            member: {
+              select: {
+                id: true,
+                role: true,
+                user: { select: { id: true, name: true, email: true, image: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
       orderBy: { createdAt: "asc" },
     });
   },
@@ -377,9 +431,61 @@ export const workspaceService = {
       where: { workspaceId_name: { workspaceId, name: input.name } },
     });
     if (existing) throw AppError.badRequest(`A team named "${input.name}" already exists`);
-    return prisma.team.create({
-      data: { workspaceId, name: input.name, description: input.description },
+    const team = await prisma.team.create({
+      data: {
+        workspaceId,
+        name: input.name,
+        description: input.description,
+        allowAutoAssign: input.allowAutoAssign ?? true,
+      },
     });
+    if (input.memberIds && input.memberIds.length > 0) {
+      await syncTeamMembership(team.id, workspaceId, input.memberIds);
+    }
+    return team;
+  },
+
+  async updateTeam(
+    userId: string,
+    workspaceId: string,
+    teamId: string,
+    rawInput: UpdateTeamInput,
+  ) {
+    await requireWorkspacePermission(userId, workspaceId, "teams.manage");
+    const input = updateTeamSchema.parse(rawInput);
+    const team = await prisma.team.findFirst({ where: { id: teamId, workspaceId } });
+    if (!team) throw AppError.notFound("Team not found");
+    if (input.name && input.name !== team.name) {
+      const conflict = await prisma.team.findUnique({
+        where: { workspaceId_name: { workspaceId, name: input.name } },
+      });
+      if (conflict) throw AppError.badRequest(`A team named "${input.name}" already exists`);
+    }
+    return prisma.team.update({
+      where: { id: teamId },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.allowAutoAssign !== undefined
+          ? { allowAutoAssign: input.allowAutoAssign }
+          : {}),
+      },
+    });
+  },
+
+  /** Replace a team's membership with exactly the given member set. */
+  async setTeamMembers(
+    userId: string,
+    workspaceId: string,
+    teamId: string,
+    rawInput: SetTeamMembersInput,
+  ) {
+    await requireWorkspacePermission(userId, workspaceId, "teams.manage");
+    const input = setTeamMembersSchema.parse(rawInput);
+    const team = await prisma.team.findFirst({ where: { id: teamId, workspaceId } });
+    if (!team) throw AppError.notFound("Team not found");
+    await syncTeamMembership(teamId, workspaceId, input.memberIds);
+    return { updated: true as const };
   },
 
   async deleteTeam(userId: string, workspaceId: string, teamId: string) {

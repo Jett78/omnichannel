@@ -11,9 +11,10 @@ import { getPrisma } from "@/lib/prisma";
  * Better Auth server instance (Phase 2).
  *
  * - Database sessions via the Prisma adapter (PostgreSQL).
- * - Email + password auth. Email verification is wired (mail is logged
- *   by the dev mailer) and sent on sign-up, but NOT required to sign in
- *   during development so seeded/demo accounts can log in immediately.
+ * - Email + password auth. Email verification is REQUIRED: sign-up
+ *   emails a verification link and the account cannot sign in until
+ *   the address is verified (accounts created before this was
+ *   enforced were verified directly in the database).
  * - Password reset uses Better Auth's token flow; the reset URL is
  *   delivered through lib/mail.ts.
  */
@@ -27,7 +28,7 @@ export const auth = betterAuth({
   database: prismaAdapter(getPrisma(), { provider: "postgresql" }),
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false,
+    requireEmailVerification: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
     sendResetPassword: async ({ user, url }) => {
@@ -39,6 +40,9 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendOnSignUp: true,
+    // An unverified sign-in attempt emails a fresh verification
+    // link, so users who lost the first one can recover themselves.
+    sendOnSignIn: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
       await sendVerificationEmail(user.email, url);

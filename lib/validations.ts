@@ -58,8 +58,24 @@ export type UpdateMemberRoleInput = z.infer<typeof updateMemberRoleSchema>;
 export const createTeamSchema = z.object({
   name: z.string().min(2, "Team name must be at least 2 characters").max(60),
   description: z.string().max(500).optional(),
+  allowAutoAssign: z.boolean().optional(),
+  /** WorkspaceMember ids to put on the team right away. */
+  memberIds: z.array(z.string()).max(500).optional(),
 });
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
+
+export const updateTeamSchema = z.object({
+  name: z.string().min(2, "Team name must be at least 2 characters").max(60).optional(),
+  description: z.string().max(500).nullable().optional(),
+  allowAutoAssign: z.boolean().optional(),
+});
+export type UpdateTeamInput = z.infer<typeof updateTeamSchema>;
+
+/** Chatwoot-style membership sync: the full desired member set. */
+export const setTeamMembersSchema = z.object({
+  memberIds: z.array(z.string()).max(500),
+});
+export type SetTeamMembersInput = z.infer<typeof setTeamMembersSchema>;
 
 // ─── Phase 4: conversations & messaging ───────────────────────────────────────
 

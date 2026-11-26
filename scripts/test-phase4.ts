@@ -104,6 +104,12 @@ async function signUp(label: string): Promise<{ id: string; email: string }> {
   const result = await auth.api.signUpEmail({
     body: { name: `Phase4 ${label}`, email, password: PASSWORD },
   });
+  // The product requires email verification before sign-in; the
+  // suite verifies its throwaway users directly in the database.
+  await prisma.user.update({
+    where: { id: result.user.id },
+    data: { emailVerified: true },
+  });
   createdUserIds.push(result.user.id);
   return { id: result.user.id, email };
 }

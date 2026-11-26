@@ -319,7 +319,7 @@ async function availableCandidates(workspaceId: string, teamId?: string) {
       workspaceId,
       isAvailable: true,
       role: { in: [...ASSIGNABLE_ROLES] },
-      ...(teamId ? { teamId } : {}),
+      ...(teamId ? { teamMemberships: { some: { teamId } } } : {}),
     },
     orderBy: [{ createdAt: "asc" }, { userId: "asc" }],
     select: { userId: true },

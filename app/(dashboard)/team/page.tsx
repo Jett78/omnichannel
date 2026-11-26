@@ -39,7 +39,7 @@ export default async function TeamPage() {
           id: m.id,
           role: m.role,
           user: m.user,
-          team: m.team,
+          teams: m.teamMemberships.map((tm) => tm.team),
           joinedLabel: m.createdAt.toLocaleDateString("en-GB", {
             day: "numeric",
             month: "short",
@@ -50,7 +50,16 @@ export default async function TeamPage() {
           id: t.id,
           name: t.name,
           description: t.description,
-          memberCount: t._count.members,
+          allowAutoAssign: t.allowAutoAssign,
+          memberCount: t.teamMembers.length,
+          members: t.teamMembers.map((tm) => ({
+            memberId: tm.member.id,
+            userId: tm.member.user.id,
+            name: tm.member.user.name,
+            email: tm.member.user.email,
+            image: tm.member.user.image,
+            role: tm.member.role,
+          })),
         }))}
         invitations={invitations.map((invitation) => ({
           id: invitation.id,

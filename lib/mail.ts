@@ -16,6 +16,8 @@ export interface MailMessage {
   subject: string;
   url?: string;
   text: string;
+  /** Label for the HTML call-to-action button (default "Open link"). */
+  buttonLabel?: string;
 }
 
 let transporter: Transporter | null = null;
@@ -40,13 +42,23 @@ function htmlBody(message: MailMessage): string {
   const escape = (value: string) =>
     value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const button = message.url
-    ? `<p style="margin:24px 0"><a href="${escape(message.url)}" style="background:#4f46e5;color:#ffffff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Open link</a></p>
-       <p style="color:#6b7280;font-size:13px">Or paste this URL into your browser:<br>${escape(message.url)}</p>`
+    ? `<p style="margin:28px 0 20px"><a href="${escape(message.url)}" style="background:#4f46e5;color:#ffffff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:600;display:inline-block">${escape(message.buttonLabel ?? "Open link")}</a></p>
+       <p style="color:#6b7280;font-size:13px">Or paste this URL into your browser:<br><a href="${escape(message.url)}" style="color:#4f46e5">${escape(message.url)}</a></p>`
     : "";
-  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:15px;line-height:1.55;color:#111827">
-  <p>${escape(message.text)}</p>
-  ${button}
-  <p style="color:#6b7280;font-size:13px">— Unified Omnichannel Inbox</p>
+  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f8f9ff;padding:32px 16px">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden">
+    <div style="background:#312e81;padding:20px 28px">
+      <span style="color:#ffffff;font-size:17px;font-weight:700">Unified Inbox</span>
+      <span style="color:#c7d2fe;font-size:12px;display:block;margin-top:2px">Unified Omnichannel Inbox</span>
+    </div>
+    <div style="padding:28px;font-size:15px;line-height:1.6;color:#111827">
+      <p style="margin:0">${escape(message.text)}</p>
+      ${button}
+    </div>
+    <div style="padding:16px 28px;border-top:1px solid #eef0f4;color:#6b7280;font-size:12px">
+      Unified Inbox — every customer conversation, in one place.
+    </div>
+  </div>
 </div>`;
 }
 
@@ -82,18 +94,20 @@ export async function sendMail(message: MailMessage): Promise<void> {
 export async function sendVerificationEmail(to: string, url: string): Promise<void> {
   await sendMail({
     to,
-    subject: "Verify your email — Unified Omnichannel Inbox",
+    subject: "Verify your email — Unified Inbox",
     url,
-    text: "Open the URL above to verify your email address.",
+    buttonLabel: "Verify my email",
+    text: "Welcome to Unified Inbox. Please confirm this is your email address by opening the link below — it expires in 1 hour. Your account becomes active as soon as you verify.",
   });
 }
 
 export async function sendResetPasswordEmail(to: string, url: string): Promise<void> {
   await sendMail({
     to,
-    subject: "Reset your password — Unified Omnichannel Inbox",
+    subject: "Reset your password — Unified Inbox",
     url,
-    text: "Open the URL above to reset your password. The link expires soon.",
+    buttonLabel: "Reset my password",
+    text: "We received a request to reset the password for your Unified Inbox account. Open the link below to choose a new password — it expires in 1 hour. If you didn't request this, ignore this email and your password stays unchanged.",
   });
 }
 
@@ -104,8 +118,9 @@ export async function sendInvitationEmail(
 ): Promise<void> {
   await sendMail({
     to,
-    subject: `You've been invited to ${workspaceName} — Unified Omnichannel Inbox`,
+    subject: `You've been invited to ${workspaceName} — Unified Inbox`,
     url,
-    text: `You've been invited to join the workspace "${workspaceName}". Open the URL above to accept your invitation. The link expires in 7 days.`,
+    buttonLabel: "Accept invitation",
+    text: `You've been invited to join the workspace "${workspaceName}". Open the link below to accept your invitation. The link expires in 7 days.`,
   });
 }

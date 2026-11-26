@@ -219,34 +219,49 @@ model Team {
   workspaceId String
   name        String
   description String?
+  /** Chatwoot parity: when a conversation is assigned to this team,
+      auto-distribute it to an available member (round-robin). */
+  allowAutoAssign Boolean @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  members   WorkspaceMember[]
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  teamMembers TeamMember[]
 
   @@unique([workspaceId, name])
   @@index([workspaceId])
+}
+
+/** Many-to-many: a workspace member can belong to several teams. */
+model TeamMember {
+  id                String   @id @default(cuid())
+  teamId            String
+  workspaceMemberId String
+  createdAt         DateTime @default(now())
+
+  team   Team            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  member WorkspaceMember @relation(fields: [workspaceMemberId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, workspaceMemberId])
+  @@index([workspaceMemberId])
 }
 
 model WorkspaceMember {
   id          String   @id @default(cuid())
   workspaceId String
   userId      String
-  teamId      String?
   role        Role     @default(AGENT)
   /** Phase 13B — smart-assignment availability (agents can toggle). */
   isAvailable Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamMemberships TeamMember[]
 
   @@unique([workspaceId, userId])
   @@index([userId])
-  @@index([teamId])
 }
 
 model Invitation {

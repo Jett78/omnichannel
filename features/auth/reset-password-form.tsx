@@ -1,21 +1,21 @@
 "use client";
 
+import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/features/auth/password-input";
 import { authClient } from "@/lib/auth-client";
 import { resetPasswordSchema } from "@/lib/validations";
 
 export function ResetPasswordForm({ token }: { token: string | null }) {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(
     token ? null : "This reset link is missing its token. Request a new one.",
   );
+  const [done, setDone] = useState(false);
   const [pending, setPending] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -42,7 +42,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
         setError(result.error.message ?? "This reset link is invalid or has expired.");
         return;
       }
-      router.push("/login");
+      setDone(true);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -53,37 +53,70 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
   return (
     <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Reset password</CardTitle>
+        <CardTitle className="text-xl">Reset password</CardTitle>
         <CardDescription>Choose a new password for your account.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="password">New password</Label>
-            <Input id="password" name="password" type="password" required disabled={!token} />
+        {done ? (
+          <div className="flex flex-col items-center gap-4 text-center">
+            <span className="flex size-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+              <CheckCircle2 className="size-7" />
+            </span>
+            <div>
+              <p className="font-medium">Password updated</p>
+              <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+                Your password has been reset. You can now sign in with your new password.
+              </p>
+            </div>
+            <Button asChild className="rounded-full px-5">
+              <Link href="/login">Go to sign in</Link>
+            </Button>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="confirmPassword">Confirm new password</Label>
-            <Input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              required
-              disabled={!token}
-            />
-          </div>
-          {error ? (
-            <p className="text-destructive text-sm" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" disabled={pending || !token} className="w-full">
-            {pending ? "Resetting…" : "Reset password"}
-          </Button>
-          <Link href="/forgot-password" className="text-center text-sm underline underline-offset-4">
-            Request a new reset link
-          </Link>
-        </form>
+        ) : (
+          <form onSubmit={(e) => void onSubmit(e)} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password">New password</Label>
+              <PasswordInput
+                id="password"
+                name="password"
+                autoComplete="new-password"
+                required
+                disabled={!token}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="confirmPassword">Confirm new password</Label>
+              <PasswordInput
+                id="confirmPassword"
+                name="confirmPassword"
+                autoComplete="new-password"
+                required
+                disabled={!token}
+              />
+            </div>
+            {error ? (
+              <p
+                className="border-destructive/30 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm"
+                role="alert"
+              >
+                {error}
+              </p>
+            ) : null}
+            <Button
+              type="submit"
+              disabled={pending || !token}
+              className="h-11 w-full rounded-full font-semibold"
+            >
+              {pending ? "Resetting…" : "Reset password"}
+            </Button>
+            <Link
+              href="/forgot-password"
+              className="text-muted-foreground text-center text-sm underline-offset-4 hover:underline"
+            >
+              Request a new reset link
+            </Link>
+          </form>
+        )}
       </CardContent>
     </Card>
   );
