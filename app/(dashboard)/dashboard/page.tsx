@@ -224,7 +224,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <div>
               <CardTitle>Conversation volume</CardTitle>
@@ -247,7 +247,7 @@ export default async function DashboardPage() {
             )}
           </CardContent>
         </Card>
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <div>
               <CardTitle>Team performance</CardTitle>
@@ -261,7 +261,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Recent conversations</CardTitle>
             <CardDescription>Latest activity across your channels.</CardDescription>
@@ -309,7 +309,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Channel health</CardTitle>
             <CardDescription>

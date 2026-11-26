@@ -147,6 +147,13 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* No page-level sideways scroll ever (mobile QA, 2026-11-26): one
+     too-wide card must not widen the whole page. `clip` (unlike
+     `hidden`) does not break position: sticky. */
+  html,
+  body {
+    overflow-x: clip;
+  }
   body {
     @apply bg-background font-sans text-foreground antialiased;
     /* Geist at a touch over regular weight app-wide (Jeet, 2026-11-26). */

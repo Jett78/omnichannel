@@ -139,31 +139,33 @@ export function NotificationsList({ workspaceId, initialItems }: NotificationsLi
             </div>
 
             {items.length > PER_PAGE ? (
-              <div className="flex flex-wrap items-center gap-3 px-2 pt-3 pb-2">
-                <p className="text-muted-foreground flex-1 text-xs">
+              <div className="flex flex-col gap-2.5 px-2 pt-3 pb-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                <p className="text-muted-foreground text-xs sm:flex-1">
                   Showing {(currentPage - 1) * PER_PAGE + 1}–
                   {Math.min(currentPage * PER_PAGE, items.length)} of {items.length}{" "}
                   notifications
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage <= 1}
-                  onClick={() => setPage(currentPage - 1)}
-                >
-                  <ChevronLeft className="size-3.5" /> Previous
-                </Button>
-                <span className="text-xs font-medium">
-                  Page {currentPage} of {pageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentPage >= pageCount}
-                  onClick={() => setPage(currentPage + 1)}
-                >
-                  Next <ChevronRight className="size-3.5" />
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage(currentPage - 1)}
+                  >
+                    <ChevronLeft className="size-3.5" /> Previous
+                  </Button>
+                  <span className="text-xs font-medium">
+                    Page {currentPage} of {pageCount}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= pageCount}
+                    onClick={() => setPage(currentPage + 1)}
+                  >
+                    Next <ChevronRight className="size-3.5" />
+                  </Button>
+                </div>
               </div>
             ) : null}
           </CardContent>

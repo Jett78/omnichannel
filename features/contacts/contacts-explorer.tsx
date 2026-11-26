@@ -258,8 +258,8 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
           </div>
 
           {visible.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-3 pt-4">
-              <p className="text-muted-foreground flex-1 text-xs">
+            <div className="flex flex-col gap-2.5 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+              <p className="text-muted-foreground text-xs sm:flex-1">
                 Showing {(currentPage - 1) * PER_PAGE + 1}–
                 {Math.min(currentPage * PER_PAGE, visible.length)} of {visible.length}{" "}
                 contacts

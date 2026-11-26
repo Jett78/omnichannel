@@ -43,9 +43,12 @@ export function TeamPerformanceChart({ data }: { data: TeamPerformanceRow[] }) {
       </div>
       <ul className="divide-y">
         {data.map((row) => (
-          <li key={row.agentId} className="flex items-center justify-between py-2 text-sm">
-            <span className="font-medium">{row.agent}</span>
-            <span className="text-muted-foreground">
+          <li
+            key={row.agentId}
+            className="flex flex-wrap items-center justify-between gap-x-3 py-2 text-sm"
+          >
+            <span className="min-w-0 truncate font-medium">{row.agent}</span>
+            <span className="text-muted-foreground whitespace-nowrap">
               {row.resolved} resolved · avg first response{" "}
               {row.avgResponseMinutes != null ? `${Math.round(row.avgResponseMinutes)} min` : "—"}
             </span>

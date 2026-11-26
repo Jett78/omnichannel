@@ -292,13 +292,13 @@ export function TeamManagement({
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full text-sm md:min-w-[640px]">
               <thead>
                 <tr className="text-muted-foreground border-b text-left text-xs">
                   <th className="pb-2 font-medium">Member</th>
                   <th className="pb-2 font-medium">Role</th>
-                  <th className="pb-2 font-medium">Team</th>
-                  <th className="pb-2 font-medium">Joined</th>
+                  <th className="hidden pb-2 font-medium md:table-cell">Team</th>
+                  <th className="hidden pb-2 font-medium md:table-cell">Joined</th>
                   <th className="pb-2 text-right font-medium">Actions</th>
                 </tr>
               </thead>
@@ -306,20 +306,20 @@ export function TeamManagement({
                 {members.map((member) => (
                   <tr key={member.id}>
                     <td className="py-3 pr-3">
-                      <span className="flex items-center gap-2.5">
+                      <span className="flex min-w-0 items-center gap-2.5">
                         <AvatarWithBadge
                           name={member.user.name || member.user.email}
                           image={member.user.image}
                           size="sm"
                         />
-                        <span className="leading-tight">
-                          <span className="block font-medium">
+                        <span className="min-w-0 leading-tight">
+                          <span className="block truncate font-medium">
                             {member.user.name}
                             {member.user.id === currentUserId ? (
                               <span className="text-muted-foreground"> (you)</span>
                             ) : null}
                           </span>
-                          <span className="text-muted-foreground block text-xs">
+                          <span className="text-muted-foreground block truncate text-xs">
                             {member.user.email}
                           </span>
                         </span>
@@ -352,7 +352,7 @@ export function TeamManagement({
                         <Badge variant={ROLE_BADGE[member.role]}>{member.role}</Badge>
                       )}
                     </td>
-                    <td className="py-3 pr-3">
+                    <td className="hidden py-3 pr-3 md:table-cell">
                       {member.teams.length === 0 ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
@@ -365,7 +365,9 @@ export function TeamManagement({
                         </span>
                       )}
                     </td>
-                    <td className="text-muted-foreground py-3 pr-3">{member.joinedLabel}</td>
+                    <td className="text-muted-foreground hidden py-3 pr-3 md:table-cell">
+                      {member.joinedLabel}
+                    </td>
                     <td className="py-3 text-right">
                       {can(currentRole, "members.remove") ? (
                         <Button
@@ -566,7 +568,7 @@ export function TeamManagement({
                       </span>
                     ) : null}
                   </span>
-                  <span className="min-w-0 flex-1">
+                  <span className="min-w-0 flex-1 basis-full sm:basis-auto">
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{team.name}</span>
                       {team.allowAutoAssign ? (

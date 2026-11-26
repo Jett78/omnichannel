@@ -147,7 +147,7 @@ export function Header({
       <button
         type="button"
         onClick={() => setSearchOpen(true)}
-        className="text-muted-foreground hover:bg-accent flex h-9 flex-1 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs transition-colors"
+        className="text-muted-foreground hover:bg-accent flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-transparent px-3 text-sm shadow-xs transition-colors"
         aria-label="Search (Ctrl+K)"
       >
         <Search className="size-4 shrink-0" />
@@ -157,7 +157,7 @@ export function Header({
         </kbd>
       </button>
 
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -204,6 +204,7 @@ export function Header({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <div className="hidden sm:block">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="size-9" aria-label="Help">
@@ -224,6 +225,7 @@ export function Header({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        </div>
 
         {user ? (
           <DropdownMenu>

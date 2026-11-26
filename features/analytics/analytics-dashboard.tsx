@@ -128,7 +128,7 @@ export function AnalyticsDashboard({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Conversation trend</CardTitle>
             <CardDescription>Conversations started and resolved per day</CardDescription>
@@ -149,7 +149,7 @@ export function AnalyticsDashboard({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Conversations by channel</CardTitle>
             <CardDescription>Share of conversations started in the selected period</CardDescription>
@@ -160,7 +160,7 @@ export function AnalyticsDashboard({
                 No conversations in this period.
               </p>
             ) : (
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-col items-center gap-4 sm:flex-row sm:flex-wrap">
                 <div className="h-52 w-52 shrink-0" role="img" aria-label="Pie chart: conversations by channel">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
@@ -186,7 +186,7 @@ export function AnalyticsDashboard({
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-                <ul className="min-w-44 flex-1 space-y-2 text-sm">
+                <ul className="w-full min-w-0 flex-1 space-y-2 text-sm">
                   {data.channelShare.map((entry) => (
                     <li key={entry.provider} className="flex items-center gap-2">
                       <span
@@ -205,7 +205,7 @@ export function AnalyticsDashboard({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>First response time</CardTitle>
             <CardDescription>
@@ -227,7 +227,7 @@ export function AnalyticsDashboard({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Agent leaderboard</CardTitle>
             <CardDescription>Assignments, resolutions and speed in the selected period</CardDescription>

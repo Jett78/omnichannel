@@ -245,7 +245,7 @@ export function WhatsAppTemplatesPanel({
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-start gap-3">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-full sm:basis-auto">
             <CardTitle>WhatsApp message templates</CardTitle>
             <CardDescription>
               Templates are how you message a customer after WhatsApp&apos;s 24-hour window
