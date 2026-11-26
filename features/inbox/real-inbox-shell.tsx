@@ -36,6 +36,7 @@ import { AvatarWithBadge } from "@/components/avatar-with-badge";
 import { PROVIDER_META, ProviderGlyph } from "@/components/channel-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -2250,7 +2251,9 @@ export function RealInboxShell({
                   {composerMode === "template" ? (
                     <div className="flex flex-col gap-2 px-3 py-2">
                       {templatesLoading ? (
-                        <p className="text-muted-foreground text-sm">Loading templates…</p>
+                        <div className="flex justify-center py-3">
+                          <Spinner className="size-4" />
+                        </div>
                       ) : templatesError ? (
                         <p className="text-sm text-red-600">{templatesError}</p>
                       ) : (channelTemplates ?? []).length === 0 ? (

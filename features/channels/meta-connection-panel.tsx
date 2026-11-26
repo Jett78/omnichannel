@@ -8,6 +8,7 @@ import { ChannelIcon } from "@/components/channel-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import type { Provider } from "@/generated/prisma/client";
 
 interface SessionAccount {
@@ -157,7 +158,9 @@ export function MetaConnectionPanel({
         ) : loadError ? (
           <p className="text-sm text-red-600">{loadError}</p>
         ) : accounts === null ? (
-          <p className="text-muted-foreground text-sm">Loading accounts from Meta…</p>
+          <div className="flex justify-center py-6">
+            <Spinner />
+          </div>
         ) : accounts.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             Meta did not return any accounts for this authorization. If you expected a Page or

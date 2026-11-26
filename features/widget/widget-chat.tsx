@@ -1,6 +1,6 @@
 "use client";
 
-import { Paperclip, SendHorizonal } from "lucide-react";
+import { Loader2, Paperclip, SendHorizonal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
@@ -199,8 +199,8 @@ export function WidgetChat({ websiteToken }: { websiteToken: string }) {
   }
   if (!config) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-sm text-zinc-400">
-        Loading chat…
+      <div className="flex h-full items-center justify-center p-6">
+        <Loader2 className="size-6 animate-spin text-zinc-400" role="status" aria-label="Loading" />
       </div>
     );
   }

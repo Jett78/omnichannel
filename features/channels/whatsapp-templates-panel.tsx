@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
   DialogContent,
@@ -292,7 +293,9 @@ export function WhatsAppTemplatesPanel({
           </p>
         ) : null}
         {loading && templates.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Loading templates from Meta…</p>
+          <div className="flex justify-center py-6">
+            <Spinner />
+          </div>
         ) : templates.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             No templates on this WhatsApp account yet. Create the first one — order updates and
