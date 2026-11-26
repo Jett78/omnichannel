@@ -692,31 +692,33 @@ export function AutomationRules({
               </div>
             )}
             {runs.length > RUNS_PER_PAGE ? (
-              <div className="mt-3 flex flex-wrap items-center gap-3 border-t pt-3">
-                <p className="text-muted-foreground flex-1 text-xs">
+              <div className="mt-3 flex flex-col gap-2.5 border-t pt-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <p className="text-muted-foreground text-xs sm:flex-1">
                   Showing {(currentRunsPage - 1) * RUNS_PER_PAGE + 1}–
                   {Math.min(currentRunsPage * RUNS_PER_PAGE, runs.length)} of {runs.length}{" "}
                   entries
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentRunsPage <= 1}
-                  onClick={() => setRunsPage(currentRunsPage - 1)}
-                >
-                  <ChevronLeft className="size-3.5" /> Previous
-                </Button>
-                <span className="text-xs font-medium">
-                  Page {currentRunsPage} of {runsPageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={currentRunsPage >= runsPageCount}
-                  onClick={() => setRunsPage(currentRunsPage + 1)}
-                >
-                  Next <ChevronRight className="size-3.5" />
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentRunsPage <= 1}
+                    onClick={() => setRunsPage(currentRunsPage - 1)}
+                  >
+                    <ChevronLeft className="size-3.5" /> Previous
+                  </Button>
+                  <span className="text-xs font-medium whitespace-nowrap">
+                    Page {currentRunsPage} of {runsPageCount}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentRunsPage >= runsPageCount}
+                    onClick={() => setRunsPage(currentRunsPage + 1)}
+                  >
+                    Next <ChevronRight className="size-3.5" />
+                  </Button>
+                </div>
               </div>
             ) : null}
             </CardContent>

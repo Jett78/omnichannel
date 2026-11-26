@@ -15,6 +15,7 @@ import {
   ListFilter,
   Lock,
   MoreHorizontal,
+  PanelRight,
   Paperclip,
   Pencil,
   Reply,
@@ -592,6 +593,9 @@ export function RealInboxShell({
   const [socketStatus, setSocketStatus] = useState<SocketStatus>("connecting");
   const [notice, setNotice] = useState<string | null>(null);
   const [mobileThread, setMobileThread] = useState(false);
+  // Below xl the contact/assignment panel is a slide-over, opened from
+  // the thread header — without this it was unreachable on phones.
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const selectedIdRef = useRef(selectedId);
   useEffect(() => {
@@ -1786,7 +1790,10 @@ export function RealInboxShell({
                 size="icon"
                 className="size-8 md:hidden"
                 aria-label="Back to conversation list"
-                onClick={() => setMobileThread(false)}
+                onClick={() => {
+                  setMobileThread(false);
+                  setDetailsOpen(false);
+                }}
               >
                 <ArrowLeft className="size-4" />
               </Button>
@@ -1866,6 +1873,16 @@ export function RealInboxShell({
               >
                 <Reply className="size-3.5" />
                 <span className="hidden min-[480px]:inline">Reply</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 rounded-full xl:hidden"
+                aria-label="Conversation details and assignment"
+                onClick={() => setDetailsOpen(true)}
+              >
+                <PanelRight className="size-3.5" />
+                <span className="hidden min-[480px]:inline">Details</span>
               </Button>
               {data.canManage ? (
                 <DropdownMenu>
@@ -2499,12 +2516,50 @@ export function RealInboxShell({
       </section>
 
       {/* ─── RIGHT: contact panel ────────────────────────────────────── */}
+      {/* On xl this is the static third pane. Below xl it becomes a
+          right slide-over (same single copy of the panel, so every
+          control — assignment, priority, tags, contact edit — works
+          identically); the wrapper flips visibility only after the
+          slide-out finishes, mirroring the sidebar drawer. */}
       {selected ? (
-        <aside
-          className="bg-card hidden w-[320px] shrink-0 overflow-y-auto border-l xl:block"
-          aria-label="Contact details"
-        >
-          <div className="flex flex-col items-center gap-1.5 px-4 pt-6 pb-4 text-center">
+        <>
+          <button
+            type="button"
+            aria-label="Close conversation details"
+            tabIndex={detailsOpen ? 0 : -1}
+            onClick={() => setDetailsOpen(false)}
+            className={cn(
+              "fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 xl:hidden",
+              detailsOpen ? "opacity-100" : "pointer-events-none opacity-0",
+            )}
+          />
+          <div
+            className={cn(
+              "fixed inset-0 z-40 xl:static xl:z-auto xl:visible",
+              detailsOpen ? "visible" : "invisible [transition:visibility_0s_linear_300ms]",
+            )}
+          >
+            <aside
+              className={cn(
+                "bg-card absolute inset-y-0 right-0 w-[320px] max-w-[85vw] shrink-0 overflow-y-auto border-l shadow-xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                detailsOpen ? "translate-x-0" : "translate-x-full",
+                "xl:static xl:h-full xl:max-w-none xl:translate-x-0 xl:shadow-none",
+              )}
+              aria-label="Contact details"
+            >
+              <div className="flex items-center justify-between px-4 pt-3 xl:hidden">
+                <span className="text-xs font-semibold tracking-wide uppercase">Details</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8"
+                  aria-label="Close details"
+                  onClick={() => setDetailsOpen(false)}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+              <div className="flex flex-col items-center gap-1.5 px-4 pt-6 pb-4 text-center xl:pt-6">
             <AvatarWithBadge
               name={selected.contact.displayName}
               image={selected.contact.avatarUrl}
@@ -2810,8 +2865,10 @@ export function RealInboxShell({
                 </div>
               </section>
             ) : null}
+            </div>
+            </aside>
           </div>
-        </aside>
+        </>
       ) : null}
 
       {/* Delete message confirmation */}
