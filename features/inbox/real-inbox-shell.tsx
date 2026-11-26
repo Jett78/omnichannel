@@ -1396,7 +1396,7 @@ export function RealInboxShell({
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 w-full">
+    <div className="flex h-[calc(100vh-3.5rem)] w-full">
       {/* ─── LEFT: conversation list ─────────────────────────────────── */}
       <section
         className={cn(

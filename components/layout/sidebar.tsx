@@ -64,25 +64,46 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "bg-sidebar text-sidebar-foreground flex shrink-0 flex-col overflow-x-hidden transition-[width] duration-300 ease-in-out",
-        collapsed ? "w-16" : "w-[228px]",
+        "bg-sidebar text-sidebar-foreground flex shrink-0 flex-col overflow-x-hidden border-r transition-[width] duration-300 ease-in-out",
+        collapsed ? "w-16" : "w-64",
         className,
       )}
     >
-      <div className="flex h-12 items-center gap-2 px-4">
+      <div
+        className={cn(
+          "flex gap-2 border-b",
+          collapsed ? "flex-col items-center px-0 py-3" : "h-14 items-center px-4",
+        )}
+      >
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white shadow-sm">
           U
         </span>
         <div
           className={cn(
             "min-w-0 flex-1 leading-tight transition-opacity duration-150",
-            collapsed ? "pointer-events-none opacity-0" : "opacity-100",
+            collapsed ? "pointer-events-none hidden opacity-0" : "opacity-100",
           )}
           aria-hidden={collapsed}
         >
           <p className="truncate text-sm font-semibold">Unified Inbox</p>
           <p className="text-muted-foreground truncate text-xs">Omnichannel workspace</p>
         </div>
+        {onToggleCollapse && !onNavigate ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
+            className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground shrink-0 rounded-md p-1.5"
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+          </button>
+        ) : null}
         {onNavigate ? (
           <button
             type="button"
@@ -95,7 +116,7 @@ export function Sidebar({
         ) : null}
       </div>
 
-      <div className="px-3 py-3">
+      <div className="border-b px-3 py-3">
         <p
           className={cn(
             "text-muted-foreground px-1 pb-1.5 text-[11px] font-medium tracking-wide whitespace-nowrap uppercase transition-opacity duration-150",
@@ -120,7 +141,7 @@ export function Sidebar({
         )}
       </div>
 
-      <nav className="flex flex-col gap-0.5 overflow-y-auto p-3" aria-label="Main navigation">
+      <nav className="flex flex-col gap-1 overflow-y-auto px-3 py-4" aria-label="Main navigation">
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
@@ -144,8 +165,8 @@ export function Sidebar({
               className={cn(
                 "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-white text-foreground ring-1 ring-black/[0.05] dark:bg-white/10 dark:ring-white/10"
-                  : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/5",
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand"
+                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               )}
             >
               <Icon className="size-4 shrink-0" />
@@ -171,32 +192,7 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto p-3">
-        {onToggleCollapse ? (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            aria-expanded={!collapsed}
-            className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium"
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="size-4 shrink-0" />
-            ) : (
-              <PanelLeftClose className="size-4 shrink-0" />
-            )}
-            <span
-              className={cn(
-                "min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-150",
-                collapsed ? "opacity-0" : "opacity-100",
-              )}
-              aria-hidden={collapsed}
-            >
-              {collapsed ? "Expand" : "Collapse"}
-            </span>
-          </button>
-        ) : null}
+      <div className="mt-auto border-t p-3">
         <Link
           href="/settings"
           onClick={onNavigate}
@@ -223,7 +219,7 @@ export function Sidebar({
               <LogoutButton iconOnly />
             </div>
           ) : (
-            <div className="flex items-center gap-2.5 px-2 pt-3">
+            <div className="bg-sidebar-accent/60 mt-2 flex items-center gap-2.5 rounded-xl px-2.5 py-2">
               <AvatarWithBadge name={user.name || user.email} size="sm" />
               <div className="min-w-0 flex-1 leading-tight">
                 <p className="truncate text-sm font-medium">{user.name}</p>
@@ -268,8 +264,8 @@ function InboxNavGroup({
         className={cn(
           "relative flex items-center rounded-lg pr-1 transition-colors",
           active
-            ? "bg-white text-foreground ring-1 ring-black/[0.05] dark:bg-white/10 dark:ring-white/10"
-            : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/5",
+            ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand"
+            : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         )}
       >
         <Link
@@ -336,8 +332,8 @@ function InboxSubList({
             className={cn(
               "rounded-lg py-1.5 pr-3 pl-10 text-[13px] transition-colors",
               isActive
-                ? "bg-white font-medium text-foreground ring-1 ring-black/[0.05] dark:bg-white/10 dark:ring-white/10"
-                : "text-muted-foreground hover:bg-white/60 hover:text-foreground dark:hover:bg-white/5",
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
+                : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             )}
           >
             {item.label}
