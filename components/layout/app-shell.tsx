@@ -71,24 +71,44 @@ export function AppShell({
         onToggleCollapse={toggleSidebar}
         className="sticky top-0 hidden h-screen lg:flex"
       />
-      {mobileOpen ? (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <button
-            type="button"
-            aria-label="Close menu"
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileOpen(false)}
-          />
+      {/* Mobile drawer: always mounted so it can SLIDE — the panel
+          translates in/out and the backdrop fades (Jeet, 2026-11-26).
+          When closed it is invisible (delayed until the slide-out
+          finishes), inert, and the backdrop ignores taps. */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 lg:hidden",
+          mobileOpen ? "visible" : "invisible [transition:visibility_0s_linear_300ms]",
+        )}
+        aria-hidden={!mobileOpen}
+      >
+        <button
+          type="button"
+          aria-label="Close menu"
+          tabIndex={mobileOpen ? 0 : -1}
+          className={cn(
+            "absolute inset-0 bg-black/50 transition-opacity duration-300",
+            mobileOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          )}
+          onClick={() => setMobileOpen(false)}
+        />
+        <div
+          className={cn(
+            "absolute inset-y-0 left-0 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+            mobileOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+          inert={!mobileOpen}
+        >
           <Sidebar
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
             user={user}
             inboxOpenCount={inboxOpenCount}
-            className="absolute inset-y-0 left-0 shadow-xl"
+            className="h-full shadow-xl"
             onNavigate={() => setMobileOpen(false)}
           />
         </div>
-      ) : null}
+      </div>
       <div className="bg-muted/40 flex min-w-0 flex-1 flex-col">
         <Header
           user={user}
