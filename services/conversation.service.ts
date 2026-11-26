@@ -300,6 +300,35 @@ export const conversationService = {
     };
   },
 
+  /** Open-conversation counts per assignee view, for the inbox tabs. */
+  async countOpenByView(
+    actorUserId: string,
+    workspaceId: string,
+  ): Promise<{ all: number; mine: number; unassigned: number; mentions: number }> {
+    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.view");
+    const base = { workspaceId, status: "OPEN" as const };
+    const [all, mine, unassigned, mentions] = await Promise.all([
+      prisma.conversation.count({ where: base }),
+      prisma.conversation.count({ where: { ...base, assigneeId: actorUserId } }),
+      prisma.conversation.count({ where: { ...base, assigneeId: null } }),
+      prisma.conversation.count({
+        where: {
+          ...base,
+          messages: {
+            some: {
+              type: "PRIVATE_NOTE" as const,
+              metadata: {
+                path: ["mentions"],
+                array_contains: [actorUserId],
+              },
+            },
+          },
+        },
+      }),
+    ]);
+    return { all, mine, unassigned, mentions };
+  },
+
   /** Search = listConversations with a query (contact name or message body). */
   async searchConversations(
     actorUserId: string,

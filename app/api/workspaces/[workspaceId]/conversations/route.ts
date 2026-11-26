@@ -17,6 +17,12 @@ export async function GET(request: Request, context: RouteContext) {
     const { workspaceId } = await context.params;
     const params = new URL(request.url).searchParams;
 
+    if (params.get("counts") === "1") {
+      return NextResponse.json(
+        await conversationService.countOpenByView(user.id, workspaceId),
+      );
+    }
+
     const statusParam = params.get("status");
     const limitParam = params.get("limit");
     const sortParam = params.get("sort");

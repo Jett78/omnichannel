@@ -5,7 +5,6 @@ import {
   Bell,
   Bot,
   Cable,
-  ChevronDown,
   CircleHelp,
   Inbox,
   LayoutDashboard,
@@ -16,13 +15,11 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { usePathname } from "next/navigation";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
 import { LogoutButton } from "@/components/layout/logout-button";
 import { WorkspaceSwitcher, type WorkspaceOption } from "@/components/layout/workspace-switcher";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -146,16 +143,6 @@ export function Sidebar({
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           const isInbox = "badge" in item && item.badge === "inbox";
-          if (isInbox && !collapsed) {
-            return (
-              <InboxNavGroup
-                key={item.href}
-                active={active}
-                openCount={inboxOpenCount}
-                onNavigate={onNavigate}
-              />
-            );
-          }
           return (
             <Link
               key={item.href}
@@ -234,112 +221,3 @@ export function Sidebar({
   );
 }
 
-const INBOX_VIEWS = [
-  { view: "all", label: "All" },
-  { view: "mine", label: "Mine" },
-  { view: "unassigned", label: "Unassigned" },
-  { view: "mentions", label: "Mentions" },
-] as const;
-
-/**
- * Inbox nav group: the Inbox link plus an expandable list of the
- * inbox's assignee views (All / Mine / Unassigned / Mentions). Open
- * by default, with "All" as the default view; the chevron collapses
- * it. The views are the inbox's real filters (?view=…), the same ones
- * the inbox's own segmented control switches.
- */
-function InboxNavGroup({
-  active,
-  openCount,
-  onNavigate,
-}: {
-  active: boolean;
-  openCount: number;
-  onNavigate?: () => void;
-}) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div>
-      <div
-        className={cn(
-          "relative flex items-center rounded-lg pr-1 transition-colors",
-          active
-            ? "bg-sidebar-accent text-sidebar-accent-foreground before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-brand"
-            : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        )}
-      >
-        <Link
-          href="/inbox?view=all"
-          onClick={onNavigate}
-          className={cn(
-            "flex flex-1 items-center gap-3 px-3 py-2 text-sm font-medium",
-            active && "font-semibold",
-          )}
-        >
-          <Inbox className="size-4 shrink-0" />
-          <span className="flex-1">Inbox</span>
-          {openCount > 0 ? (
-            <Badge variant="info" className="px-1.5" title="Open conversations">
-              {openCount}
-            </Badge>
-          ) : null}
-        </Link>
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          aria-label={open ? "Collapse inbox views" : "Expand inbox views"}
-          aria-expanded={open}
-          className="hover:bg-background/60 rounded-md p-1"
-        >
-          <ChevronDown
-            className={cn("size-4 transition-transform", open ? "" : "-rotate-90")}
-          />
-        </button>
-      </div>
-      {open ? (
-        <Suspense fallback={<InboxSubList currentView="all" onNavigate={onNavigate} />}>
-          <InboxSubNav onNavigate={onNavigate} />
-        </Suspense>
-      ) : null}
-    </div>
-  );
-}
-
-function InboxSubNav({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const onInbox = pathname === "/inbox" || pathname.startsWith("/inbox/");
-  const currentView = onInbox ? (searchParams.get("view") ?? "all") : "all";
-  return <InboxSubList currentView={currentView} onNavigate={onNavigate} />;
-}
-
-function InboxSubList({
-  currentView,
-  onNavigate,
-}: {
-  currentView: string;
-  onNavigate?: () => void;
-}) {
-  return (
-    <div className="mt-0.5 flex flex-col gap-0.5">
-      {INBOX_VIEWS.map((item) => {
-        const isActive = currentView === item.view;
-        return (
-          <Link
-            key={item.view}
-            href={`/inbox?view=${item.view}`}
-            onClick={onNavigate}
-            className={cn(
-              "rounded-lg py-1.5 pr-3 pl-10 text-[13px] transition-colors",
-              isActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-            )}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
-}

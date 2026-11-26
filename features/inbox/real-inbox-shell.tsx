@@ -384,6 +384,20 @@ const STATUS_CHIPS: Array<{ value: StatusFilter; label: string; activeClass: str
   { value: "RESOLVED", label: "Resolved", activeClass: STATUS_CHIP_ACTIVE },
 ];
 
+/** Assignee view tabs at the top of the list (Jeet's reference,
+ *  2026-11-26): Mine / Unassigned / All / Mentions with real open
+ *  counts from the API. They replaced the sidebar's Inbox dropdown. */
+const VIEW_TABS: Array<{
+  value: AssigneeTab;
+  label: string;
+  countKey: "mine" | "unassigned" | "all" | "mentions";
+}> = [
+  { value: "mine", label: "Mine", countKey: "mine" },
+  { value: "unassigned", label: "Unassigned", countKey: "unassigned" },
+  { value: "all", label: "All", countKey: "all" },
+  { value: "mentions", label: "Mentions", countKey: "mentions" },
+];
+
 const DRAFTS_KEY = "uoi.inbox.drafts.v1";
 
 function readDrafts(): Record<string, { draft: string; mode: "reply" | "note" }> {
@@ -492,6 +506,12 @@ export function RealInboxShell({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [sortMode, setSortMode] = useState<SortMode>("latest");
   const [channelFilter, setChannelFilter] = useState<string>("ALL");
+  const [viewCounts, setViewCounts] = useState<{
+    all: number;
+    mine: number;
+    unassigned: number;
+    mentions: number;
+  } | null>(null);
   const [knownChannels, setKnownChannels] = useState<
     Array<{ id: string; provider: RealConversationItem["channel"]["provider"]; displayName: string }>
   >(() => {
@@ -674,6 +694,23 @@ export function RealInboxShell({
     filtersRef.current = { assigneeTab, statusFilter, sortMode, channelFilter };
   }, [assigneeTab, statusFilter, sortMode, channelFilter]);
 
+  const fetchViewCounts = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/conversations?counts=1`);
+      if (!res.ok) return;
+      setViewCounts(
+        (await res.json()) as {
+          all: number;
+          mine: number;
+          unassigned: number;
+          mentions: number;
+        },
+      );
+    } catch {
+      // Counts are decorative; the tabs still work without them.
+    }
+  }, [apiBase]);
+
   const fetchConversations = useCallback(async () => {
     try {
       const f = filtersRef.current;
@@ -687,6 +724,7 @@ export function RealInboxShell({
       if (!res.ok) return;
       const body = (await res.json()) as { items: RealConversationItem[] };
       setConversations(body.items);
+      void fetchViewCounts();
       setKnownChannels((prev) => {
         const seen = new Map(prev.map((c) => [c.id, c]));
         for (const item of body.items) seen.set(item.channel.id, item.channel);
@@ -695,7 +733,7 @@ export function RealInboxShell({
     } catch {
       // Realtime/list refresh is best-effort; DB state re-syncs on next event.
     }
-  }, [apiBase, currentUserId]);
+  }, [apiBase, currentUserId, fetchViewCounts]);
 
   // Refetch when the list controls change.
   useEffect(() => {
@@ -1405,7 +1443,7 @@ export function RealInboxShell({
       {/* ─── LEFT: conversation list ─────────────────────────────────── */}
       <section
         className={cn(
-          "bg-card w-full shrink-0 flex-col border-r md:flex md:w-[22.5rem]",
+          "bg-card w-full shrink-0 flex-col border-r md:flex md:w-[21.875rem]",
           mobileThread ? "hidden" : "flex",
         )}
         aria-label="Conversations"
@@ -1436,7 +1474,46 @@ export function RealInboxShell({
             </span>
           </span>
         </div>
-        <div className="flex items-center gap-1.5 px-4 pb-3">
+        <div
+          className="flex items-center gap-4 border-b px-4"
+          role="tablist"
+          aria-label="Conversation views"
+        >
+          {VIEW_TABS.map((tab) => {
+            const isTabActive = assigneeTab === tab.value;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={isTabActive}
+                onClick={() => setAssigneeTab(tab.value)}
+                className={cn(
+                  "relative py-2 text-sm transition-colors",
+                  isTabActive
+                    ? "font-semibold text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {tab.label}
+                {viewCounts ? (
+                  <span
+                    className={cn(
+                      "ml-1.5 text-xs",
+                      isTabActive ? "text-primary/70" : "text-muted-foreground/80",
+                    )}
+                  >
+                    {viewCounts[tab.countKey]}
+                  </span>
+                ) : null}
+                {isTabActive ? (
+                  <span className="bg-primary absolute inset-x-0 -bottom-px h-0.5 rounded-full" />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-1.5 px-4 pt-3 pb-3">
           <div className="relative min-w-0 flex-1">
             <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
             <Input
@@ -2405,7 +2482,7 @@ export function RealInboxShell({
       {/* ─── RIGHT: contact panel ────────────────────────────────────── */}
       {selected ? (
         <aside
-          className="bg-card hidden w-[330px] shrink-0 overflow-y-auto border-l xl:block"
+          className="bg-card hidden w-[320px] shrink-0 overflow-y-auto border-l xl:block"
           aria-label="Contact details"
         >
           <div className="flex flex-col items-center gap-1.5 px-4 pt-6 pb-4 text-center">

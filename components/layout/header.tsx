@@ -2,7 +2,7 @@
 
 import { Bell, CircleHelp, LogOut, Menu, Search, Settings, UserRound } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
@@ -85,12 +85,10 @@ export function Header({
   searchConversations?: HeaderSearchConversation[];
   onMenuClick?: () => void;
 }) {
-  const pathname = usePathname();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const title = TITLES[pathname] ?? "Unified Omnichannel Inbox";
   const unread = notifications.filter((n) => !n.isRead).length;
 
   useEffect(() => {
@@ -145,7 +143,6 @@ export function Header({
       >
         <Menu className="size-4" />
       </Button>
-      <h1 className="text-sm font-semibold whitespace-nowrap">{title}</h1>
 
       <button
         type="button"
