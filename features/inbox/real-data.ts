@@ -76,6 +76,9 @@ export interface RealInboxData {
   initialView?: "all" | "mine" | "unassigned" | "mentions";
   /** Phase 13G — whether an AI provider key is configured server-side. */
   aiConfigured: boolean;
+  /** workspace.update (OWNER/ADMIN) — gates destructive inbox actions
+   *  like deleting conversations/messages (RBAC audit 2026-11-26). */
+  canManage: boolean;
   conversations: RealConversationItem[];
   initialMessages: { conversationId: string; messages: RealMessageItem[] };
   members: Array<{ id: string; name: string }>;

@@ -15,6 +15,7 @@ import type { RealChannelConfig } from "@/features/channels/channels-catalog";
 import { getActiveWorkspace } from "@/lib/active-workspace";
 import { getCurrentUser } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
+import { hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 
 interface ChannelsPageProps {
@@ -60,6 +61,11 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
     updatedAt: channel.updatedAt.toISOString(),
   }));
   const whatsapp = getWhatsAppConfig();
+  const membership = await prisma.workspaceMember.findUnique({
+    where: { workspaceId_userId: { workspaceId: active.id, userId: user.id } },
+    select: { role: true },
+  });
+  const canManage = membership ? hasPermission(membership.role, "channels.manage") : false;
 
   const params = await searchParams;
   const appUrl = getEnv().APP_URL.replace(/\/+$/, "");
@@ -74,6 +80,7 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
     <ChannelsCatalog
       realChannels={channels}
       workspaceId={active.id}
+      canManage={canManage}
       mockEnabled={isMockProviderEnabled()}
       metaConfig={{
         facebookConfigured: isFacebookConfigured(),

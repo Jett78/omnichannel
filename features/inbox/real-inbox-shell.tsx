@@ -1861,21 +1861,23 @@ export function RealInboxShell({
               >
                 <Reply className="size-3.5" /> Reply
               </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="rounded-full" aria-label="More actions">
-                    <MoreHorizontal className="size-4" /> More
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    className="text-red-600"
-                    onSelect={() => setConfirmDeleteConversation(true)}
-                  >
-                    <Trash2 className="size-4" /> Delete conversation
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {data.canManage ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="rounded-full" aria-label="More actions">
+                      <MoreHorizontal className="size-4" /> More
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      className="text-red-600"
+                      onSelect={() => setConfirmDeleteConversation(true)}
+                    >
+                      <Trash2 className="size-4" /> Delete conversation
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
 
             <ScrollArea className="min-h-0 flex-1">
@@ -1899,7 +1901,7 @@ export function RealInboxShell({
                           message={message}
                           side="left"
                           onCopy={() => copyMessage(message)}
-                          onDelete={() => setPendingDeleteMessage(message)}
+                          onDelete={data.canManage ? () => setPendingDeleteMessage(message) : undefined}
                         />
                         <p className="flex items-center gap-1.5 pb-1 text-[11px] font-semibold tracking-wide uppercase">
                           <Lock className="size-3" /> Private note ·{" "}
@@ -1942,7 +1944,7 @@ export function RealInboxShell({
                               ? () => void retryMessage(message)
                               : undefined
                           }
-                          onDelete={() => setPendingDeleteMessage(message)}
+                          onDelete={data.canManage ? () => setPendingDeleteMessage(message) : undefined}
                         />
                         <div className="rounded-2xl rounded-br-md bg-indigo-200 px-3.5 py-2.5 text-sm text-indigo-950 dark:bg-indigo-500/30 dark:text-indigo-50">
                           {message.messageType === "TEMPLATE" ? (

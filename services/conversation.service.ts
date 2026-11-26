@@ -777,7 +777,10 @@ export const conversationService = {
     workspaceId: string,
     conversationId: string,
   ): Promise<{ id: string }> {
-    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.assign");
+    // Destructive — admins only (RBAC audit 2026-11-26: agents hold
+    // conversations.assign, which previously let them delete whole
+    // conversations).
+    await requireWorkspacePermission(actorUserId, workspaceId, "workspace.update");
     await loadConversationOrThrow(workspaceId, conversationId);
     await prisma.conversation.delete({ where: { id: conversationId } });
     await writeAudit(workspaceId, actorUserId, "conversation.delete", conversationId);
@@ -813,7 +816,9 @@ export const conversationService = {
     conversationId: string,
     messageId: string,
   ): Promise<{ id: string }> {
-    await requireWorkspacePermission(actorUserId, workspaceId, "conversations.reply");
+    // Destructive — admins only (RBAC audit 2026-11-26: agents hold
+    // conversations.reply, which previously let them delete messages).
+    await requireWorkspacePermission(actorUserId, workspaceId, "workspace.update");
     await loadConversationOrThrow(workspaceId, conversationId);
     const message = await prisma.message.findFirst({
       where: { id: messageId, conversationId },

@@ -1,11 +1,10 @@
-import { CheckCheck, Clock, Inbox, MessagesSquare, Plug, UserX } from "lucide-react";
+import { ArrowRight, CheckCheck, Clock, Inbox, MessagesSquare, Plug, TriangleAlert, UserX } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
 import { ChannelIcon, PROVIDER_META } from "@/components/channel-icon";
 import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -60,19 +59,126 @@ export default async function DashboardPage() {
     ]);
 
   const recent = recentList.items;
+  const firstName = user.name.split(" ")[0] || user.name;
+  const hourRaw = Number(
+    new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      hour12: false,
+      timeZone: active.timezone,
+    }).format(new Date()),
+  );
+  const hourInTz = Number.isNaN(hourRaw) ? 12 : hourRaw % 24;
+  const greeting = hourInTz < 12 ? "Good morning" : hourInTz < 17 ? "Good afternoon" : "Good evening";
+  const todayLabel = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    timeZone: active.timezone,
+  }).format(new Date());
+  const connectedCount = channels.filter((c) => c.status === "CONNECTED").length;
+  const attention: Array<{ text: string; href: string; cta: string }> = [];
+  if (unassigned > 0) {
+    attention.push({
+      text: `${unassigned} unassigned conversation${unassigned === 1 ? "" : "s"} waiting for an agent`,
+      href: "/inbox?view=unassigned",
+      cta: "Open unassigned",
+    });
+  }
+  for (const channel of channels) {
+    if (channel.status !== "CONNECTED" && attention.length < 3) {
+      attention.push({
+        text: `${channel.displayName} (${PROVIDER_META[channel.provider].label}) is ${channel.status.toLowerCase()}`,
+        href: "/channels",
+        cta: "Open Channels",
+      });
+    }
+  }
+  const canConnect = activeMembership?.role === "OWNER" || activeMembership?.role === "ADMIN";
+
   const noDataNote = total === 0 ? "Connect a channel to get started" : "All time";
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader
-        title={`Overview — ${active.name}`}
-        description={`Signed in as ${user.name} (${user.email})${user.emailVerified ? "" : " — email not verified yet"}${activeMembership ? ` · your role: ${activeMembership.role}` : ""}.`}
-        actions={
-          <Button asChild>
-            <Link href="/channels">Connect a channel</Link>
-          </Button>
-        }
-      />
+      {/* Greeting hero — gradient, matching the Channels hero language */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-7 text-white sm:px-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-white/10 blur-2xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -bottom-28 left-1/3 size-56 rounded-full bg-fuchsia-300/20 blur-3xl"
+        />
+        <div className="relative flex flex-wrap items-end justify-between gap-6">
+          <div className="max-w-xl">
+            <p className="text-xs font-semibold tracking-widest text-indigo-100 uppercase">
+              {todayLabel} · {active.name}
+            </p>
+            <h2 className="pt-2 text-3xl font-bold tracking-tight">
+              {greeting}, {firstName}
+            </h2>
+            <p className="pt-2 text-sm leading-relaxed text-indigo-100">
+              {open > 0
+                ? `You have ${open} open conversation${open === 1 ? "" : "s"}${
+                    unassigned > 0 ? `, and ${unassigned} of them still need an agent` : ""
+                  }.`
+                : "All caught up — no open conversations right now."}
+            </p>
+            <div className="flex flex-wrap gap-2 pt-4">
+              <Button asChild className="bg-white text-indigo-700 hover:bg-indigo-50">
+                <Link href="/inbox">
+                  Open inbox <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+              {canConnect ? (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                >
+                  <Link href="/channels">Connect a channel</Link>
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex gap-2.5">
+            {[
+              { label: "Open now", value: open },
+              { label: "Unassigned", value: unassigned },
+              { label: "Channels live", value: `${connectedCount}/${channels.length}` },
+            ].map((tile) => (
+              <div
+                key={tile.label}
+                className="rounded-2xl bg-white/10 px-4 py-3 ring-1 ring-white/25 backdrop-blur"
+              >
+                <p className="text-2xl font-bold">{tile.value}</p>
+                <p className="text-[11px] tracking-wide text-indigo-100 uppercase">{tile.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {attention.length > 0 ? (
+        <section className="flex flex-col gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/25 dark:bg-amber-500/10">
+          <p className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <TriangleAlert className="size-4" /> Needs your attention
+          </p>
+          <ul className="flex flex-col gap-1.5">
+            {attention.map((item) => (
+              <li
+                key={item.text}
+                className="flex flex-wrap items-center justify-between gap-2 text-sm text-amber-900 dark:text-amber-200"
+              >
+                <span>{item.text}</span>
+                <Link href={item.href} className="font-medium underline underline-offset-4">
+                  {item.cta}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
         <StatCard
@@ -231,9 +337,18 @@ export default async function DashboardPage() {
                     <span className="text-muted-foreground text-xs">
                       {PROVIDER_META[channel.provider].label}
                     </span>
-                    <Badge variant={channel.status === "CONNECTED" ? "success" : "warning"}>
-                      {channel.status}
-                    </Badge>
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className={
+                          channel.status === "CONNECTED"
+                            ? "size-2 rounded-full bg-emerald-500"
+                            : "size-2 rounded-full bg-amber-500"
+                        }
+                      />
+                      <Badge variant={channel.status === "CONNECTED" ? "success" : "warning"}>
+                        {channel.status}
+                      </Badge>
+                    </span>
                   </li>
                 ))}
               </ul>

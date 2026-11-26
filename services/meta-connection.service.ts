@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { AppError } from "@/lib/errors";
 import { decryptText, encryptText } from "@/lib/encryption";
 import { prisma } from "@/lib/prisma";
-import { requireWorkspaceMembership, requireWorkspacePermission } from "@/lib/workspace-auth";
+import { requireWorkspacePermission } from "@/lib/workspace-auth";
 import {
   FACEBOOK_SCOPES,
   FacebookProvider,
@@ -371,7 +371,10 @@ export const metaConnectionService = {
     workspaceId: string,
     sessionId: string,
   ): Promise<ConnectionSessionView> {
-    await requireWorkspaceMembership(actorUserId, workspaceId);
+    // Part of the channel-connect flow — managers only (RBAC audit
+    // 2026-11-26: previously any workspace member could read a live
+    // connection session).
+    await requireWorkspacePermission(actorUserId, workspaceId, "channels.manage");
     const session = await loadUsableSession(actorUserId, workspaceId, sessionId);
 
     if (session.provider === "FACEBOOK") {

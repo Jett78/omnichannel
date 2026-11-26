@@ -135,6 +135,7 @@ export function ChannelsCatalog({
   gmailConfig,
   gmailConnected,
   gmailError,
+  canManage = true,
 }: {
   realChannels: RealChannel[];
   workspaceId?: string;
@@ -147,6 +148,9 @@ export function ChannelsCatalog({
   gmailConfig?: GmailConfigView;
   gmailConnected?: string | null;
   gmailError?: string | null;
+  /** channels.manage — agents/viewers get a read-only Channels page
+   *  (RBAC audit 2026-11-26). */
+  canManage?: boolean;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Provider | null>(null);
@@ -343,7 +347,7 @@ export function ChannelsCatalog({
         </p>
       ) : null}
 
-      {metaSession && workspaceId ? (
+      {metaSession && workspaceId && canManage ? (
         <MetaConnectionPanel
           workspaceId={workspaceId}
           sessionId={metaSession.id}
@@ -351,7 +355,7 @@ export function ChannelsCatalog({
         />
       ) : null}
 
-      {whatsappConfig && workspaceId ? (
+      {whatsappConfig && workspaceId && canManage ? (
         <WhatsAppConnectPanel
           workspaceId={workspaceId}
           whatsappConfig={whatsappConfig}
@@ -362,11 +366,11 @@ export function ChannelsCatalog({
         />
       ) : null}
 
-      {workspaceId ? (
+      {workspaceId && canManage ? (
         <WhatsAppTemplatesPanel workspaceId={workspaceId} connectedChannels={realChannels} />
       ) : null}
 
-      {workspaceId ? (
+      {workspaceId && canManage ? (
         <TelegramConnectPanel
           workspaceId={workspaceId}
           connectedChannels={realChannels}
@@ -376,7 +380,7 @@ export function ChannelsCatalog({
         />
       ) : null}
 
-      {workspaceId ? (
+      {workspaceId && canManage ? (
         <WebsiteConnectPanel
           workspaceId={workspaceId}
           connectedChannels={realChannels}
@@ -568,8 +572,9 @@ export function ChannelsCatalog({
                       {statusLabel}
                     </Badge>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                    {canManage ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -634,8 +639,9 @@ export function ChannelsCatalog({
                         >
                           <Trash2 /> Delete
                         </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : null}
 
                   </li>
                 );
@@ -649,6 +655,7 @@ export function ChannelsCatalog({
         </section>
       ) : null}
 
+      {canManage ? (
       <section id="all-channels" className="flex scroll-mt-6 flex-col gap-3">
         <div>
           <h3 className="text-base font-semibold tracking-tight">All channels</h3>
@@ -771,6 +778,12 @@ export function ChannelsCatalog({
           })}
         </div>
       </section>
+      ) : (
+        <p className="text-muted-foreground rounded-xl border border-dashed p-4 text-sm">
+          Channel connections are managed by workspace owners and admins. You can see the
+          connected accounts above — ask an admin if a channel needs connecting or changing.
+        </p>
+      )}
 
       <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent>

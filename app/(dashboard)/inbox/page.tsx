@@ -62,6 +62,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
           currentUserId: user.id,
           initialView: view,
           aiConfigured: (await getAiStatus(active.id)).configured,
+          canManage: (() => {
+            const me = members.find((m) => m.user.id === user.id);
+            return me?.role === "OWNER" || me?.role === "ADMIN";
+          })(),
           conversations: orderedItems.map((item) => ({
             id: item.id,
             status: item.status,
