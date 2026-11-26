@@ -1,6 +1,17 @@
 "use client";
 
-import { CheckCircle2, FlaskConical, PlugZap, Trash2, TriangleAlert } from "lucide-react";
+import {
+  Code2,
+  FlaskConical,
+  Plug,
+  Plus,
+  Puzzle,
+  RefreshCw,
+  Settings,
+  Trash2,
+  TriangleAlert,
+  Unplug,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -61,6 +72,31 @@ export interface RealChannel {
   status: string;
   config?: RealChannelConfig;
   externalAccountId?: string;
+  /** ISO timestamp of the last channel-row update — shown as "Last connected". */
+  updatedAt?: string;
+}
+
+/** Provider sublabels for the connected-accounts list (reference design). */
+const CONNECTED_SUBLABELS: Partial<Record<Provider, string>> = {
+  FACEBOOK: "Facebook Messenger",
+  WEBSITE: "Website live chat",
+  WHATSAPP: "WhatsApp Business",
+};
+
+/** "2 days ago" style relative time for the Last connected line. */
+function timeAgo(iso: string): string {
+  const seconds = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return days === 1 ? "1 day ago" : `${days} days ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return weeks === 1 ? "1 week ago" : `${weeks} weeks ago`;
+  const months = Math.floor(days / 30);
+  return months <= 1 ? "1 month ago" : `${months} months ago`;
 }
 
 /** Public Meta setup facts (no secrets) passed from the server page. */
@@ -256,42 +292,30 @@ export function ChannelsCatalog({
 
   return (
     <div className="flex w-full flex-col gap-8">
-      {/* Hero */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-8 text-white sm:px-8">
+      {/* Connected accounts header — reference design (Jeet,
+          2026-11-26): light tinted panel, icon tile, Add Account. */}
+      <section className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-indigo-50 via-violet-50/50 to-transparent px-6 py-6 dark:from-indigo-950/40 dark:via-violet-950/20 dark:to-transparent">
         <div
           aria-hidden
-          className="pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-white/10 blur-2xl"
+          className="pointer-events-none absolute -top-20 right-10 size-52 rounded-full bg-indigo-200/30 blur-3xl dark:bg-indigo-500/10"
         />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -bottom-28 left-1/3 size-56 rounded-full bg-fuchsia-300/20 blur-3xl"
-        />
-        <div className="relative flex flex-wrap items-end justify-between gap-4">
-          <div className="max-w-xl">
-            <p className="flex items-center gap-2 text-xs font-semibold tracking-widest text-indigo-100 uppercase">
-              <PlugZap className="size-4" /> Channels
-            </p>
-            <h2 className="pt-2 text-3xl font-bold tracking-tight">
-              Every conversation, one inbox
-            </h2>
-            <p className="pt-2 text-sm leading-relaxed text-indigo-100">
-              Connect your messaging accounts and reply to customers from a single place.
-              Messenger and Instagram connect through Meta&apos;s official sign-in, X through its
-              own — you always approve access on the platform itself.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium ring-1 ring-white/25 backdrop-blur">
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-emerald-300" />
-              </span>
-              {connectedCount} connected
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+              <Puzzle className="size-7" />
             </span>
-            <span className="inline-flex items-center rounded-full bg-white/15 px-3 py-1.5 text-sm font-medium ring-1 ring-white/25 backdrop-blur">
-              {PROVIDER_ORDER.length} channels available
-            </span>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Connected Accounts</h2>
+              <p className="text-muted-foreground pt-0.5 text-sm">
+                Manage your connected social and messaging accounts
+              </p>
+            </div>
           </div>
+          <Button asChild className="gap-1.5">
+            <a href="#all-channels">
+              <Plus className="size-4" /> Add Account
+            </a>
+          </Button>
         </div>
       </section>
 
@@ -451,171 +475,202 @@ export function ChannelsCatalog({
       ) : null}
 
       {realChannels.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between">
-            <h3 className="flex items-center gap-2 text-base font-semibold tracking-tight">
-              <CheckCircle2 className="size-4 text-emerald-500" />
-              Connected in this workspace
-            </h3>
-            <p className="text-muted-foreground text-xs">
-              {connectedCount} of {realChannels.length} active
-            </p>
-          </div>
+        <section>
           <Card className="overflow-hidden py-0">
             <ul className="divide-y">
-              {realChannels.map((channel) => (
-                <li
-                  key={channel.id}
-                  className="flex items-center gap-3.5 px-5 py-3.5 transition-colors hover:bg-muted/40"
-                >
-                  <span
-                    className="rounded-2xl p-2"
-                    style={{ backgroundColor: `${PROVIDER_META[channel.provider].color}1a` }}
-                  >
-                    <ChannelIcon provider={channel.provider} size="md" />
-                  </span>
-                  <span className="min-w-0 flex-1 leading-tight">
-                    <span className="block truncate text-sm font-semibold">
-                      {channel.displayName}
-                    </span>
-                    <span className="text-muted-foreground block pt-0.5 text-xs">
-                      {PROVIDER_META[channel.provider].label}
-                      {channel.config?.displayPhoneNumber
-                        ? ` · ${channel.config.displayPhoneNumber}`
-                        : ""}
-                    </span>
-                    {channel.status === "ERROR" && channel.config?.lastError ? (
-                      <span className="block pt-0.5 text-xs text-red-600">
-                        {channel.config.lastError} Reconnect to fix it.
-                      </span>
-                    ) : null}
-                  </span>
-                  <Badge
-                    variant={
-                      channel.status === "CONNECTED"
-                        ? "success"
-                        : channel.status === "ERROR"
-                          ? "destructive"
-                          : channel.status === "EXPIRED"
-                            ? "warning"
-                            : "muted"
-                    }
-                    className="gap-1.5"
-                  >
-                    <span
-                      className={cn(
-                        "size-1.5 rounded-full",
-                        channel.status === "CONNECTED"
-                          ? "bg-emerald-500"
-                          : channel.status === "ERROR"
-                            ? "bg-white"
-                            : channel.status === "EXPIRED"
-                              ? "bg-amber-500"
-                              : "bg-zinc-400",
-                      )}
-                    />
-                    {channel.status}
-                  </Badge>
-                  {channel.provider === "FACEBOOK" ||
-                  channel.provider === "INSTAGRAM" ||
+              {realChannels.map((channel) => {
+                const meta = PROVIDER_META[channel.provider];
+                const oauthHref =
+                  channel.provider === "FACEBOOK" && metaConfig?.facebookConfigured && workspaceId
+                    ? `/api/workspaces/${workspaceId}/channels/facebook/connect`
+                    : channel.provider === "INSTAGRAM" &&
+                        metaConfig?.instagramConfigured &&
+                        workspaceId
+                      ? `/api/workspaces/${workspaceId}/channels/instagram/connect`
+                      : channel.provider === "GMAIL" && gmailConfig?.configured && workspaceId
+                        ? `/api/workspaces/${workspaceId}/channels/gmail/connect`
+                        : null;
+                const hasReconnect =
+                  oauthHref !== null ||
                   channel.provider === "WHATSAPP" ||
-                  channel.provider === "GMAIL" ||
-                  channel.provider === "WEBSITE" ||
-                  channel.provider === "TELEGRAM" ? (
-                    <span className="flex items-center gap-1">
-                      {(() => {
-                        const reconnectHref =
-                          channel.provider === "FACEBOOK" &&
-                          metaConfig?.facebookConfigured &&
-                          workspaceId
-                            ? `/api/workspaces/${workspaceId}/channels/facebook/connect`
-                            : channel.provider === "INSTAGRAM" &&
-                                metaConfig?.instagramConfigured &&
-                                workspaceId
-                              ? `/api/workspaces/${workspaceId}/channels/instagram/connect`
-                              : channel.provider === "GMAIL" &&
-                                    gmailConfig?.configured &&
-                                    workspaceId
-                                  ? `/api/workspaces/${workspaceId}/channels/gmail/connect`
-                                  : null;
-                        return channel.provider === "WEBSITE" && workspaceId ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openWebsiteSnippet(channel.id)}
-                            >
-                              Embed code
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openWebsiteEdit(channel.id)}
-                            >
-                              Settings
-                            </Button>
-                          </>
-                        ) : channel.provider === "WHATSAPP" && workspaceId ? (
-                          <Button
-                            variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
-                            size="sm"
-                            onClick={() => openWhatsAppEdit(channel.id)}
-                          >
-                            Reconnect
-                          </Button>
-                        ) : channel.provider === "TELEGRAM" && workspaceId ? (
-                          <Button
-                            variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
-                            size="sm"
-                            onClick={() => openTelegramEdit(channel.id)}
-                          >
-                            Reconnect
-                          </Button>
-                        ) : reconnectHref ? (
-                          <Button
-                            variant={channel.status === "CONNECTED" ? "ghost" : "outline"}
-                            size="sm"
-                            asChild
-                          >
-                            <a href={reconnectHref}>Reconnect</a>
-                          </Button>
-                        ) : null;
-                      })()}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground hover:text-red-600"
-                        onClick={() => setDisconnectTarget(channel)}
-                        disabled={disconnectingId !== null}
+                  channel.provider === "TELEGRAM";
+                const openReconnect = () => {
+                  if (channel.provider === "WHATSAPP") openWhatsAppEdit(channel.id);
+                  else if (channel.provider === "TELEGRAM") openTelegramEdit(channel.id);
+                };
+                const statusLabel =
+                  channel.status === "CONNECTED"
+                    ? "Connected"
+                    : channel.status === "DISCONNECTED"
+                      ? "Disconnected"
+                      : channel.status === "EXPIRED"
+                        ? "Expired"
+                        : channel.status === "ERROR"
+                          ? "Error"
+                          : channel.status;
+                return (
+                  <li
+                    key={channel.id}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 transition-colors hover:bg-muted/40"
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                      <span
+                        className="flex size-12 shrink-0 items-center justify-center rounded-xl"
+                        style={{ backgroundColor: `${meta.color}1a` }}
                       >
-                        {disconnectingId === channel.id ? "Disconnecting…" : "Disconnect"}
+                        <ChannelIcon provider={channel.provider} size="md" />
+                      </span>
+                      <span className="min-w-0 leading-tight">
+                        <span className="block truncate text-[15px] font-semibold">
+                          {channel.displayName}
+                        </span>
+                        <span className="text-muted-foreground block pt-0.5 text-[13px]">
+                          {CONNECTED_SUBLABELS[channel.provider] ?? meta.label}
+                          {channel.config?.displayPhoneNumber
+                            ? ` · ${channel.config.displayPhoneNumber}`
+                            : ""}
+                        </span>
+                        {channel.status === "ERROR" && channel.config?.lastError ? (
+                          <span className="block pt-0.5 text-xs text-red-600">
+                            {channel.config.lastError} Reconnect to fix it.
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+
+                    <Badge
+                      variant={
+                        channel.status === "CONNECTED"
+                          ? "success"
+                          : channel.status === "ERROR"
+                            ? "destructive"
+                            : channel.status === "EXPIRED"
+                              ? "warning"
+                              : "muted"
+                      }
+                      className="gap-1.5"
+                    >
+                      <span
+                        className={cn(
+                          "size-1.5 rounded-full",
+                          channel.status === "CONNECTED"
+                            ? "bg-emerald-500"
+                            : channel.status === "ERROR"
+                              ? "bg-white"
+                              : channel.status === "EXPIRED"
+                                ? "bg-amber-500"
+                                : "bg-zinc-400",
+                        )}
+                      />
+                      {statusLabel}
+                    </Badge>
+
+                    {channel.provider === "WEBSITE" && workspaceId ? (
+                      <span className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => openWebsiteSnippet(channel.id)}
+                        >
+                          <Code2 className="size-3.5" />
+                          Embed code
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => openWebsiteEdit(channel.id)}
+                        >
+                          <Settings className="size-3.5" />
+                          Settings
+                        </Button>
+                      </span>
+                    ) : channel.status === "CONNECTED" ? (
+                      <span className="flex w-48 flex-col items-start">
+                        {hasReconnect ? (
+                          oauthHref ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1.5 px-2 font-medium"
+                              asChild
+                            >
+                              <a href={oauthHref}>
+                                <RefreshCw className="size-3.5" />
+                                Reconnect
+                              </a>
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1.5 px-2 font-medium"
+                              onClick={openReconnect}
+                            >
+                              <RefreshCw className="size-3.5" />
+                              Reconnect
+                            </Button>
+                          )
+                        ) : null}
+                        {channel.updatedAt ? (
+                          <span className="text-muted-foreground px-2 text-xs">
+                            Last connected: {timeAgo(channel.updatedAt)}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : hasReconnect ? (
+                      oauthHref ? (
+                        <Button size="sm" className="gap-1.5" asChild>
+                          <a href={oauthHref}>
+                            <Plug className="size-3.5" />
+                            {channel.status === "DISCONNECTED" ? "Connect" : "Reconnect"}
+                          </a>
+                        </Button>
+                      ) : (
+                        <Button size="sm" className="gap-1.5" onClick={openReconnect}>
+                          <Plug className="size-3.5" />
+                          {channel.status === "DISCONNECTED" ? "Connect" : "Reconnect"}
+                        </Button>
+                      )
+                    ) : null}
+
+                    <span className="flex items-center gap-2">
+                      {channel.status === "CONNECTED" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => setDisconnectTarget(channel)}
+                          disabled={disconnectingId !== null}
+                        >
+                          <Unplug className="size-3.5" />
+                          {disconnectingId === channel.id ? "Disconnecting…" : "Disconnect"}
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        className="gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 dark:bg-red-950/40 dark:hover:bg-red-950/60"
+                        onClick={() => setDeleteTarget(channel)}
+                        disabled={deletingId !== null}
+                      >
+                        <Trash2 className="size-3.5" />
+                        {deletingId === channel.id ? "Deleting…" : "Delete"}
                       </Button>
                     </span>
-                  ) : null}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
-                    onClick={() => setDeleteTarget(channel)}
-                    disabled={deletingId !== null}
-                  >
-                    <Trash2 className="size-3.5" />
-                    {deletingId === channel.id ? "Deleting…" : "Delete"}
-                  </Button>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
             {disconnectError ? (
               <p className="px-5 pb-3 text-sm text-red-600">{disconnectError}</p>
             ) : null}
-            {deleteError ? (
-              <p className="px-5 pb-3 text-sm text-red-600">{deleteError}</p>
-            ) : null}
+            {deleteError ? <p className="px-5 pb-3 text-sm text-red-600">{deleteError}</p> : null}
           </Card>
         </section>
       ) : null}
 
-      <section className="flex flex-col gap-3">
+      <section id="all-channels" className="flex scroll-mt-6 flex-col gap-3">
         <div>
           <h3 className="text-base font-semibold tracking-tight">All channels</h3>
           <p className="text-muted-foreground pt-0.5 text-xs">

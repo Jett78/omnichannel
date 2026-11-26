@@ -47,6 +47,7 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
       status: true,
       config: true,
       externalAccountId: true,
+      updatedAt: true,
     },
   });
   const channels = channelRows.map((channel) => ({
@@ -56,6 +57,7 @@ export default async function ChannelsPage({ searchParams }: ChannelsPageProps) 
     status: channel.status,
     config: toRealChannelConfig(channel.config),
     externalAccountId: channel.externalAccountId,
+    updatedAt: channel.updatedAt.toISOString(),
   }));
   const whatsapp = getWhatsAppConfig();
 

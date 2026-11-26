@@ -728,7 +728,9 @@ export function AutomationRules({
       <Dialog open={builderOpen} onOpenChange={setBuilderOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{editingId ? "Edit rule" : "New automation rule"}</DialogTitle>
+            <DialogTitle className="text-lg">
+              {editingId ? "Edit rule" : "New automation rule"}
+            </DialogTitle>
             <DialogDescription>
               Build the flow top to bottom: when it happens, the conditions that must match,
               then what to do.
@@ -739,6 +741,7 @@ export function AutomationRules({
             <Label htmlFor="rule-name">Rule name</Label>
             <Input
               id="rule-name"
+              className="h-11 bg-muted/30 px-3.5"
               value={ruleName}
               onChange={(event) => setRuleName(event.target.value)}
               placeholder="e.g. Welcome + round-robin for new chats"
@@ -748,7 +751,7 @@ export function AutomationRules({
           {/* Step 1 — trigger. Dograh node-card style: the card stays
               neutral; the step's colour lives in a small badge that
               overlaps the card's top edge. */}
-          <div className="bg-card relative mt-3 rounded-lg border p-4 pt-5">
+          <div className="relative mt-3 rounded-xl border border-emerald-200/70 bg-emerald-50/40 p-4 pt-5 dark:border-emerald-500/20 dark:bg-emerald-500/5">
             <span className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-xs font-medium text-white">
               <Zap className="size-3" /> When
             </span>
@@ -767,11 +770,13 @@ export function AutomationRules({
           </div>
 
           <div className="flex justify-center" aria-hidden>
-            <ArrowDown className="text-muted-foreground size-4" />
+            <span className="bg-muted flex size-6 items-center justify-center rounded-full ring-1 ring-border/60">
+              <ArrowDown className="text-muted-foreground size-3.5" />
+            </span>
           </div>
 
           {/* Step 2 — conditions */}
-          <div className="bg-card relative mt-3 rounded-lg border p-4 pt-5">
+          <div className="relative mt-3 rounded-xl border border-amber-200/70 bg-amber-50/40 p-4 pt-5 dark:border-amber-500/20 dark:bg-amber-500/5">
             <span className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-medium text-white">
               <Filter className="size-3" /> Only if
             </span>
@@ -799,8 +804,8 @@ export function AutomationRules({
                         }
                         className={
                           active
-                            ? "rounded-full bg-foreground px-2.5 py-1 text-xs font-medium text-background"
-                            : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
+                            ? "rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground ring-1 ring-primary transition-colors"
+                            : "rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border/60 transition-colors hover:bg-muted hover:text-foreground hover:ring-border"
                         }
                       >
                         {option.label}
@@ -834,8 +839,8 @@ export function AutomationRules({
                           }
                           className={
                             active
-                              ? "rounded-full bg-foreground px-2.5 py-1 text-xs font-medium text-background"
-                              : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
+                              ? "rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground ring-1 ring-primary transition-colors"
+                              : "rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border/60 transition-colors hover:bg-muted hover:text-foreground hover:ring-border"
                           }
                         >
                           {channel.displayName}
@@ -870,8 +875,8 @@ export function AutomationRules({
                           }
                           className={
                             active
-                              ? "rounded-full bg-foreground px-2.5 py-1 text-xs font-medium text-background"
-                              : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
+                              ? "rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground ring-1 ring-primary transition-colors"
+                              : "rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border/60 transition-colors hover:bg-muted hover:text-foreground hover:ring-border"
                           }
                         >
                           {tag.name}
@@ -917,18 +922,23 @@ export function AutomationRules({
           </div>
 
           <div className="flex justify-center" aria-hidden>
-            <ArrowDown className="text-muted-foreground size-4" />
+            <span className="bg-muted flex size-6 items-center justify-center rounded-full ring-1 ring-border/60">
+              <ArrowDown className="text-muted-foreground size-3.5" />
+            </span>
           </div>
 
           {/* Step 3 — actions */}
-          <div className="bg-card relative mt-3 rounded-lg border p-4 pt-5">
+          <div className="relative mt-3 rounded-xl border border-blue-200/70 bg-blue-50/40 p-4 pt-5 dark:border-blue-500/20 dark:bg-blue-500/5">
             <span className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full bg-blue-500 px-2 py-0.5 text-xs font-medium text-white">
               <Play className="size-3" /> Then do
             </span>
             <div className="flex flex-col gap-3">
               {drafts.map((draft, index) => (
-                <div key={index} className="bg-muted/40 flex flex-col gap-2 rounded-lg border p-3">
+                <div key={index} className="flex flex-col gap-2.5 rounded-xl border bg-background p-3.5">
                   <div className="flex items-center gap-2">
+                    <span className="bg-primary/10 text-primary flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold">
+                      {index + 1}
+                    </span>
                     <Select
                       value={draft.type}
                       onValueChange={(value) => updateDraft(index, { type: value })}
@@ -1052,7 +1062,7 @@ export function AutomationRules({
                   {draft.type === "ai_reply" ? (
                     <p className="text-muted-foreground text-xs leading-relaxed">
                       The AI writes and sends a reply from the conversation and your knowledge
-                      base (Settings → AI assistant). It stops replying in a conversation once
+                      base (managed under “AI assistant” on this page). It stops replying in a conversation once
                       a human agent has replied there. Needs the AI key configured — without
                       it, the run records “not configured” and nothing is sent.
                     </p>
@@ -1119,8 +1129,8 @@ export function AutomationRules({
                               }
                               className={
                                 active
-                                  ? "rounded-full bg-foreground px-2.5 py-1 text-xs font-medium text-background"
-                                  : "bg-muted text-muted-foreground hover:text-foreground rounded-full px-2.5 py-1 text-xs font-medium"
+                                  ? "rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground ring-1 ring-primary transition-colors"
+                                  : "rounded-full bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground ring-1 ring-border/60 transition-colors hover:bg-muted hover:text-foreground hover:ring-border"
                               }
                             >
                               {member.name}
@@ -1173,7 +1183,7 @@ export function AutomationRules({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="self-start"
+                  className="self-start border-dashed"
                   onClick={() => setDrafts((prev) => [...prev, emptyDraft()])}
                 >
                   <Plus className="size-3.5" /> Add action
@@ -1182,7 +1192,7 @@ export function AutomationRules({
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-1">
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex items-center justify-end gap-2 border-t bg-background/95 px-6 pt-3 pb-4 backdrop-blur">
             <Button variant="ghost" onClick={() => setBuilderOpen(false)}>
               Cancel
             </Button>
