@@ -1,19 +1,11 @@
 "use client";
 
-import {
-  AtSign,
-  Bell,
-  CheckCheck,
-  ChevronLeft,
-  ChevronRight,
-  Mail,
-  MessageSquare,
-  UserPlus,
-} from "lucide-react";
+import { AtSign, Bell, CheckCheck, Mail, MessageSquare, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { PaginationBar } from "@/components/pagination-bar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { NotificationView } from "@/services/notification.service";
@@ -139,34 +131,19 @@ export function NotificationsList({ workspaceId, initialItems }: NotificationsLi
             </div>
 
             {items.length > PER_PAGE ? (
-              <div className="flex flex-col gap-2.5 px-2 pt-3 pb-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-                <p className="text-muted-foreground text-xs sm:flex-1">
-                  Showing {(currentPage - 1) * PER_PAGE + 1}–
-                  {Math.min(currentPage * PER_PAGE, items.length)} of {items.length}{" "}
-                  notifications
-                </p>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage <= 1}
-                    onClick={() => setPage(currentPage - 1)}
-                  >
-                    <ChevronLeft className="size-3.5" /> Previous
-                  </Button>
-                  <span className="text-xs font-medium">
-                    Page {currentPage} of {pageCount}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentPage >= pageCount}
-                    onClick={() => setPage(currentPage + 1)}
-                  >
-                    Next <ChevronRight className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
+              <PaginationBar
+                className="px-2 pt-3 pb-2"
+                page={currentPage}
+                pageCount={pageCount}
+                onPageChange={setPage}
+                summary={
+                  <>
+                    Showing {(currentPage - 1) * PER_PAGE + 1}–
+                    {Math.min(currentPage * PER_PAGE, items.length)} of {items.length}{" "}
+                    notifications
+                  </>
+                }
+              />
             ) : null}
           </CardContent>
         </Card>

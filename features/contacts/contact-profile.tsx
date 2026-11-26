@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
-import { ChannelBadge, PROVIDER_META } from "@/components/channel-icon";
+import { ChannelIcon, PROVIDER_META } from "@/components/channel-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -214,9 +214,9 @@ export function ContactProfile({ workspaceId, initialProfile, canEdit }: Contact
               <div className="flex flex-col divide-y">
                 {profile.identities.map((identity) => (
                   <div key={identity.id} className="flex items-center gap-3 py-2.5">
-                    <ChannelBadge provider={identity.provider as Provider} className="size-7" />
+                    <ChannelIcon provider={identity.provider as Provider} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">
+                      <p className="truncate text-sm font-medium">
                         {PROVIDER_META[identity.provider as Provider]?.label ?? identity.provider}
                         <span className="text-muted-foreground font-normal">
                           {" "}
@@ -369,7 +369,7 @@ export function ContactProfile({ workspaceId, initialProfile, canEdit }: Contact
                   href={`/inbox?c=${conversation.id}`}
                   className="hover:bg-accent/50 -mx-2 flex items-center gap-3 rounded-md px-2 py-2.5"
                 >
-                  <ChannelBadge provider={conversation.provider as Provider} className="size-7 shrink-0" />
+                  <ChannelIcon provider={conversation.provider as Provider} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">{conversation.preview ?? "—"}</p>
                     <p className="text-muted-foreground text-xs">

@@ -1,16 +1,8 @@
 "use client";
 
-import {
-  ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
-  Layers,
-  MoreVertical,
-  Search,
-  UserPlus,
-} from "lucide-react";
+import { ArrowUpDown, Layers, MoreVertical, Search, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { AvatarWithBadge } from "@/components/avatar-with-badge";
 import { PROVIDER_META, ProviderGlyph } from "@/components/channel-icon";
@@ -21,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PageHeader } from "@/components/layout/page-header";
+import { PaginationBar } from "@/components/pagination-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,7 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatLastActive, type RealContact } from "@/features/contacts/real-data";
-import { cn } from "@/lib/utils";
 import type { Provider } from "@/generated/prisma/client";
 
 type SortMode = "recent" | "name";
@@ -83,22 +75,6 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
   const pageCount = Math.max(1, Math.ceil(visible.length / PER_PAGE));
   const currentPage = Math.min(page, pageCount);
   const pageContacts = visible.slice((currentPage - 1) * PER_PAGE, currentPage * PER_PAGE);
-
-  // Numbered pagination (reference style): all pages when few, else a
-  // window around the current page with first/last pinned.
-  const pageList = useMemo(() => {
-    if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i + 1);
-    const set = new Set([
-      1,
-      2,
-      currentPage - 1,
-      currentPage,
-      currentPage + 1,
-      pageCount - 1,
-      pageCount,
-    ]);
-    return [...set].filter((n) => n >= 1 && n <= pageCount).sort((a, b) => a - b);
-  }, [pageCount, currentPage]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -258,58 +234,19 @@ export function ContactsExplorer({ contacts }: { contacts: RealContact[] }) {
           </div>
 
           {visible.length > 0 ? (
-            <div className="flex flex-col gap-2.5 pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-              <p className="text-muted-foreground text-xs sm:flex-1">
-                Showing {(currentPage - 1) * PER_PAGE + 1}–
-                {Math.min(currentPage * PER_PAGE, visible.length)} of {visible.length}{" "}
-                contacts
-              </p>
-              {pageCount > 1 ? (
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="size-8 rounded-full"
-                    disabled={currentPage <= 1}
-                    onClick={() => setPage(currentPage - 1)}
-                    aria-label="Previous page"
-                  >
-                    <ChevronLeft className="size-4" />
-                  </Button>
-                  {pageList.map((n, idx) => (
-                    <Fragment key={n}>
-                      {idx > 0 && n - (pageList[idx - 1] ?? n) > 1 ? (
-                        <span className="text-muted-foreground px-0.5 text-xs">…</span>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => setPage(n)}
-                        aria-current={n === currentPage ? "page" : undefined}
-                        aria-label={`Page ${n}`}
-                        className={cn(
-                          "size-8 rounded-full border text-xs font-medium transition-colors",
-                          n === currentPage
-                            ? "bg-primary border-transparent text-primary-foreground"
-                            : "bg-card hover:border-primary/40",
-                        )}
-                      >
-                        {n}
-                      </button>
-                    </Fragment>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="size-8 rounded-full"
-                    disabled={currentPage >= pageCount}
-                    onClick={() => setPage(currentPage + 1)}
-                    aria-label="Next page"
-                  >
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div>
-              ) : null}
-            </div>
+            <PaginationBar
+              className="pt-4"
+              page={currentPage}
+              pageCount={pageCount}
+              onPageChange={setPage}
+              summary={
+                <>
+                  Showing {(currentPage - 1) * PER_PAGE + 1}–
+                  {Math.min(currentPage * PER_PAGE, visible.length)} of {visible.length}{" "}
+                  contacts
+                </>
+              }
+            />
           ) : null}
         </CardContent>
       </Card>
