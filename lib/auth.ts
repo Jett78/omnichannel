@@ -6,6 +6,7 @@ import { AppError } from "@/lib/errors";
 import { getEnv } from "@/lib/env";
 import { sendResetPasswordEmail, sendVerificationEmail } from "@/lib/mail";
 import { getPrisma } from "@/lib/prisma";
+import { verificationWatch } from "@/lib/verification-watch";
 
 /**
  * Better Auth server instance (Phase 2).
@@ -53,6 +54,9 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24, // refresh session once per day
     cookieCache: { enabled: true, maxAge: 5 * 60 },
   },
+  // Lets the tab that started a sign-up sign itself in once the
+  // email is verified on any device (see the plugin for the design).
+  plugins: [verificationWatch()],
 });
 
 export type AuthSession = typeof auth.$Infer.Session;

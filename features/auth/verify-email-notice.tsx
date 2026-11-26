@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  clearVerificationWatch,
+  exchangeVerificationWatch,
+  readVerificationWatch,
+  registerVerificationWatch,
+} from "@/features/auth/verification-watch-client";
 import { authClient, useSession } from "@/lib/auth-client";
 
 export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | null }) {
@@ -18,10 +24,23 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
   const [pending, setPending] = useState(false);
   const [emailInput, setEmailInput] = useState(initialEmail ?? "");
   const [justVerified, setJustVerified] = useState(false);
+  const [watchId, setWatchId] = useState<string | null>(null);
 
   const sessionEmail = session?.user.email;
   const verified = (session?.user.emailVerified ?? false) || justVerified;
   const email = sessionEmail ?? emailInput;
+
+  // Pick up the verification watch planted at sign-up (this browser
+  // only) and re-register it, so an exchange is possible the moment
+  // verification lands — and so a stale or overwritten registration
+  // heals itself while this page is open.
+  useEffect(() => {
+    if (!email || verified) return;
+    const stored = readVerificationWatch(email);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWatchId(stored);
+    if (stored) void registerVerificationWatch(email, stored);
+  }, [email, verified]);
 
   // Cross-device watch: the verification link is often clicked on
   // another device (e.g. the phone's mail app) while THIS tab stays
@@ -68,17 +87,39 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
   // its own effect: when the timed navigation sat inside the polling
   // effect, flipping `verified` re-ran that effect and its cleanup
   // cancelled the pending redirect (found in live QA, 2026-11-26).
+  // With a verification watch, this tab exchanges it for a session
+  // and goes straight into the app — no sign-in step. Without one
+  // (a browser that didn't start the sign-up), the fallbacks are a
+  // session refresh (the click happened in this browser) or the
+  // prefilled sign-in page.
   useEffect(() => {
     if (!justVerified) return;
+    let cancelled = false;
     const timer = setTimeout(() => {
-      if (sessionEmail) {
-        router.refresh();
-      } else if (email) {
-        router.push(`/login?verified=1&email=${encodeURIComponent(email)}`);
-      }
+      void (async () => {
+        if (watchId && email) {
+          const exchanged = await exchangeVerificationWatch(email, watchId);
+          if (cancelled) return;
+          if (exchanged) {
+            clearVerificationWatch();
+            router.push("/dashboard");
+            router.refresh();
+            return;
+          }
+        }
+        if (cancelled) return;
+        if (sessionEmail) {
+          router.refresh();
+        } else if (email) {
+          router.push(`/login?verified=1&email=${encodeURIComponent(email)}`);
+        }
+      })();
     }, 1400);
-    return () => clearTimeout(timer);
-  }, [justVerified, sessionEmail, email, router]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [justVerified, watchId, sessionEmail, email, router]);
 
   async function onResend() {
     if (!email) {
@@ -114,13 +155,13 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
           <div>
             <p className="font-medium">Email verified</p>
             <p className="text-muted-foreground mt-1 text-sm">
-              {sessionEmail
-                ? "Your email address is verified. You're all set."
+              {sessionEmail || watchId
+                ? "Your email address is verified. Signing you in…"
                 : "Your email address is verified. Taking you to sign in…"}
             </p>
           </div>
           <Button asChild className="rounded-full px-5">
-            {sessionEmail ? (
+            {sessionEmail || watchId ? (
               <Link href="/dashboard">Continue to your inbox</Link>
             ) : (
               <Link href={`/login?verified=1&email=${encodeURIComponent(email)}`}>

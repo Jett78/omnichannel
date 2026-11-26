@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/features/auth/password-input";
+import { createVerificationWatch } from "@/features/auth/verification-watch-client";
 import { authClient } from "@/lib/auth-client";
 import { registerSchema } from "@/lib/validations";
 
@@ -52,9 +53,11 @@ export function RegisterForm({ nextPath }: { nextPath?: string | null }) {
       }
       // Email verification is required before the account can be
       // used: the server has emailed a verification link, so send
-      // the user to the check-your-inbox page. (An invitation's
-      // destination is picked up again when they open the invite
-      // link after verifying.)
+      // the user to the check-your-inbox page. First plant a
+      // verification watch in this browser, so that when the link
+      // is clicked — on ANY device — this tab can sign itself in
+      // automatically instead of falling back to the sign-in page.
+      await createVerificationWatch(parsed.data.email);
       router.push(`/verify-email?email=${encodeURIComponent(parsed.data.email)}`);
       router.refresh();
     } catch {

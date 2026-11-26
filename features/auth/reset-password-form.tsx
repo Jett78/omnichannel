@@ -2,7 +2,8 @@
 
 import { CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,11 +13,23 @@ import { authClient } from "@/lib/auth-client";
 import { resetPasswordSchema } from "@/lib/validations";
 
 export function ResetPasswordForm({ token }: { token: string | null }) {
+  const router = useRouter();
   const [error, setError] = useState<string | null>(
     token ? null : "This reset link is missing its token. Request a new one.",
   );
   const [done, setDone] = useState(false);
   const [pending, setPending] = useState(false);
+
+  // After a successful reset, continue to the sign-in page on its own
+  // (with a banner there) — the button below is the manual fallback.
+  useEffect(() => {
+    if (!done) return;
+    const timer = setTimeout(() => {
+      router.push("/login?reset=1");
+      router.refresh();
+    }, 1600);
+    return () => clearTimeout(timer);
+  }, [done, router]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,7 +78,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
             <div>
               <p className="font-medium">Password updated</p>
               <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-                Your password has been reset. You can now sign in with your new password.
+                Your password has been reset. Taking you to sign in with your new password…
               </p>
             </div>
             <Button asChild className="rounded-full px-5">

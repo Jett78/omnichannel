@@ -16,10 +16,12 @@ import { loginSchema } from "@/lib/validations";
 export function LoginForm({
   nextPath,
   justVerified,
+  justReset,
   initialEmail,
 }: {
   nextPath?: string | null;
   justVerified?: boolean;
+  justReset?: boolean;
   initialEmail?: string | null;
 }) {
   const router = useRouter();
@@ -111,6 +113,15 @@ export function LoginForm({
             >
               <CheckCircle2 className="size-4 shrink-0" />
               Email verified — sign in to continue into your account.
+            </p>
+          ) : null}
+          {justReset ? (
+            <p
+              className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200"
+              role="status"
+            >
+              <CheckCircle2 className="size-4 shrink-0" />
+              Password updated — sign in with your new password.
             </p>
           ) : null}
           <div className="flex flex-col gap-2">
