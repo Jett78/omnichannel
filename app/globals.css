@@ -153,3 +153,17 @@
     font-weight: 450;
   }
 }
+
+/*
+ * One button curve everywhere (Jeet, 2026-11-26): nothing renders as
+ * a full pill — every rounded-full utility resolves to the default
+ * button's radius (rounded-md, the Send invite button's curve), so
+ * buttons, badges, chips and search bars all share one consistent
+ * corner. Elements smaller than twice the radius (presence dots,
+ * count circles, switch thumbs, avatars at small sizes) still render
+ * as true circles, because the browser clamps the radius to the box.
+ * This rule is intentionally unlayered so it wins over the utility.
+ */
+.rounded-full {
+  border-radius: calc(var(--radius) - 2px);
+}

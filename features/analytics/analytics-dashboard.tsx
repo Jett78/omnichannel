@@ -113,7 +113,7 @@ export function AnalyticsDashboard({
         </p>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {stats.map((stat) => (
           <Card key={stat.label} className="gap-0 py-4 transition-shadow hover:shadow-md">
             <CardContent className="px-4">
