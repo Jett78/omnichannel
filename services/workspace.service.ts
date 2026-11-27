@@ -178,6 +178,22 @@ export const workspaceService = {
     return updated;
   },
 
+  /**
+   * Permanently delete a workspace and everything in it. OWNER-only:
+   * the `workspace.delete` permission is granted to no other role
+   * (lib/permissions.ts) — Jeet's rule, checked 2026-11-27, is that
+   * only the owner may delete a workspace. Every child table's FK to
+   * Workspace is ON DELETE CASCADE (verified against the live
+   * schema), and grandchildren cascade through their parents, so the
+   * single delete removes members, channels, conversations, messages
+   * and settings with it. No audit row is written — it would cascade
+   * away with the workspace in the same statement.
+   */
+  async deleteWorkspace(userId: string, workspaceId: string) {
+    await requireWorkspacePermission(userId, workspaceId, "workspace.delete");
+    await prisma.workspace.delete({ where: { id: workspaceId } });
+  },
+
   async listMembers(userId: string, workspaceId: string) {
     await requireWorkspacePermission(userId, workspaceId, "members.view");
     return prisma.workspaceMember.findMany({

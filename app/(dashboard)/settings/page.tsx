@@ -2,8 +2,8 @@ import { TriangleAlert } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/page-header";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DeleteWorkspace } from "@/features/settings/delete-workspace";
 import { NotificationPreferences } from "@/features/settings/notification-preferences";
 import { StoreConnectionCard } from "@/features/settings/store-connection";
 import { OutgoingWebhooks } from "@/features/settings/outgoing-webhooks";
@@ -82,13 +82,13 @@ export default async function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button variant="destructive" disabled>
-            Delete workspace
-          </Button>
-          <p className="text-muted-foreground mt-2 text-xs">
-            Workspace deletion is disabled in this phase — it arrives with a typed-confirmation flow
-            and a data-export option.
-          </p>
+          {currentMember.role === "OWNER" ? (
+            <DeleteWorkspace workspaceId={active.id} workspaceName={active.name} />
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Only the workspace owner can delete this workspace.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

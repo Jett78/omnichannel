@@ -30,3 +30,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     return apiError(error);
   }
 }
+
+/** DELETE — permanently delete the workspace (OWNER only, enforced in the service). */
+export async function DELETE(request: Request, context: RouteContext) {
+  try {
+    const user = await requireApiUser(request);
+    const { workspaceId } = await context.params;
+    await workspaceService.deleteWorkspace(user.id, workspaceId);
+    return NextResponse.json({ deleted: true });
+  } catch (error) {
+    return apiError(error);
+  }
+}
