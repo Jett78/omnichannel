@@ -80,7 +80,6 @@ export function VerifyEmailNotice({ initialEmail }: { initialEmail?: string | nu
       cancelled = true;
       clearInterval(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email, verified]);
 
   // Continue automatically once verification lands. This must live in

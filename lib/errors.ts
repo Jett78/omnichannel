@@ -1,7 +1,13 @@
+import { ZodError } from "zod";
+
 /**
  * Consistent application errors.
  * Services throw AppError; route handlers / server actions translate
  * them into a uniform shape via `toErrorResponse` / `getErrorMessage`.
+ * Zod validation failures (routes parse request bodies with zod
+ * schemas) map to 400 — before this branch existed they fell through
+ * to the generic 500, so a malformed body looked like a server crash
+ * (QA audit 2026-11-27).
  */
 export class AppError extends Error {
   readonly code: string;
@@ -42,6 +48,24 @@ export interface ErrorResponseBody {
 export function toErrorResponse(error: unknown): { status: number; body: ErrorResponseBody } {
   if (error instanceof AppError) {
     return { status: error.status, body: { error: { code: error.code, message: error.message } } };
+  }
+  if (error instanceof ZodError) {
+    const details = error.issues
+      .slice(0, 3)
+      .map((issue) => {
+        const path = issue.path.join(".");
+        return path ? `${path}: ${issue.message}` : issue.message;
+      })
+      .join("; ");
+    return {
+      status: 400,
+      body: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: details ? `Invalid request — ${details}` : "Invalid request",
+        },
+      },
+    };
   }
   console.error("Unexpected error:", error);
   return {
